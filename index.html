@@ -9,10 +9,29 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.0.0";  // stable ver→v1.0.0
+  const FRONT_VERSION = "v1.0.1";  // stable ver→v1.0.0
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzH4uGB-IhDg5Z2a1FbnZMi42I5Qp0VLWRdXThT3QbYcf59XgVnuPlgwWMKF2n2KPjy/exec";     // GAS v1.0.0
 
+  const ENV_NS = (() => {
+    const raw = [location.origin, LIFF_ID, API_ENDPOINT].join('|');
+    // 短いハッシュでOK（djbx33a）
+    let h = 5381;
+    for (const c of raw) h = ((h << 5) + h) ^ c.charCodeAt(0);
+    return 'env:' + (h >>> 0).toString(36);
+  })();
+   (function rememberEnvAndPurge(){
+    const K = 'liff:env:current';
+    const cur = `${LIFF_ID}|${API_ENDPOINT}`;
+    const prev = localStorage.getItem(K);
+    if (prev && prev !== cur) {
+      Object.keys(localStorage).forEach(k=>{
+        if (k.startsWith('liff:')) localStorage.removeItem(k);
+      });
+    }
+    localStorage.setItem(K, cur);
+  })();
+  
   // （オプション）設定チェック：重複定義や未設定を早期に気づけます
   (function(){
     if (!FRONT_VERSION || !LIFF_ID || !API_ENDPOINT) {
@@ -2266,7 +2285,7 @@ function bindHandlers(){
 
 /* --- 軽量ローカルキャッシュ（SWR用） --- */
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5分
-function _cacheKey(k){ return `liff:${k}`; }
+function _cacheKey(k){ return `liff:${ENV_NS}:${k}`; }
 function cacheGet(k){
   try{
     const raw = localStorage.getItem(_cacheKey(k));
