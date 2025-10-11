@@ -7,6 +7,40 @@
   
 <!-- ===== 設定（共通） v1：ページ先頭に固定 ===== -->
 <script>
+
+  // テスト用
+  // 右下🛠ボタンで、現在のID/環境/サーバ応答を即確認
+  (function attachDebugProbe(){
+    const btn = document.createElement('button');
+    btn.textContent = '🛠';
+    btn.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:99999;opacity:.7';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.title = 'Debug probe';
+
+    btn.onclick = async () => {
+      const idt = (window.liff && liff.getDecodedIDToken) ? liff.getDecodedIDToken() : null;
+      const sub = idt?.sub || '(no sub)';
+      const env = {
+        origin: location.origin,
+        LIFF_ID, API_ENDPOINT, ENV_NS,
+        sub, name: idt?.name || '', aud: idt?.aud || '', iss: idt?.iss || ''
+      };
+      const q = s => fetch(API_ENDPOINT + s + '&_=' + Date.now())
+                        .then(r=>r.json()).catch(e=>({error:String(e)}));
+      const isA = await q(`?isAdmin=1&id=${encodeURIComponent(sub)}`);
+      const who = await q(`?whoami=1&id=${encodeURIComponent(sub)}`);
+      console.table(env);
+      console.log('[isAdmin]', isA);
+      console.log('[whoami]', who);
+      alert(
+        `sub=${sub}\n` +
+        `isAdmin: ${isA?.status}/${isA?.isAdmin}\n` +
+        `whoami.members: ${Array.isArray(who?.members)?who.members.length:'-'}`
+      );
+    };
+    document.addEventListener('DOMContentLoaded', ()=>document.body.appendChild(btn), {once:true});
+  })();
+
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
   const FRONT_VERSION = "v1.0.1";  // stable ver→v1.0.0
