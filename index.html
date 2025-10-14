@@ -9,9 +9,9 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.0.1";  // stable ver→v1.0.1
+  const FRONT_VERSION = "v1.0.2";  // stable ver→v1.0.2
   const LIFF_ID = "2008270687-9qV1G3yq";
-  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwDkrsK7cjYdYvwmkMSm8PYdSy6DgKNAN40XosIY0yUUYKYXJrX8Sys4ZhXh_-nxVmN/exec";     // GAS v1.0.1
+  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzXcSfGOxXEgXPzQMBylNDuwftZcs77B-_nhYc8NmSxwbymmhRdPzAWSUv-FS7sRjPc/exec;     // GAS v1.0.2
 
   const ENV_NS = (() => {
     const raw = [location.origin, LIFF_ID, API_ENDPOINT].join('|');
@@ -513,6 +513,14 @@
     .seg-both  {
       color:#6d5a93; background:#f1eaff; border-color:#bda8ea; /* 紫系 */
     }
+    #view-custom-push .card{
+      max-width: 720px;
+      margin: 12px auto;
+      padding: 16px;
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.06);
+    }
+    #view-custom-push .sectionTitle{ margin-bottom: 8px; }
   </style>
 
   <!-- Tailwind の上乗せ -->
@@ -1114,34 +1122,48 @@
     }
 
     /* 管理レポート：名前⇔コメントの間を固定ギャップで */
+    /* 行＝名前｜コメント */
     #view-admin-report .repPersonRow{
-      display: flex;
-      align-items: baseline;
-      justify-content: flex-start; /* space-between をやめる */
-      gap: 16px;                   /* ← お好みで 12–20px */
+      display:flex;
+      align-items:flex-start;      /* ベースラインでもOK */
+      gap:16px;
     }
     
-    /* 左（名前）は内容幅のまま / 右（コメント）は伸縮＆折り返し */
-    #view-admin-report .repPersonRow .repName { flex: 0 0 auto; }
-    #view-admin-report .repPersonRow .repAt   { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    /* 左：名前は内容幅のまま */
+    #view-admin-report .repPersonRow .repName{
+      flex:0 0 auto;
+    }
     
-    /* 右が空なら非表示（見た目のズレ防止） */
-    #view-admin-report .repPersonRow .repAt:empty { display:none; }
-    /* コメントの前に薄い「｜」を表示 */
+    /* 右：器は伸縮OK＆縮められるように min-width:0 */
     #view-admin-report .repPersonRow .repAt{
-      display:flex;              /* 既に指定済みなら不要 */
+      flex:1 1 auto;
+      min-width:0;                 /* ← これ重要（flex item の既定 min-width:auto を打消す） */
+      display:flex;                /* パイプ「｜」と本文を横並びにするため */
       align-items:baseline;
+      overflow-wrap:anywhere;      /* 念のため器側にも付けておく */
+      word-break:break-word;
     }
     
+    /* 右：本文本体（ここに折返しルールを直付け） */
     #view-admin-report .repComment{
-      position:relative;
+      display:block;               /* flex item として扱いやすく */
+      flex:1 1 auto;
+      min-width:0;                 /* ← これがないと縮まずに右へ溢れます */
+      white-space:normal !important;
+      overflow-wrap:anywhere;
+      word-break:break-word;
     }
     
+    /* 右が空なら非表示（ズレ防止） */
+    #view-admin-report .repPersonRow .repAt:empty { display:none; }
+    
+    /* コメント前の区切り「｜」 */
     #view-admin-report .repComment::before{
-      content: "｜";             /* 全角バー */
-      color: var(--c-muted);     /* 薄い色で */
-      margin-right: .5em;        /* バーと文字の間隔 */
-      opacity: .7;               /* さらに薄くしたい時は 0.5〜0.7 で調整 */
+      content:"｜";
+      color:var(--c-muted);
+      margin-right:.5em;
+      opacity:.7;
+      flex:0 0 auto;
     }
     /* 1行目：左=日付時刻／右=区分バッジ */
     .fRow1 { display:flex; align-items:baseline; gap:6px; }
@@ -1176,6 +1198,161 @@
       font-weight: 400 !important;  /* ← normal に戻す */
       margin-left: .5em;            /* タイトルとの間を少し空ける（任意） */
     }
+    /* CustomPush ページの左右余白とカード間隔を他画面に揃える */
+    #view-custom-push { padding: 0 16px; }
+    @media (min-width: 480px){ #view-custom-push { padding: 0 20px; } }
+    #view-custom-push .card { margin: 12px 0; }
+    #cp_extra { font-size: 14px; line-height: 1.4; } /* 見切れ対策 */
+
+    /* 行右側にチェック群を置く（幅は既存 select 幅と同等感） */
+    #view-custom-push .cp-checks{
+      display:flex; flex-wrap:wrap; gap:12px; justify-content:flex-end;
+    }
+    
+    /* 薄紫の“操作不可”表示ボックス（既存カラーに合わせる） */
+    #view-custom-push .cp-pill{
+      border:1.5px dashed var(--c-primary-2);
+      background:#f7f5ff;            /* 既存ページの無効系背景と同じ系統 */
+      border-radius:10px;
+      padding:12px;
+      margin:10px 0;
+    }
+    #view-custom-push .cp-pill-title{
+      font-weight:700; margin-bottom:4px; color:var(--c-text);
+    }
+    #view-custom-push .cp-pill-body{
+      color: var(--c-muted);
+    }
+    
+    /* 本文：紫枠・白背景・角丸を既存と統一 */
+    #view-custom-push .cp-field{ margin:12px 0; display:flex; flex-direction:column; gap:8px; }
+    #view-custom-push .cp-textarea{
+      width:100%;
+      border:1.5px solid var(--c-primary-2);
+      background:#fff;
+      border-radius:10px;
+      padding:10px 12px;
+      font-size:13px;
+      box-sizing:border-box;
+    }
+    
+    /* 小型ヒント文字（既存 .hint のトーンに寄せる） */
+    #view-custom-push .hint{ color: var(--c-muted); font-size: 12px; }
+    
+    /* 既存ページと同じ左右余白・カード間隔（あなたの追記と同じ値で再掲） */
+    #view-custom-push { padding: 0 16px; }
+    @media (min-width: 480px){ #view-custom-push { padding: 0 20px; } }
+    #view-custom-push .card { margin: 12px 0; }
+    
+    /* 複数選択候補の見切れ対策（既に入っていれば不要） */
+    #cp_extra{ font-size:14px; line-height:1.4; }
+    /* チェック群を左寄せ・横並び（折り返しOK） */
+    #view-custom-push .cp-stat-row{
+      display:flex; flex-wrap:wrap; gap:12px; justify-content:flex-start;
+      margin-bottom: 10px;
+    }
+    
+    /* 薄紫の“操作不可”表示ボックス */
+    #view-custom-push .cp-pill{
+      border:1.5px dashed var(--c-primary-2);
+      background:#f7f5ff;
+      border-radius:10px;
+      padding:12px;
+      margin:10px 0;
+    }
+    #view-custom-push .cp-pill-title{ font-weight:700; margin-bottom:4px; color:var(--c-text); }
+    #view-custom-push .cp-pill-body { color:var(--c-muted); }
+    
+    /* 本文の紫枠・白背景・角丸（既存トーンに統一） */
+    #view-custom-push .cp-field{ margin:12px 0; display:flex; flex-direction:column; gap:8px; }
+    #view-custom-push .cp-textarea{
+      width:100%; border:1.5px solid var(--c-primary-2); background:#fff;
+      border-radius:10px; padding:10px 12px; font-size:16px; box-sizing:border-box;
+    }
+    
+    /* 宛先追加（手動）のselectは角丸を強制（multipleでも角丸に） */
+    #cp_extra{ border-radius:10px !important; }
+    
+    /* 手動追加とテンプレの間に“1行分”の空白（フォームの行間に合わせて） */
+    #view-custom-push .cp-space-1line{ height: 14px; }  /* 12〜16pxでお好み調整可 */
+    /* 対象ステータス：無効時の見た目をはっきり */
+    
+    #view-custom-push .statWrap.is-disabled{
+      background:#f5efff !important;         /* 薄い紫の面 */
+      border:1.5px dashed #d8cef1 !important; /* ダッシュ枠 */
+      border-radius:12px !important;
+      padding:10px !important;
+      opacity:.95 !important;
+    }
+    
+    #view-custom-push .statWrap.is-disabled label{
+      color:#7a6fa6 !important;               /* 文字も少し薄めの紫トーン */
+    }
+    
+    #view-custom-push .statWrap .lockTag{
+      display:inline-flex !important;
+      align-items:center; gap:6px;
+      font-size:12px; color:#7f6aa5;
+      background:#efe7ff; border:1px solid #e6e0f0;
+      border-radius:999px; padding:2px 8px; margin-left:8px;
+    }
+    #view-custom-push .statWrap .lockTag[hidden]{ display:none !important; }
+
+    #view-custom-push #cp_event{ font-size:13px; }
+    .loadingHint{
+      font-size: 12px;
+      color: var(--c-muted);
+      margin-left: 6px;
+    }
+    
+    #cp_extra_row { grid-template-columns: 1fr var(--attSel-width); }
+    #cp_extra_row .row-att-note{
+      grid-column: 1 / -1;     /* 下段で2列ぶち抜き */
+      margin-top: 4px;
+    }
+    .loadingHint{ font-size:12px; color: var(--c-muted); }
+    
+    /* 自動・手動の宛先一覧エリアに適用（両方まとめて） */
+    #cp_auto_targets, #cp_auto,
+    #cp_manual_targets, #cp_manual {
+      white-space: pre-line;   /* ← \n を改行として描画 */
+      font-size: 0.9rem;       /* ← お好みで 0.85rem 〜 0.95rem に調整 */
+      line-height: 1.6;        /* ← 行間少し広めで読みやすく */
+    }
+    /* 対象ステータス：ラベル文字色は黒(=既定色)に固定 */
+    #view-custom-push #cp_stat_wrap label,
+    #view-custom-push #cp_stat_wrap .repLabel{
+      color: var(--c-text) !important;
+    }
+    /* 本文を少し小さめに */
+    #cp_body.cp-textarea{
+      font-size: 13px !important;  /* 12〜15あたりでお好み調整 */
+      line-height: 1.7;            /* 読みやすさ維持におすすめ */
+    }
+    
+    .siteFooter{
+      margin:24px 0 12px; padding:8px 0; text-align:center;
+      font-size:12px; color:#9CA3AF;
+    }
+    .siteFooter a{ color:inherit; text-decoration:underline; text-underline-offset:2px; }
+    .siteFooter .ver{ margin-left:8px; opacity:.7; }
+  /* レイアウト：フッターを最下部に固定（中身が少ないページでも） */
+    html, body { height: 100%; }
+    body { min-height: 100svh; display: flex; flex-direction: column; }
+    main { flex: 1 0 auto; }
+    
+    /* フッターの見た目 */
+    .siteFooter{
+      text-align:center; font-size:12px; color:#777;
+      padding: 10px 16px; border-top:1px solid var(--c-border);
+    }
+    .siteFooter a{ color: var(--c-primary-2); text-decoration:none; }
+    .siteFooter .dot{ color:#bbb; margin:0 6px; }
+    
+    /* カスタム通知：タイトル周りの余白を他ページと合わせる */
+    #view-custom-push { padding: 0 !important; } /* section自身の内側パディングをゼロ */
+    #view-custom-push > .row-space{ margin: 8px 0 8px !important; }
+    #view-custom-push .card:first-of-type{ margin-top: 8px !important; }
   </style>
   
   <!-- LIFF SDK -->
@@ -1204,6 +1381,7 @@
       <div class="row" style="gap:8px;">
         <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin">予定登録/編集</button>
         <button id="btnAdminMenuReport"    class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-report">出欠結果一覧</button>
+        <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" data-view-target="view-custom-push">カスタム通知</button>
         <a href="https://your-domain.github.io/your-repo/summary.html" target="_blank" class="btn btn-outline btn-sm btn-compact">サマリ</a>
       </div>
       <div class="small muted" style="margin-top:6px;">※ 管理者のみ表示されます</div>
@@ -1494,29 +1672,570 @@
     
       <div id="repBox" class="muted">公演を選択してください</div>
     </section>
+    <!-- ===== カスタム通知（管理者） ===== -->
+    <section id="view-custom-push" data-view>
+    
+      <!-- 見出し行：左=タイトル / 右=トップに戻る -->
+      <div class="row-space" style="align-items:center;">
+        <div class="sectionTitle">カスタム通知</div>
+        <button id="btnCustomBack" type="button" class="btn btn-ghost btn-sm">
+          トップに戻る
+        </button>
+      </div>
+    
+      <!-- ここからカード（※要望①：イベントもカード内に） -->
+      <div class="card">
+    
+        <!-- 宛先の選び方（ラベル左／セレクト右） -->
+        <div class="row-att" style="margin:6px 0 12px;">
+          <label for="cp_event" class="repLabel">宛先の選び方</label>
+          <select id="cp_event" class="selectBtn schedSel">
+            <option value="manual">手動のみで宛先を選ぶ</option>
+            <optgroup id="opt-events" label="イベントから選ぶ"></optgroup>
+          </select>
+          
+          <script>
+          (function(){
+            // 1) getLineId は必ずグローバルに一度だけ
+            window.getLineId = window.getLineId || (async function(){
+              try{
+                if (typeof window.getMyLineId_ === 'function'){
+                  const id = await window.getMyLineId_();
+                  if (id){ (window.state ||= {}).lineId = id; return id; }
+                }
+              }catch(_){}
+              const tryOnce = () => {
+                if (window.__ME__?.lineId) return window.__ME__.lineId;
+                if (window.state?.lineId)  return window.state.lineId;
+                try{ return window.liff?.getDecodedIDToken?.()?.sub || ''; }catch(_){ return ''; }
+              };
+              for (let i=0;i<40;i++){
+                const id = tryOnce();
+                if (id){ (window.state ||= {}).lineId = id; return id; }
+                await new Promise(r=>setTimeout(r,100));
+              }
+              return '';
+            });
+          
+            const sec      = document.getElementById('view-custom-push');
+            const selMode  = document.getElementById('cp_event');
+            const optGroup = document.getElementById('opt-events');
+          
+            function applyModeUI(){
+              const statWrap = document.getElementById('cp_stat_wrap');
+              const statLock = document.getElementById('cp_stat_lock');
+              const manual   = (selMode.value === 'manual' || !selMode.value);
+              sec.querySelectorAll('.cp_stat').forEach(cb => cb.disabled = manual);
+              statWrap?.classList.toggle('is-disabled', manual);
+              statWrap?.setAttribute('aria-disabled', manual ? 'true' : 'false');
+              if (statLock) statLock.hidden = !manual;
+            }
+          
+            async function fillEventChoices(){
+              // プレースホルダ（optgroup だけ差し替え）
+              if (optGroup) optGroup.innerHTML = `<option value="" disabled>読み込み中…</option>`;
+          
+              const lid = await getLineId();
+              const url = new URL(API_ENDPOINT);
+              url.searchParams.set('attendanceReport','1');
+              url.searchParams.set('meta','1');
+              url.searchParams.set('admin','1');
+              if (lid) url.searchParams.set('lineId', lid);
+          
+              let r;
+              try{ r = await fetch(url).then(x=>x.json()); }
+              catch(e){ r = {status:'error', message:String(e)}; }
+          
+              const listRaw = Array.isArray(r?.list) ? r.list :
+                              Array.isArray(r?.meta) ? r.meta :
+                              Array.isArray(r?.data) ? r.data : [];
+          
+              const isOpen   = e => (typeof e.open      !== 'undefined') ? !!e.open
+                                   : (typeof e.published !== 'undefined') ? !!e.published
+                                   : (typeof e.status    !== 'undefined') ? (e.status === '公開中') : true;
+              const isHappyo = e => (typeof e.kind !== 'undefined')
+                                    ? (e.kind === '発表' || /発表/.test(String(e.kind)))
+                                    : true;
+          
+              const list = listRaw.filter(e => isOpen(e) && isHappyo(e));
+          
+              // イベントIndex（集合時間/場所も拾う）
+              const idx = {};
+              list.forEach(e=>{
+                const id  = String(e.eventId ?? e.id ?? '');
+                const ymd = e.ymd || e.date || '';
+                const hm  = e.hm  || e.time || '';
+                const meet      = e.meet || e.meetTime || e['集合'] || '';
+                const meetPoint = e.meetPoint || e['集合場所'] || e.place || e.venue || '';
+                idx[id] = {
+                  id,
+                  title   : e.title || e.name || '',
+                  date    : ymd,
+                  time    : hm,
+                  datetime: [ymd, hm].filter(Boolean).join(' '),
+                  place   : e.place || e.venue || '',
+                  meet,
+                  meetPoint
+                };
+              });
+              window.__EVENT_INDEX__ = idx;
+          
+              const opts = list.map(e=>{
+                const id  = String(e.eventId ?? e.id ?? '');
+                const ymd = e.ymd || e.date || '';
+                const hm  = e.hm  || e.time || '';
+                const dt  = [ymd, hm].filter(Boolean).join(' ');
+                const tt  = e.title || e.name || '';
+                return `<option value="${id}">${dt} ｜ ${tt}</option>`;
+              }).join('') || `<option value="" disabled>（該当イベントなし）</option>`;
+          
+              // optgroup を中身だけ差し替え
+              if (optGroup) optGroup.innerHTML = opts;
+              applyModeUI();
+            }
+          
+            document.addEventListener('DOMContentLoaded', ()=>{
+              fillEventChoices();
+              applyModeUI();
+            });
+          })();  /* ← IIFE をきちんと閉じる */
+          </script>
+        </div>
+    
+        <!-- 対象ステータス（見出し＋チェック群） -->
+        <div id="cp_stat_wrap" class="statWrap">
+          <div class="repLabel">
+            対象ステータス
+            <span id="cp_stat_lock" class="lockTag" hidden>手動モード（選択不可）</span>
+          </div>
+        
+          <div class="row" style="gap:10px; margin-top:6px;">
+            <label><input type="checkbox" class="cp_stat" value="参加"> 参加</label>
+            <label><input type="checkbox" class="cp_stat" value="未定"> 未定</label>
+            <label><input type="checkbox" class="cp_stat" value="未回答"> 未回答</label>
+            <label><input type="checkbox" class="cp_stat" value="欠席"> 欠席</label>
+          </div>
+        </div>
+    
+        <!-- 宛先追加（手動） ラベル左 / セレクト右（※要望③：角丸） -->
+        <div class="row-att" id="cp_extra_row" style="margin:12px 0;">
+          <label for="cp_extra" class="repLabel">宛先追加（手動）</label>
+          <select id="cp_extra" class="selectBtn" multiple>
+            <option value="">選択してください</option>
+          </select>
+          <!-- 下段フル幅で表示 -->
+          <div class="row-att-note">
+            <span id="cp_extra_hint" class="loadingHint" hidden>（読み込み中…）</span>
+          </div>
+        </div>
+    
+        <!-- 自動選択 / 手動追加（表示のみ・薄紫） -->
+        <div class="cp-pill">
+          <div class="cp-pill-title">宛先（自動選択）</div>
+          <div class="cp-pill-body" id="cp_auto">（該当なし）</div>
+        </div>
+        <div class="cp-pill" id="cp_manual_wrap">
+          <div class="cp-pill-title">宛先（手動選択）</div>
+          <div class="cp-pill-body" id="cp_manual">（未選択）</div>
+        </div>
+    
+        <!-- ※要望④：手動追加とテンプレの間に1行分の空白 -->
+        <div class="cp-space-1line"></div>
+    
+        <!-- テンプレート -->
+        <div class="row-att" style="margin:6px 0 12px;">
+          <label for="cp_tpl" class="repLabel">テンプレート</label>
+          <select id="cp_tpl" class="selectBtn">
+            <option value="">なし</option>
+            <option value="雨天中止">雨天中止時</option>
+            <option value="時間変更">時間変更時</option>
+          </select>
+
+          <script>
+          (function(){
+            function boot(){
+              const selTpl  = document.getElementById('cp_tpl');
+              const selMode = document.getElementById('cp_event');
+              const bodyEl  = document.getElementById('cp_body');
+              const cntEl   = document.getElementById('cp_count');
+              if (!selTpl || !selMode || !bodyEl) return;
+          
+              function pickEventCtx(){
+                const eid = selMode.value;
+                const ev = (eid && eid !== 'manual') ? (window.__EVENT_INDEX__?.[eid] || null) : null;
+                return ev || { title:'{TITLE}', date:'{DATE}', time:'{TIME}',
+                               datetime:'{DATETIME}', place:'{PLACE}',
+                               meet:'{MEET_OLD}', meetPoint:'{MEET_POINT}' };
+              }
+          
+              function applyTemplate(){
+                const kind = selTpl.value;
+                const ctx  = pickEventCtx();
+                let text = '';
+          
+                if (kind === '雨天中止'){
+                  text =
+          `【雨天中止のお知らせ】
+          ${ctx.datetime} 開催予定の「${ctx.title}」は、雨天のため中止となりました。
+          楽しみにしてくださっていた皆さまには申し訳ありません。
+          
+          どうぞよろしくお願いいたします。`;
+                } else if (kind === '時間変更'){
+                  text =
+          `【集合時間変更のお知らせ】
+          ${ctx.date} の「${ctx.title}」は、集合時間を ${ctx.meet || '{MEET_OLD}'} → {MEET_NEW} に変更します。
+          集合場所：${ctx.meetPoint || '{MEET_POINT}'}
+          開始時間：${ctx.time || '{TIME}'}
+          場所：${ctx.place || '{PLACE}'}
+          
+          ご不便をおかけしますが、どうぞよろしくお願いいたします。`;
+                }
+          
+                bodyEl.value = text;
+                bodyEl.dispatchEvent(new Event('input'));
+                if (cntEl) cntEl.textContent = `${bodyEl.value.length} / ${bodyEl.maxLength || 2000}`;
+              }
+          
+              selTpl.addEventListener('change', applyTemplate);
+              selMode.addEventListener('change', () => { if (selTpl.value) applyTemplate(); });
+          
+              // 文字数カウンタ
+              if (cntEl){
+                const upd = () => cntEl.textContent = `${bodyEl.value.length} / ${bodyEl.maxLength || 2000}`;
+                bodyEl.addEventListener('input', upd); upd();
+              }
+          
+              bodyEl.style.whiteSpace = 'pre-wrap';
+              bodyEl.style.lineHeight = '1.6';
+            }
+          
+            // ← ここがポイント：DOM構築完了を待つ
+            if (document.readyState === 'loading'){
+              document.addEventListener('DOMContentLoaded', boot);
+            }else{
+              boot();
+            }
+          })();
+          </script>
+        </div>
+    
+        <!-- 本文 -->
+        <div class="cp-field">
+          <label for="cp_body" class="repLabel">本文（2000文字まで）</label>
+          <textarea id="cp_body" rows="7" maxlength="2000" class="cp-textarea"></textarea>
+          <div class="hint" id="cp_count">0 / 2000</div>
+        </div>
+    
+        <!-- アクション -->
+        <div class="row" style="gap:10px; justify-content:flex-end;">
+          <button id="cp_reset" class="btn btn-ghost">リセット</button>
+          <button id="cp_send" class="btn btn-primary">送信する</button>
+        </div>
+    
+      </div><!-- /card -->
+    </section>
   </main>
 
-  <!-- ===== 共通：SPA切替 ===== -->
-  <script>
-    function showView(id){
-      document.querySelectorAll('[data-view]').forEach(v => {
-        v.classList.toggle('show', v.id === id);
-      });
-      window.scrollTo({ top: 0, behavior: 'auto' });
+  <footer id="legalFooter" class="legal-footer" aria-label="legal links">
+  <a href="https://fujizukadaiko.github.io/taiko-liff-form-prod/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>
+  ・
+  <a href="https://fujizukadaiko.github.io/taiko-liff-form-prod/terms.html" target="_blank" rel="noopener">利用規約</a>
+</footer>
+  <style>
+    /* ===== Custom Push UI style (scoped) ===== */
+    #view-custom-push {
+      --violet: #6F4BD8;
+      --violet-500: #6F4BD8;
+      --violet-600: #5c3bcf;
+      --violet-100: #F2EEFF;
+      --ink: #2b2346;
+      --muted: #6b6b86;
+      padding: 16px;
+      background: linear-gradient(180deg, #f7f5ff 0%, #f9f9ff 100%);
     }
-    document.addEventListener('DOMContentLoaded', () => {
-      document.querySelectorAll('[data-view-target]').forEach(el => {
-        el.addEventListener('click', (ev) => {
-          ev.preventDefault();
-          const target = el.getAttribute('data-view-target');
-          if (target) showView(target);
-        });
-      });
-      document.getElementById('btnReload')?.addEventListener('click', () => location.reload());
-      // ← 起動（これを追加）
-      init();
-    });
-  </script>
+    
+    /* タイトル行 */
+    #view-custom-push .cp-header{
+      display:flex; align-items:center; justify-content:space-between;
+      margin: 8px 0 16px;
+    }
+    #view-custom-push .cp-title{
+      font-size: 22px; font-weight: 700; color: var(--ink); margin: 0;
+    }
+    
+    /* ボタン */
+    #view-custom-push .btn{
+      border-radius: 12px; padding: 10px 16px; font-weight: 700;
+      border: 2px solid transparent; transition: .2s;
+    }
+    #view-custom-push .btn-sm{ padding: 8px 12px; font-size: 14px; }
+    #view-custom-push .btn-ghost{
+      background: #fff; color: var(--violet-600); border-color: var(--violet-500);
+    }
+    #view-custom-push .btn-ghost:active{ transform: translateY(1px); }
+    #view-custom-push .btn-primary{
+      background: var(--violet-500); color:#fff; border-color: var(--violet-500);
+      box-shadow: 0 6px 16px rgba(111,75,216,.25);
+    }
+    #view-custom-push .btn-primary:active{ transform: translateY(1px); }
+    
+    /* 行：ラベル左、入力右 */
+    #view-custom-push .field-row{
+      display:flex; align-items:center; justify-content:space-between; gap:14px;
+      margin: 14px 0;
+    }
+    #view-custom-push .field-row > label{
+      font-weight: 700; color: var(--ink); letter-spacing:.02em;
+    }
+    /* 縦方向のフィールド（本文用） */
+    #view-custom-push .field-col{
+      display:flex; flex-direction:column; gap:8px; margin: 14px 0;
+    }
+    #view-custom-push .field-col > label{ font-weight:700; color:var(--ink); }
+    
+    /* セレクト/テキストエリアの共通 */
+    #view-custom-push .select, 
+    #view-custom-push .textarea{
+      flex:1 1 auto; width: 64%;
+      border:2px solid var(--violet-500); border-radius:14px;
+      background:#fff; color:#1f1637;
+      padding:12px 14px; font-size:16px; outline:none;
+    }
+    #view-custom-push .select:focus, 
+    #view-custom-push .textarea:focus{
+      border-color: var(--violet-600); box-shadow: 0 0 0 3px rgba(111,75,216,.15);
+    }
+    
+    /* チェック群（対象ステータス） */
+    #view-custom-push .checks{
+      display:flex; flex-wrap:wrap; gap:18px; justify-content:flex-end; width:64%;
+      color:#2b2346;
+    }
+    #view-custom-push .checks label{ display:flex; align-items:center; gap:8px; }
+    
+    /* 白カード */
+    #view-custom-push .card{
+      background:#fff; border-radius:16px; padding:18px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.06);
+      margin-top: 14px;
+    }
+    
+    /* 宛先の“読み取り専用”表示（薄紫の操作不可感） */
+    #view-custom-push .pillbox{
+      border:2px dashed var(--violet-500);
+      background: var(--violet-100);
+      border-radius:16px; padding:14px; margin:12px 0;
+    }
+    #view-custom-push .pillbox-title{
+      font-weight: 800; color: var(--ink); margin-bottom:6px;
+    }
+    #view-custom-push .pillbox-body{
+      color:#8a84a6;
+    }
+    
+    /* 本文 */
+    #view-custom-push .textarea{ min-height: 180px; }
+    
+    /* アクション行 */
+    #view-custom-push .actions{
+      display:flex; gap:12px; justify-content:flex-end; margin-top:16px;
+    }
+    
+    /* モバイルで右側が窮屈にならないように */
+    @media (max-width: 420px){
+      #view-custom-push .select, 
+      #view-custom-push .checks{ width: 60%; }
+    }
+    /* --- 0) 横はみ出しの安全網（右端の白帯対策） --- */
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden; /* ← まずは強制で横スク封じ */
+      box-sizing: border-box;
+    }
+    
+    /* --- 1) カスタム通知セクション自身は常に親幅内に収める --- */
+    #view-custom-push {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      /* 上の余白が気になる場合は 0 にする。セーフエリアを使うなら下の@supportsへ */
+      padding-top: 0;
+    }
+    
+    /* iOS セーフエリアを上だけに部分適用したい場合（任意） */
+    @supports (padding: env(safe-area-inset-top)) {
+      #view-custom-push { padding-top: env(safe-area-inset-top); }
+    }
+    
+    /* --- 2) タイトル行の“上マージン”を潰す --- */
+    #view-custom-push > .row-space:first-child { margin-top: 0; }
+    #view-custom-push .sectionTitle { margin: 0; }
+    
+    /* 白カード周りで意図せぬ“上だけ余白”が出る保険 */
+    #view-custom-push .card { margin-top: 0; width: 100%; box-sizing: border-box; }
+    
+    /* --- 3) フレックス行で横溢れしないように（クラス不一致も吸収） --- */
+    /* HTMLは .row-att / .repLabel / .selectBtn を使っている */
+    #view-custom-push .row-att {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    #view-custom-push .row-att .repLabel { flex: 0 0 auto; }
+    #view-custom-push .row-att .selectBtn {
+      flex: 1 1 0%;
+      min-width: 0;
+      max-width: 100%;
+    }
+    /* チェック群も折り返せるように */
+    #cp_stat_wrap .row { flex-wrap: wrap; }
+    
+    /* --- 4) 宛先の表示を“改行＋小さめ文字”に --- */
+    /* 実HTMLは .cp-pill-body / #cp_auto / #cp_manual なので両対応 */
+    #view-custom-push .cp-pill-body,
+    #cp_auto, #cp_auto_targets, #cp_manual, #cp_manual_targets {
+      white-space: pre-line;     /* \n を改行として描画 */
+      font-size: 0.9rem;         /* お好みで 0.85〜0.95rem */
+      line-height: 1.6;
+    }
+    
+    /* --- 5) 仕上げ：内側要素が親幅を超えないよう安全網 --- */
+    #view-custom-push * { max-width: 100%; box-sizing: border-box; }
+    
+    /* 1) 背景色のズレを解消：親の背景をそのまま使う */
+    #view-custom-push{
+      background: inherit !important;            /* ← 自前グラデをやめて親と完全一致 */
+      padding-top: 0;                             /* ← 上の余白はゼロ（必要なら下のsafe-areaで復活） */
+    }
+    @supports (padding: env(safe-area-inset-top)) {
+      #view-custom-push{ padding-top: env(safe-area-inset-top); } /* iOSのノッチ分だけ足す（任意） */
+    }
+    
+    /* 2) タイトル行（「カスタム通知」）の上下バランスを他ページに合わせる */
+    #view-custom-push > .row-space:first-child,
+    #view-custom-push .cp-header{
+      margin: 8px 0 12px; /* 出欠結果一覧と同等の“間” */
+    }
+    #view-custom-push .sectionTitle{ margin: 0; } /* 見出し自身の余計な上マージンを潰す */
+    
+    /* 3) 見出しとカードの間に“薄紫の余白”を作る */
+    #view-custom-push .card{ 
+      margin-top: 12px !important;  /* 前回0にしたのを戻す（1枚目に効けばOK） */
+      width: 100%;
+      box-sizing: border-box;
+    }
+    
+    /* 4) 宛先の表示は改行＋小さめ文字（自動／手動 共通） */
+    #view-custom-push .cp-pill-body,
+    #cp_auto, #cp_auto_targets, #cp_manual, #cp_manual_targets{
+      white-space: pre-line;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+    
+    /* 5) 念のための横はみ出し防止（前回の安全網は残してOK） */
+    html, body{ overflow-x: hidden; }
+    #view-custom-push *{ max-width: 100%; box-sizing: border-box; }
+
+    #cp_body {
+      white-space: pre-wrap;  /* 改行と折返しを両立 */
+      line-height: 1.6;
+    }
+    /* 対象ステータスの枠・背景をなくす */
+    #cp_stat_wrap,
+    #cp_stat_wrap.is-disabled {
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+    
+    /* 内側行の余白だけ軽く */
+    #cp_stat_wrap .row { margin-top: 6px; }
+    
+    /* ラベルとチェックはそのまま */
+    #cp_stat_wrap .repLabel { margin: 0; }
+
+    /* 対象ステータスの枠・背景を完全に消す（最優先の強い指定） */
+    #view-custom-push #cp_stat_wrap.statWrap.is-disabled,
+    #view-custom-push #cp_stat_wrap {
+      border: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+    }
+    /* ---- プレビュー用モーダル ---- */
+    .cpModalOverlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.45);
+      display:flex; align-items:center; justify-content:center;
+      z-index:1000;
+    }
+    .cpModal{
+      background:#fff; border:1px solid var(--c-border);
+      border-radius:14px; padding:16px; width:min(680px, calc(100% - 28px));
+      box-shadow:0 12px 32px rgba(0,0,0,.12);
+    }
+    .cpModal h3{ margin:0 0 8px; font-size:16px; font-weight:700; }
+    .cpModal .meta{ font-size:13px; color:#444; margin-bottom:8px; }
+    .cpModal pre{
+      white-space:pre-wrap; word-break:break-word;
+      background:#f7f7fb; border:1px solid var(--c-border);
+      border-radius:10px; padding:10px; max-height:40vh; overflow:auto;
+      font-size:14px; line-height:1.6;
+    }
+    .cpModal .actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+    .cpModal .muted{ color:#6b6b6b; font-size:12px; }
+    
+    /* 種別バッジの配色（.kind-badge / .scKind の中身テキストに応じて） */
+    .kind-badge, .scKind { border-color: transparent; }
+    .kind-badge.badge--announce, .scKind.badge--announce {
+      background:#FEF3C7; border-color:#F59E0B; color:#92400E; /* 黄 */
+    }
+    .kind-badge.badge--practice, .scKind.badge--practice {
+      background:#ECFDF5; border-color:#10B981; color:#065F46; /* 緑 */
+    }
+    .kind-badge.badge--other, .scKind.badge--other {
+      background:#F5F3FF; border-color:#8B5CF6; color:#5B21B6; /* 紫 */
+    }
+    /* === 共通フッター（常に画面下に固定） === */
+    .legal-footer{
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      text-align: center;
+      font-size: 10px;
+      color: var(--c-muted);
+      padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); /* iOSノッチ対応 */
+      background: transparent; /* 背景は透過のまま(邪魔なら#fffなどに) */
+      z-index: 40;
+    }
+    .legal-footer a{
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      opacity: .9;
+    }
+    
+    /* フッターに隠れないよう、全ページの下余白を少し増やす */
+    main{
+      padding-bottom: 42px; /* フッター高さぶんの余白 */
+    }
+    @supports (padding: max(0px)){
+      main{ padding-bottom: max(42px, env(safe-area-inset-bottom)); }
+    }
+    /* ===== カスタム通知：タイトル周りの余白を他ページと揃える ===== */
+    #view-custom-push > .row-space{
+      margin: 8px 0 8px !important;   /* 上下とも控えめに（出欠結果一覧と同程度） */
+    }
+    #view-custom-push .sectionTitle{
+      margin: 0 !important;           /* 見出し自体の余白をリセット */
+    }
+    #view-custom-push .card:first-of-type{
+      margin-top: 8px !important;     /* 1枚目カードの上マージンだけ薄く */
+    }
+  </style>
 
   <!-- ===== HomeEventsUI v7 ===== -->
   <script>
@@ -1947,7 +2666,8 @@ const $ = s => document.querySelector(s);
 const INCLUDE_BOTH_FOR_ALL = true;
 // ↑②の仕様に合わせて false（＝常に『両方』は表示対象から除外）
 // 運用で方針変更する場合は true にすると、常に『両方』を表示に含められます。
-function show(id){ document.querySelectorAll("[data-view]").forEach(v=>v.classList.remove("show")); $(id).classList.add("show"); }
+function show(id){ document.querySelectorAll("[data-view]").forEach(v=>v.classList.remove("show")); $(id).classList.add("show"); const lf = document.getElementById('legalFooter');
+  if (lf) lf.style.display = (id === '#view-home') ? '' : 'none';}
 function logHome(t){ $("#homeLog").textContent = t||""; }
 function logForm(t){ $("#formLog").textContent = t||""; }
 function logReg(t){ $("#regLog").textContent = t||""; }
@@ -2222,7 +2942,12 @@ function bindHandlers(){
     show("#view-admin-report");
     reportReload();
   };
-
+  // 管理メニュー：カスタム通知
+  $("#btnAdminCustomPush").onclick = () => {
+    if (!state.isAdmin){ alert("管理者のみアクセス可能です"); return; }
+    show("#view-custom-push");                 // 画面表示
+    window.initCustomPushPage?.();             // 初期化（イベント候補読込・参加のみONなど）
+  };
   // 管理画面
   $("#btnAdminBack").onclick = ()=> show("#view-home");
   document.getElementById('btnAdminReload')
@@ -2989,6 +3714,7 @@ async function onRegister(){
 (() => {
   if (window.__SchedulesBlockV__ && window.__SchedulesBlockV__ >= 6) return;
   window.__SchedulesBlockV__ = 6;
+  const KIND_CLASS = { '発表':'badge--announce', '練習':'badge--practice', 'その他':'badge--other' };
   // --- フィルタ保存/復元（localStorage） ---
   const FILTER_KEY = 'sched:filters:v1';
   function saveFilters(){
@@ -3036,6 +3762,7 @@ async function onRegister(){
     const segLabel = dispSeg(segNorm);
     const dateText = ymdDow(parseYmdStrictLocal(it.ymd || it.date)) || (it.date || "");
     const kindText = String(it.kind || "").trim();
+    const kindCls  = KIND_CLASS[kindText] || ""; 
     const memoText = String(it.memo || "").trim();
   
     const meetTxt  = [
@@ -3056,7 +3783,7 @@ async function onRegister(){
         <!-- 1行目：左=区分 / 右=種別 -->
         <div class="scTop">
           ${segLabel ? `<span class="seg-badge ${segNorm==='adult'?'seg-adult':segNorm==='child'?'seg-child':'seg-both'}">${segLabel}</span>` : ``}
-          ${kindText ? `<span class="scKind">${kindText}</span>` : ``}
+          ${kindText ? `<span class="scKind ${kindCls}">${kindText}</span>` : ``}
         </div>
   
         <!-- 2行目：日付 + タイトル（1行省略） -->
@@ -3746,8 +4473,8 @@ window.reportReload = function(){ initAdminReportPage(); };
   
   // --- ヘルパー：state.report からセレクトを全面再描画 ---
   function drawEventSelectFromReport(){
-    if (!selEvent) return;
-    selEvent.innerHTML = `<option value="">（選択してください）</option>`;
+    if (!selMode) return;
+    selMode.innerHTML = `<option value="">（選択してください）</option>`;
 
     const items = (state.report || []).slice().sort((a,b)=>
       String(a.ymd||"").localeCompare(String(b.ymd||"")) ||
@@ -3760,9 +4487,9 @@ window.reportReload = function(){ initAdminReportPage(); };
       // ★ id / eventId のどちらでもOKに
       opt.value = String(e.id ?? e.eventId ?? "");
       opt.textContent = `${e.ymd || ""}${e.time ? " " + e.time : ""}  ${e.title || ""}`;
-      selEvent.appendChild(opt);
+      selMode.appendChild(opt);
     }
-    selEvent.disabled = false;
+    selMode.disabled = false;
   }
 
     /* ===== 出欠結果一覧（管理者） 1枚カード版 ===== */
@@ -3872,7 +4599,7 @@ window.reportReload = function(){ initAdminReportPage(); };
   }
   // 出欠結果の描画（#repEvent の value を eventId とみなして取得）
   async function renderReport(){
-    const lid = encodeURIComponent(state.lineId || "");
+    const lid = encodeURIComponent(((window.state && window.state.lineId) || ""));
     const sel = document.getElementById('repEvent');
     const box = document.getElementById('repBox');
     const id  = sel?.value || '';
@@ -4004,9 +4731,10 @@ window.reportReload = function(){ initAdminReportPage(); };
           <div class="repPersonRow">
             <div class="repName">${h(p.name)}</div>
             <div class="repAt">${
-              (p.comment && `<span class="repComment">${h(String(p.comment).trim())}</span>`)
-              || repFormatAt(p.at)
-              || ''
+              (p.comment
+                 ? `<span class="repComment">${h(String(p.comment).trim())}</span>`
+                : (repFormatAt(p.at) ? `<span class="repComment">${h(repFormatAt(p.at))}</span>` : '')
+              )
             }</div>
           </div>
         `).join("")}
@@ -4025,13 +4753,15 @@ window.reportReload = function(){ initAdminReportPage(); };
     if (!sel) return;
   
     // 古いメタを一旦クリア（失敗時の取り違え防止）
-    state.reportMeta = [];
+    window.state = window.state || {};
+    window.state.reportMeta = [];
   
     sel.disabled = true;
     sel.innerHTML = `<option value="">（読み込み中…）</option>`;
     try{
       // 認可の都合で lineId/admin を付けて取得
-      const r = await api(`?attendanceReport=1&meta=1&lineId=${encodeURIComponent(state.lineId)}&admin=1`);
+      const lid = encodeURIComponent(((window.state && window.state.lineId) || ""));
+      const r = await api(`?attendanceReport=1&meta=1&lineId=${lid}&admin=1`);
       if (r?.status === 'ok' && Array.isArray(r.list)){
         // ★ ここで保存
         state.reportMeta = r.list;
@@ -4070,6 +4800,581 @@ window.reportReload = function(){ initAdminReportPage(); };
   window.initAdminReportPage = initAdminReportPage;
   window.reportReload = function(){ initAdminReportPage(); };
 })();
+
+  // ❶ lineId が確定するまで待つ
+  async function waitLineId(timeoutMs = 4000){
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline){
+      let lid = (window.state && window.state.lineId) || "";
+      if (!lid && window.liff?.getDecodedIDToken) {
+        try { lid = liff.getDecodedIDToken()?.sub || ""; } catch(_) {}
+      }
+      if (lid) return lid;
+      await new Promise(r => setTimeout(r, 120));
+    }
+    return "";
+  }
+
+  (function(){
+    // --- フォールバック（あれば既存の $ / show をそのまま使用） ---
+    window.$ = window.$ || (sel => document.querySelector(sel));
+    window.show = window.show || function(sel){
+      document.querySelectorAll('[data-view]').forEach(sec=>{
+        if (sec.matches(sel)) sec.removeAttribute('hidden');
+        else sec.setAttribute('hidden','');
+      });
+      window.scrollTo({top:0, behavior:'instant'});
+    };
+  
+    // トップへ戻る（カスタム通知 → ホーム）
+    const btn = document.getElementById('btnCustomBack');
+    if (btn) btn.addEventListener('click', ()=> show('#view-home'));
+  
+    // （念のため）ホームセクションが data-view を持っているかチェック
+    // <section id="view-home" data-view> ... </section> の形が必須です
+  })();
+
+    (function(){
+      document.addEventListener('DOMContentLoaded', init);
+    
+      async function init(){
+        // ====== 要素参照 ======
+        const sec          = document.getElementById('view-custom-push');
+        if (!sec) return;
+    
+        const selMode      = document.getElementById('cp_event');          // 「宛先の選び方」プルダウン（= イベント選択を兼ねる）
+        const statWrap     = document.getElementById('cp_stat_wrap');      // 対象ステータス（枠）
+        const statLockTag  = document.getElementById('cp_stat_lock');      // 「手動モード（選択不可）」タグ
+        const statChecks   = Array.from(sec.querySelectorAll('.cp_stat')); // 参加/未定/未回答/欠席
+    
+        const selExtra     = document.getElementById('cp_extra');          // 宛先追加（手動）
+        const hintExtra    = document.getElementById('cp_extra_hint');     // （読み込み中…）ラベル
+    
+        const boxAuto   = sec.querySelector('#cp_auto_targets, #cp_auto');   // 宛先（自動選択）
+        const boxManual = sec.querySelector('#cp_manual_targets, #cp_manual'); // 宛先（手動選択）
+    
+        // 画面内キャッシュ
+        sec.__rows   = [];   // 出欠 rows（event選択時）
+    
+        // ===== 小物ユーティリティ =====
+        const getCheckedStats = () =>
+          Array.from(document.querySelectorAll('#cp_stat_wrap .cp_stat:checked'))
+            .map(i => i.value);
+        const setDisabled = (els, on)=> els.forEach(el=>{ if(el) el.disabled = !!on; });
+        const setText     = (el, s)=> { if(el) el.textContent = s; };
+        const setHTML     = (el, s)=> { if(el) el.innerHTML   = s; };
+    
+        function loadingOnExtra(on){
+          if (hintExtra) hintExtra.hidden = !on;
+          if (selExtra){
+            selExtra.disabled = !!on;
+            if (on) selExtra.innerHTML = '<option value="" disabled>読み込み中…</option>';
+          }
+        }
+    
+        async function myLineId(){
+          try { if (window.getMyLineId_) return await window.getMyLineId_(); } catch(_){}
+          const tryOnce = () => {
+            if (window.__ME__?.lineId) return window.__ME__.lineId;
+            if (window.state?.lineId)  return window.state.lineId;
+            try{
+              const idt = window.liff?.getDecodedIDToken?.();
+              if (idt?.sub){ (window.state ||= {}).lineId = idt.sub; return idt.sub; }
+            }catch(_){}
+            return '';
+          };
+          for (let i=0;i<40;i++){ const id=tryOnce(); if(id) return id; await new Promise(r=>setTimeout(r,100)); }
+          return '';
+        }
+    
+        // ===== 見た目ロック（手動モード） =====
+        function applyModeLock(){
+          const manual = (selMode?.value === 'manual');
+          setDisabled(statChecks, manual);
+          statWrap?.classList.toggle('is-locked', manual);
+          if (statLockTag) statLockTag.hidden = !manual;
+          setText(boxAuto, manual ? '（手動モード：自動選択は使いません）' : '（読込中…）');
+        }
+    
+        // ===== イベント一覧をプルダウンへ（先頭は「手動で選ぶ」） =====
+        async function fillEventOptions(){
+          if (!selMode) return;
+    
+          // 一旦ローディング
+          selMode.innerHTML = '<option value="" disabled>読み込み中…</option>';
+          selMode.disabled = true;
+    
+          const lid = await getLineId();
+          const url = new URL(API_ENDPOINT);
+          url.searchParams.set('attendanceReport','1');
+          url.searchParams.set('meta','1');
+          url.searchParams.set('admin','1');
+          if (lid) url.searchParams.set('lineId', lid);
+    
+          let r = {status:'error'};
+          try { r = await fetch(url).then(x=>x.json()); } catch(_){}
+    
+          const list = Array.isArray(r?.list) ? r.list
+                      : Array.isArray(r?.meta) ? r.meta
+                      : Array.isArray(r?.data) ? r.data : [];
+    
+          // 「公開中・発表」優先（GASは accepting:'open' を返す）
+          const filt = list.filter(e=>{
+            const open = (e.accepting === 'open');
+            const kind = (e.type === '発表' || e.kind === '発表');
+            return open && kind;
+          });
+          const useList = filt.length ? filt : list;
+    
+          const opts = [
+            `<option value="manual">手動のみで選ぶ</option>`,
+            ...useList.map(e=>{
+              const id = String(e.eventId ?? e.id ?? '');
+              const dt = [e.ymd||e.date||'', e.time||e.hm||''].filter(Boolean).join(' ');
+              const tt = e.title || e.name || '';
+              return `<option value="${id}">${dt}　${tt}</option>`;
+            })
+          ].join('');
+    
+          selMode.innerHTML = opts || `<option value="manual">手動のみで選ぶ</option>`;
+          selMode.disabled = false;
+          selMode.value = 'manual';       // 既定＝手動
+          applyModeLock();
+    
+          // 手動の候補を初回取得
+          await populateManualList();
+        }
+    
+        // ===== イベント選択時：出欠結果を取得 → 自動枠へ反映 =====
+        async function fetchReportForEvent(evId){
+          if (!evId || evId==='manual') return;
+
+          sec.__loadingRows = true;                    // ★ 追加：開始
+          setText(boxAuto, '（読込中…）');
+        
+          const lid = await getLineId();
+          const url = new URL(API_ENDPOINT);
+          url.searchParams.set('attendanceReport','1');
+          url.searchParams.set('eventId', evId);
+          url.searchParams.set('admin','1');
+          if (lid) url.searchParams.set('lineId', lid);
+        
+          let r = {status:'error'};
+          try {
+            r = await fetch(url).then(x=>x.json());
+          } catch(_){
+            // no-op
+          } finally {
+            sec.__loadingRows = false;                 // ★ 追加：終了（成功/失敗どちらでも）
+          }
+        
+          if (r.status!=='ok'){
+            setText(boxAuto, '（取得エラー）');
+            sec.__rows = [];
+            return;
+          }
+        
+          sec.__rows   = Array.isArray(r.rows)   ? r.rows   : [];
+          sec.__roster = Array.isArray(r.roster) ? r.roster : [];
+          sec.__loadingAuto = false;
+          sec.__autoTargets = []; // [{lineId, name, label, perfs}]
+          
+          const anyChecked = getCheckedStats().length > 0;
+          if (anyChecked) renderAutoBox();
+          else setText(boxAuto, '（対象ステータスを選択してください）');
+        }
+    
+        // ===== 対象ステータス選択に応じて自動枠を描画 =====
+        function renderAutoBox(){
+          if (sec.__loadingRows){
+            setText(boxAuto, '（読込中…）');
+            return;
+          }
+        
+          const sel = new Set(getCheckedStats());
+          const out = [];
+          if (sel.has('未回答')){
+            const answered = new Set((sec.__rows||[]).map(x => x.name).filter(Boolean));
+            const noans = (sec.__roster||[]).filter(nm => !answered.has(nm));
+            out.push(...noans);
+          }
+          ['参加','未定','欠席'].forEach(st=>{
+            if (sel.has(st)){
+              out.push(...(sec.__rows||[])
+                .filter(x => x.attend === st)
+                .map(x => x.displayName || x.name));
+            }
+          });
+          setText(boxAuto, out.length ? out.join('、') : '（該当なし）');
+        }
+    
+        // ===== 手動モード：通知Yの名簿を取得 → selExtra に入れる =====
+        async function populateManualList(){
+          if (!selExtra) return;
+          loadingOnExtra(true);
+    
+          const lid = await getLineId();
+          const url = new URL(API_ENDPOINT);
+          url.searchParams.set('listInputers','1');          // ★ 新API
+          url.searchParams.set('deliverableOnly','1');
+          url.searchParams.set('notifyOnly','1');
+          if (lid) url.searchParams.set('lineId', lid);
+    
+          let r = {status:'error'};
+          try { r = await fetch(url).then(x=>x.json()); } catch(_){}
+    
+          // ★ GAS側パッチで返す配列（[{lineId,name}]）
+          const list = Array.isArray(r.list) ? r.list : [];
+          selExtra.innerHTML = list.map(x =>
+            `<option value="${x.lineId}">${x.label || x.name}</option>`
+          ).join('') || `<option value="" disabled>オプションなし</option>`;
+    
+          selExtra.disabled = (list.length === 0);
+          loadingOnExtra(false);
+          renderManualBox();
+        }
+    
+        // ===== 手動の選択を表示枠に反映 =====
+        function renderManualBox(){
+          if (!selExtra || !boxManual) return;
+          const names = Array.from(selExtra.selectedOptions)
+            .map(o => o.textContent.trim())
+            .filter(Boolean);
+          setText(boxManual, names.length ? names.join('\n') : '（未選択）');
+        }
+
+        // === CustomPush: globals bootstrap ===
+        (function(){
+          const root = document.getElementById('view-custom-push');
+          if (!root) return;
+        
+          // 共有ハンドル（全ブロックから参照する前提）
+          window.cpSec   = window.cpSec   || root;
+          window.selMode = window.selMode || document.getElementById('cp_event');          // イベント/手動
+          window.boxAuto = window.boxAuto || document.querySelector('#cp_auto_targets, #cp_auto');  // 自動表示枠
+        
+          // 状態用の安全初期化
+          if (typeof cpSec.__loadingAuto === 'undefined') cpSec.__loadingAuto = false;
+          if (!Array.isArray(cpSec.__autoTargets))        cpSec.__autoTargets = [];
+        
+          // ユーティリティ（未定義なら用意）
+          window.getCheckedStats = window.getCheckedStats || function(){
+            return Array.from(cpSec.querySelectorAll('.cp_stat:checked')).map(el => el.value);
+          };
+          window.setText = window.setText || function(el, s){
+            if (el) el.textContent = s;
+          };
+        })();
+
+        // ===== 結線（置換）=====
+        (function(){
+          const sec      = window.cpSec;
+          const selMode  = window.selMode || document.getElementById('cp_event');
+          const boxAuto  = window.boxAuto || document.querySelector('#cp_auto_targets, #cp_auto');
+          const statWrap = document.getElementById('cp_stat_wrap');
+          const selExtra = document.getElementById('cp_extra');
+        
+          if (!sec || !selMode) return;
+        
+          // 「宛先の選び方」変更
+          selMode.addEventListener('change', async ()=>{
+            if (typeof applyModeLock === 'function') applyModeLock();
+            if (selMode.value === 'manual'){
+              sec.__loadingAuto = false; // 読込フラグ解除（任意）
+              setText(boxAuto, '（手動モード：自動選択は使いません）');
+              if (typeof populateManualList === 'function') await populateManualList();
+            } else {
+              if (typeof refreshAutoByPreview === 'function') await refreshAutoByPreview();
+            }
+          });
+        
+          // 対象ステータス変更 → イベントモード時のみプレビュー更新
+          statWrap?.addEventListener('change', (e)=>{
+            if (!e.target?.classList?.contains('cp_stat')) return;
+            if (selMode.value !== 'manual' && typeof refreshAutoByPreview === 'function'){
+              refreshAutoByPreview();
+            }
+          });
+        
+          // 手動追加の選択内容を表示枠に反映
+          selExtra?.addEventListener('input',  ()=> typeof renderManualBox==='function' && renderManualBox());
+          selExtra?.addEventListener('change', ()=> typeof renderManualBox==='function' && renderManualBox());
+        })();
+
+        // ===== 初期化 =====
+        if (boxAuto)   setText(boxAuto,  '（初期化中…）');
+        if (boxManual) setText(boxManual,'（未選択）');
+        await fillEventOptions();
+        applyModeLock();
+        renderManualBox();
+      }
+    })();
+  
+      async function refreshAutoByPreview(){
+        const sec     = window.cpSec   || document.getElementById('view-custom-push');
+        const selMode = window.selMode || document.getElementById('cp_event');
+        const boxAuto = window.boxAuto || document.querySelector('#cp_auto_targets, #cp_auto');
+      
+        if (!selMode || selMode.value==='manual') return;
+      
+        const sts = getCheckedStats();
+        if (sts.length === 0){
+          setText(boxAuto, '（対象ステータスを選択してください）');
+          return;
+        }
+      
+        sec.__loadingAuto = true;
+        setText(boxAuto, '（読込中…）');
+      
+        const lid = await getLineId();          // ★ Admin 判定用
+        const url = new URL(API_ENDPOINT);
+        url.searchParams.set('attendanceReport','1');
+        url.searchParams.set('customPushPreview','1');
+        url.searchParams.set('eventId', selMode.value);
+        url.searchParams.set('statuses', JSON.stringify(sts));
+        if (lid){
+          url.searchParams.set('lineId', lid);       // ★ これが必須（Admin 判定）
+          url.searchParams.set('senderLineId', lid); // （任意）ログ/テンプレ側で利用可
+        }
+      
+        let r;
+        try{ r = await fetch(url).then(x=>x.json()); }
+        catch(e){ r = { status:'error', message:String(e) }; }
+        console.log('customPushPreview resp:', r);   // ★ デバッグログ（開発者ツールで確認）
+      
+        sec.__loadingAuto = false;
+      
+        if (r.status!=='ok'){
+          setText(boxAuto, '（取得エラー）');
+          sec.__autoTargets = [];
+          return;
+        }
+      
+        sec.__autoTargets = Array.isArray(r.autoTargets) ? r.autoTargets : [];
+        const labels = sec.__autoTargets
+          .map(x => x.label || x.name)
+          .filter(Boolean);
+      
+        setText(boxAuto, labels.length ? labels.join('\n') : '（該当なし）');
+      }
+    function setText(el, s){ if(el) el.textContent = s; }
+    function getCheckedStats(){
+      const sec = window.cpSec || document.getElementById('view-custom-push');
+      return Array.from(sec?.querySelectorAll('.cp_stat')||[])
+        .filter(cb=>cb.checked).map(cb=>cb.value);
+    }
+
+    (function(){
+      const root    = document.getElementById('view-custom-push');
+      if (!root) return;
+    
+      const selMode = document.getElementById('cp_event');
+      const selTpl  = document.getElementById('cp_tpl');
+      const bodyEl  = document.getElementById('cp_body');
+      const cntEl   = document.getElementById('cp_count');
+      const boxAuto = document.getElementById('cp_auto');   // 表示用（自動）
+      const boxMan  = document.getElementById('cp_manual'); // 表示用（手動）
+      const selExtra= document.getElementById('cp_extra');
+    
+      // 状態キャッシュ（既存があれば流用）
+      root.__autoTargets = Array.isArray(root.__autoTargets) ? root.__autoTargets : [];
+    
+      function getCheckedStats(){
+        return Array.from(document.querySelectorAll('#cp_stat_wrap .cp_stat:checked')).map(el=>el.value);
+      }
+    
+      // いま選べている自動宛先が未取得なら、preview APIで埋める
+      async function ensureAutoTargets(){
+        if (!selMode || !selMode.value || selMode.value === 'manual') return [];
+        if (root.__autoTargets && root.__autoTargets.length) return root.__autoTargets;
+    
+        const sts = getCheckedStats();
+        if (sts.length === 0) return [];
+    
+        // API: /?attendanceReport=1&customPushPreview=1&eventId=..&statuses=[..]&lineId=..&senderLineId=..
+        let lid = '';
+        try{ if (typeof window.getLineId === 'function') lid = await window.getLineId(); }catch(_){}
+        const url = new URL(API_ENDPOINT);
+        url.searchParams.set('attendanceReport','1');
+        url.searchParams.set('customPushPreview','1');
+        url.searchParams.set('eventId', selMode.value);
+        url.searchParams.set('statuses', JSON.stringify(sts));
+        if (lid){
+          url.searchParams.set('lineId', lid);
+          url.searchParams.set('senderLineId', lid);
+        }
+    
+        try{
+          const r = await fetch(url).then(x=>x.json());
+          if (r?.status === 'ok'){
+            root.__autoTargets = Array.isArray(r.autoTargets) ? r.autoTargets : [];
+            // 表示も更新（空なら“該当なし”）
+            if (boxAuto){
+              const labels = root.__autoTargets.map(x => x.label || x.name).filter(Boolean);
+              boxAuto.textContent = labels.length ? labels.join('\n') : '（該当なし）';
+            }
+          }
+        }catch(_){}
+        return root.__autoTargets || [];
+      }
+    
+      function collectManualTargets(){
+        if (!selExtra) return [];
+        return Array.from(selExtra.selectedOptions || [])
+          .map(o => ({ lineId: o.value, label: o.textContent.trim() }))
+          .filter(x => x.lineId);
+      }
+    
+      async function collectAllTargets(){
+        const auto = await ensureAutoTargets(); // [{lineId,label}]
+        const man  = collectManualTargets();
+        const uniq = new Map();
+        [...auto, ...man].forEach(x => { if (x && x.lineId) uniq.set(x.lineId, { lineId:x.lineId, label:x.label || x.name || x.lineId }); });
+        return Array.from(uniq.values());
+      }
+    
+      // --- リセット ---
+      function doReset(){
+        // イベント＝手動
+        if (selMode){
+          selMode.value = 'manual';
+          selMode.dispatchEvent(new Event('change'));
+        }
+        // ステータス未選択
+        document.querySelectorAll('#cp_stat_wrap .cp_stat').forEach(cb => cb.checked = false);
+        // 自動宛先表示とキャッシュをクリア
+        root.__autoTargets = [];
+        if (boxAuto) boxAuto.textContent = '（手動モード：自動選択は使いません）';
+        // 手動宛先の選択を解除
+        if (selExtra){
+          Array.from(selExtra.options).forEach(o => o.selected = false);
+        }
+        if (boxMan) boxMan.textContent = '（未選択）';
+        // テンプレ＆本文クリア
+        if (selTpl){ selTpl.value = ''; }
+        if (bodyEl){
+          bodyEl.value = '';
+          bodyEl.dispatchEvent(new Event('input'));
+        }
+        if (cntEl) cntEl.textContent = `0 / ${bodyEl?.maxLength || 2000}`;
+      }
+    
+      // --- プレビューUI ---
+      function openPreview({body, count, sampleList, onConfirm}){
+        const ov = document.createElement('div');
+        ov.className = 'cpModalOverlay';
+        ov.innerHTML = `
+          <div class="cpModal" role="dialog" aria-modal="true">
+            <h3>送信プレビュー</h3>
+            <div class="meta">宛先 <b>${count}</b> 人に送信します。</div>
+            <pre>${body.replace(/[<>&]/g, m => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]))}</pre>
+            <div class="muted" style="margin-top:6px;">
+              宛先例：${sampleList.slice(0,3).map(s=>`<span class="pill sm" style="margin-right:6px;">${s}</span>`).join('')}
+              ${sampleList.length>3 ? `ほか ${sampleList.length-3} 名` : ''}
+            </div>
+            <div class="actions">
+              <button type="button" class="btn btn-ghost btn-sm">キャンセル</button>
+              <button type="button" class="btn btn-primary btn-sm" id="cp_do_send">OK（送信）</button>
+            </div>
+          </div>`;
+        document.body.appendChild(ov);
+    
+        const btns = ov.querySelectorAll('.btn');
+        const close = () => { ov.remove(); };
+        btns[0].addEventListener('click', close);
+        btns[1].addEventListener('click', async ()=>{
+          btns[0].disabled = true; btns[1].disabled = true;
+          try{ await onConfirm(); } finally { close(); }
+        });
+      }
+    
+      // --- 実送信 ---
+      async function sendNow({ body, targets, eventId }){
+        const sender = (typeof window.getLineId === 'function') ? (await window.getLineId()) : '';
+      
+        const form = new URLSearchParams();
+        form.set('customPushSend', '1');
+        if (sender) form.set('senderLineId', sender);
+        if (eventId && eventId !== 'manual') form.set('eventId', eventId);
+        form.set('body', body);
+        form.set('targets', JSON.stringify(targets.map(t => t.lineId)));
+      
+        // まず通常の CORS で試す
+        try{
+          const res = await fetch(API_ENDPOINT, { method:'POST', body: form });
+          // 読めるなら JSON を読む
+          let data = null;
+          try { data = await res.json(); } catch(_) {}
+          if (res.ok) return data || { status:'ok' };
+          throw new Error('HTTP '+res.status);
+        }catch(e){
+          console.warn('CORS failed, fallback to no-cors:', e);
+          // フォールバック：投げっぱなし（成功可否は読めない）
+          try{
+            await fetch(API_ENDPOINT, { method:'POST', body: form, mode:'no-cors' });
+            return { status:'ok', note:'no-cors fallback' };
+          }catch(err){
+            return { status:'error', message:String(err) };
+          }
+        }
+      }
+    
+      // --- バリデーション（未入力やプレースホルダを検知） ---
+      function validateBody(text){
+        if (!text || !text.trim()) return '本文が空です。';
+        const remains = [];
+        ['{MEET_NEW}','{MEET_POINT}','{TIME}','{PLACE}','{MEET_OLD}','{TITLE}','{DATE}','{DATETIME}'].forEach(ph=>{
+          if (text.includes(ph)) remains.push(ph);
+        });
+        if (remains.length) return `本文に未置換の項目があります：${remains.join('、')}`;
+        return '';
+      }
+    
+      // === イベント結線 ===
+      const btnReset = document.getElementById('cp_reset');
+      const btnSend  = document.getElementById('cp_send');
+    
+      btnReset?.addEventListener('click', (e)=>{ e.preventDefault(); doReset(); });
+    
+      btnSend?.addEventListener('click', async (e)=>{
+        e.preventDefault();
+    
+        const body = bodyEl?.value || '';
+        const err  = validateBody(body);
+        if (err){ alert(err); return; }
+    
+        // 宛先収集（必要なら preview API を叩いて最新化）
+        const targets = await collectAllTargets();
+        if (!targets.length){
+          alert('宛先がありません。イベントと対象ステータス、または手動宛先を選択してください。');
+          return;
+        }
+    
+        // プレビュー → OKで送信
+        openPreview({
+          body,
+          count: targets.length,
+          sampleList: targets.map(t => t.label || t.lineId),
+          onConfirm: async ()=>{
+            // ボタンを無効化（連打防止）
+            btnSend.disabled = true;
+    
+            // 送信
+            const res = await sendNow({ body, targets, eventId: selMode?.value });
+            if (res?.status === 'ok'){
+              alert('送信しました。');
+              // 任意でリセット
+              // doReset();
+            }else{
+              alert(`送信に失敗しました：${res?.message || 'unknown error'}`);
+            }
+    
+            btnSend.disabled = false;
+          }
+        });
+      });
+    
+    })();
 
 </script> 
   
