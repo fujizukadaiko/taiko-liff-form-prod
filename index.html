@@ -9,10 +9,32 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.0.2";  // stable ver→v1.0.2
+  const FRONT_VERSION = "v1.1.0";  // stable ver→v1.1.0
   const LIFF_ID = "2008270687-9qV1G3yq";
-  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzXcSfGOxXEgXPzQMBylNDuwftZcs77B-_nhYc8NmSxwbymmhRdPzAWSUv-FS7sRjPc/exec";     // GAS v1.0.2
+  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzc6Y0mvqIqiMW750JD8YGrRRQaRBYme9XyGfyNbsIW8_sR0f94r364mYN0_s08u7dk/exec";     // GAS v1.1.0
 
+  // 更新履歴
+  window.__CHANGELOG_ENTRIES__ = [
+    {
+      date: "2025-11-15",
+      title: "ご意見BOX（右下ボタン）を追加",
+      tags: ["機能追加","UI"],
+      body: "気づいた点や改善要望を送信できるフォームを追加しました。右下の吹き出しボタンから利用できます。"
+    },
+    {
+      date: "2025-11-15",
+      title: "今後の予定に演奏開始時間を表示",
+      tags: ["改善","UI"],
+      body: "イベント一覧に演奏開始時間を表示するようにしました。"
+    },
+    {
+      date: "2025-11-15",
+      title: "更新履歴ページを追加",
+      tags: ["機能追加","UI"],
+      body: "アプリ内の変更点を確認できるようになりました。右上「vX.X.X」から開けます。未読マークも表示されます。"
+    }
+  ];
+  
   const ENV_NS = (() => {
     const raw = [location.origin, LIFF_ID, API_ENDPOINT].join('|');
     // 短いハッシュでOK（djbx33a）
@@ -521,6 +543,140 @@
       box-shadow: 0 4px 16px rgba(0,0,0,.06);
     }
     #view-custom-push .sectionTitle{ margin-bottom: 8px; }
+    
+    #summaryFreeQuotaBox .kv { display: grid; gap: 6px; }
+    #summaryFreeQuotaBox .kvRow { display:flex; justify-content:space-between; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
+    #summaryFreeQuotaBox .kvKey { color:#666; font-size:13px; }
+    #summaryFreeQuotaBox .kvVal { font-weight:600; }
+
+    .summaryCard .kpi { display:inline-block; min-width:120px; padding:8px 10px; margin:4px; border:1px solid #eee; border-radius:8px; }
+    .summaryCard .kpiLabel { font-size:12px; color:#666; }
+    .summaryCard .kpiValue { font-size:20px; font-weight:700; }
+    .summaryCard .num { text-align:right; font-variant-numeric: tabular-nums; }
+    .summaryCard .ok { color:#0a7; }
+    .summaryCard .ng { color:#c33; }
+    .summaryCard .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
+    .summaryCard .summaryHeader { font-weight:700; margin:6px 0 8px; }
+    .summaryCard .summarySubHeader { font-weight:700; margin:10px 0 6px; }
+    .table.compact th, .table.compact td { padding:4px 6px; }
+
+    /* サマリ見出し行：右端へボタン寄せ */
+    #view-summary .card .row.header {
+      display:flex; align-items:center; gap:8px; margin-bottom:8px;
+    }
+    #view-summary .card .row.header .sectionTitle { flex:1; } /* ← これでボタンが右端へ */
+    
+    /* サマリカードのグリッド */
+    .metricsGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    @media (min-width: 480px){
+      .metricsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (min-width: 720px){
+      .metricsGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+    .metricCard {
+      border: 1px solid #e6e6e6;
+      border-radius: 12px;
+      padding: 14px 12px;
+      background: #fff;
+    }
+    .metricTitle { font-size: 12px; color:#666; margin-bottom: 6px; }
+    .metricValue { font-size: 22px; font-weight: 700; }
+    .tableSm { width:100%; border-collapse: collapse; }
+    .tableSm th, .tableSm td { padding: 8px 6px; border-bottom: 1px solid #eee; }
+    .sectionSub { font-weight:700; font-size:16px; margin:14px 0 6px; }
+    .badgeMuted { font-size:12px; padding:2px 8px; border-radius:9999px; background:#f0f0f7; color:#555; }
+    .ok { color:#14a44d; } .ng { color:#d62d20; }
+    /* KPI：横4並び（スマホでも崩れないよう少し小さめ） */
+    /* ── ① 4列を“常に”固定 ─────────────────────────── */
+    .summaryKpis{
+      display:grid;
+      grid-template-columns:repeat(4, minmax(0,1fr)); /* ← 常に4列 */
+      gap:6px;                                        /* 余白を少し詰める */
+      margin-top:8px;
+    }
+    
+    /* ── ② 子要素はグリッド前提のコンパクト化 ───────────── */
+    .summaryKpis .kpi{
+      display:block;
+      width:100%;
+      min-width:0;
+      margin:0;                 /* gap 管理 */
+      padding:8px 6px;          /* 余白を縮める */
+      min-height:52px;          /* ボックス高さ控えめ */
+      border:1px solid #e6e6e6;
+      border-radius:10px;
+      background:#fff;
+    }
+    .summaryKpis .kpi .kpiLabel{
+      font-size:10px;           /* ラベルを小さく */
+      line-height:1.1;
+      letter-spacing:.01em;
+    }
+    .summaryKpis .kpi .kpiValue{
+      font-size:16px;           /* 数字も少し小さく */
+      line-height:1.05;
+      font-weight:700;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    /* ── ③ 極小端末(幅≤360px)はさらに詰める保険 ──────── */
+    @media (max-width:360px){
+      .summaryKpis{ gap:4px; }
+      .summaryKpis .kpi{ padding:6px 4px; min-height:48px; }
+      .summaryKpis .kpi .kpiLabel{ font-size:9px; }
+      .summaryKpis .kpi .kpiValue{ font-size:15px; }
+    }
+    .table.compact.smalltext { font-size: 13px; }
+    .table.compact.smalltext th, 
+    .table.compact.smalltext td { padding: 6px 8px; }
+    .table.compact.history td, .table.compact.history th{
+      font-size: 0.9rem; line-height:1.2;
+    }
+    .table.compact.history .nowrap { white-space: nowrap; }
+    #view-summary table.table.compact.history.verysmall td,
+    #view-summary table.table.compact.history.verysmall th {
+      font-size: 11px !important;
+      line-height: 1.1 !important;
+      padding: 3px 5px !important;
+    }
+    /* ヘッダーのタイトル */
+    .pageTitle{ font-weight:700; font-size:18px; }
+
+        .kpi{ border:1px solid #e6e6e6; border-radius:12px; padding:12px; background:#fff; }
+        .kpiLabel{ font-size:12px; color:#666; margin-bottom:6px; }
+        .kpiValue{ font-size:22px; font-weight:700; }
+    /* タブボタンの下に余白を追加 */
+    #view-summary .card .tabsRow {
+      margin-bottom: 14px;
+    }
+    
+    /* ===== サマリ（当月配信）ブロック ===== */
+    .summaryBlock {
+      border: 1px solid #e5e5f0;
+      border-radius: 12px;
+      padding: 12px 12px 10px;
+      background: #fff;
+      margin-bottom: 14px;
+    }
+    
+    /* 履歴ブロック */
+    .summaryBlock.historyBlock {
+      border: 1px solid #e5e5f0;
+      border-radius: 12px;
+      padding: 12px 12px 10px;
+      background: #fff;
+      margin-bottom: 12px;
+    }
+    
+    /* テーブルと再取得ボタンの間に余白 */
+    #btnSummaryReload {
+      margin-top: 10px;
+    }
   </style>
 
   <!-- Tailwind の上乗せ -->
@@ -939,8 +1095,12 @@
     }
     .scTitleBtn .scDate{ flex:0 0 auto; font-weight:700; white-space:nowrap; }
     .scTitleBtn .scTitle{
-      flex:1 1 auto; min-width:0;            /* ← これがないと省略記号が効かない */
+      flex:1 1 auto; min-width:0;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .scTitleBtn[aria-expanded="true"] .scTitle{
+      white-space:normal; overflow:hidden; text-overflow:clip;
+      display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
     }
     .scTitleBtn .scCaret{ flex:0 0 auto; margin-left:8px; transition:transform .12s ease; }    
     /* 折りたたみパネル（フルタイトル／メモ／場所＋集合情報をここに） */
@@ -954,8 +1114,11 @@
       border-radius: 0;
       font-size: 13px; color:#444;
     }
-    .scMeta{ font-size:13px; color:var(--c-text); margin-top:6px; }
-    
+    .scMeta { font-size:13px; color:var(--c-text); margin-top:6px; display:flex; flex-direction:column; gap:4px; }
+    .scMeta .scLine { display:flex; align-items:baseline; gap:.5em; min-width:0; }
+    .scMeta .scLine .lbl { font-weight:700; white-space:nowrap; }
+    .scMeta .lbl{ font-weight: 700; margin-right: 6px;}
+        
     /* 種別＝右端・四角バッジ（既存） */
     .scKind{
       margin-left:auto; display:inline-flex; align-items:center; height:22px;
@@ -969,6 +1132,12 @@
     .scTitleBtn .scCaret{
       flex:0 0 auto; margin-left:8px;
       font-size: 16px; line-height: 1;   /* 見やすく */
+    }
+    .scTitleBtn .scTime{
+      margin-left: .6rem;
+      font-weight: 600;
+      white-space: nowrap;
+      opacity: .9;
     }
     /* ===== 出欠結果一覧（管理者）・1枚カード版 ===== */
     .repCard { background:#fff; border:1px solid var(--c-border); border-radius:12px; padding:12px; }
@@ -1353,6 +1522,18 @@
     #view-custom-push { padding: 0 !important; } /* section自身の内側パディングをゼロ */
     #view-custom-push > .row-space{ margin: 8px 0 8px !important; }
     #view-custom-push .card:first-of-type{ margin-top: 8px !important; }
+
+    /* タブ（無料枠確認／配信履歴）の直下に少し余白 */
+    #view-summary .card .tabsRow { margin-bottom: 12px; }  /* ← クラス名を付ける（下でJSから設定） */
+    
+    /* サマリ本体を薄い枠で囲む */
+    .summaryCard .summaryBody {
+      border: 1px solid #e9e9f2;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      margin-top: 8px;
+    }
   </style>
   
   <!-- LIFF SDK -->
@@ -1361,9 +1542,9 @@
 
 <body>
   <header class="is-sticky">
-    <div class="siteTitle">藤塚太鼓 出欠・予定</div>
-    <div class="ver" id="ver"></div>
-  </header>
+  <div class="siteTitle">藤塚太鼓 出欠・予定</div>
+  <div class="ver" id="ver"></div>
+</header>
 
   <main>
     <!-- 友だち未追加アラート -->
@@ -1382,7 +1563,8 @@
         <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin">予定登録/編集</button>
         <button id="btnAdminMenuReport"    class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-report">出欠結果一覧</button>
         <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" data-view-target="view-custom-push">カスタム通知</button>
-        <a href="https://your-domain.github.io/your-repo/summary.html" target="_blank" class="btn btn-outline btn-sm btn-compact">サマリ</a>
+        <button id="btnSummary" class="btn btn-outline btn-sm btn-compact" data-view-target="view-summary">サマリ</button>
+        <button id="btnFeedback" class="btn btn-outline btn-sm btn-compact" data-view-target="view-feedback">ご意見BOX</button>
       </div>
       <div class="small muted" style="margin-top:6px;">※ 管理者のみ表示されます</div>
     </div>
@@ -1934,6 +2116,63 @@
     
       </div><!-- /card -->
     </section>
+
+    <!-- ===== サマリ（管理者） ===== -->
+    <section id="view-summary" data-view class="view" hidden>
+     
+     <div class="summaryHeaderRow" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="pageTitle" style="margin:0;">サマリ</div>
+      <button id="btnSummaryToTop" class="btn btn-outline btn-sm btn-compact">トップに戻る</button>
+    </div>
+    
+        <!-- タブ風ボタン -->
+      <div class="card">
+        <div class="row" style="gap:8px;margin-bottom:8px;">
+          <button id="btnSummaryFreeQuota" class="btn btn-primary btn-sm btn-compact">無料枠確認</button>
+          <button id="btnSummaryPushStats" class="btn btn-outline btn-sm btn-compact">配信履歴</button>
+        </div>
+    
+        <!-- 無料枠 -->
+        <div id="summaryFreeQuotaBox" class="summaryCard">
+          <div class="small muted">読み込み待機中…</div>
+        </div>
+    
+        <!-- 配信履歴 -->
+        <div id="summaryPushStatsBox" class="summaryCard" style="display:none;">
+          <div class="small muted">読み込み待機中…</div>
+        </div>
+    
+        <div class="row" style="gap:8px;margin-top:10px;">
+          <button id="btnSummaryReload" class="btn btn-outline btn-sm btn-compact">再取得</button>
+        </div>
+    
+        <div class="small muted" style="margin-top:6px;">
+          ※ 「無料枠確認」は<strong>このシステム（Messaging API経由）</strong>で送信した今月の利用状況を表示します。<br>
+          ※ Official Accountアプリからの手動配信や、あいさつ／自動応答メッセージは<strong>含まれません</strong>。<br>
+          ※ 「配信履歴」は Pushlog / PushDetail をもとに当月の集計を表示します。
+        </div>
+      </div>
+    </section>
+    <!-- ===== サマリ END ===== -->
+    <!-- ご意見BOX（管理者） -->
+      <section id="view-feedback" data-view class="view" hidden>
+        <div class="fbHeaderRow"
+             style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div class="pageTitle" style="margin:0;">ご意見BOX</div>
+          <button id="btnFeedbackBack" class="btn btn-outline btn-sm btn-compact">
+            トップに戻る
+          </button>
+        </div>
+      
+        <div class="card">
+          <div class="row header">
+            <div class="sectionTitle">受信一覧（カテゴリ別）</div>
+            <button id="fbReload" class="btn btn-ghost btn-sm">再読込</button>
+          </div>
+      
+          <div id="feedbackListBox">読み込み中…</div>
+        </div>
+      </section>
   </main>
 
   <footer id="legalFooter" class="legal-footer" aria-label="legal links">
@@ -1941,6 +2180,64 @@
   ・
   <a href="https://fujizukadaiko.github.io/taiko-liff-form-prod/terms.html" target="_blank" rel="noopener">利用規約</a>
 </footer>
+
+    <!-- ご意見ボタン -->
+    <button id="feedbackFab" class="fab" aria-label="ご意見BOX">
+      <img src="./assets/feedback.svg" alt="" />
+      <span class="sr-only">ご意見BOX</span>
+    </button>
+    
+    <!-- ご意見モーダル -->
+    <div id="feedbackModal" class="modal" hidden>
+      <div class="modal-backdrop" data-close="1"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+        <div class="modal-header">
+          <div id="fbTitle" class="modal-title">ご意見BOX</div>
+          <button class="icon-btn" data-close="1" aria-label="閉じる">×</button>
+        </div>
+    
+        <div class="modal-body">
+          <label class="label">カテゴリ（任意）</label>
+          <select id="fbCategory" class="select">
+            <option value="その他" selected>その他</option>
+            <option value="要望">要望</option>
+            <option value="不具合">不具合</option>
+            <option value="デザイン">デザイン</option>
+          </select>
+    
+          <label class="label" style="margin-top:10px;">メッセージ（必須）</label>
+          <textarea id="fbMessage" class="textarea" rows="5" maxlength="300" placeholder="ご意見・ご要望をお聞かせください"></textarea>
+          <div class="counter"><span id="fbCount">0</span> / 300</div>
+        </div>
+    
+        <div class="modal-footer">
+          <button class="btn btn-outline" data-close="1">キャンセル</button>
+          <button id="fbSendBtn" class="btn btn-primary">送信</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- スナックバー -->
+    <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+  
+  <!-- 更新履歴モーダル -->
+  <div id="changelogModal" class="modal" hidden>
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cgTitle">
+      <div class="modal-header">
+        <div id="cgTitle" class="modal-title">更新履歴</div>
+      </div>
+  
+      <div class="modal-body">
+        <div id="changelogList" class="cg-list"></div>
+      </div>
+  
+      <div class="modal-footer">
+        <button class="btn btn-outline" data-close="1">閉じる</button>
+      </div>
+    </div>
+  </div>
+  
   <style>
     /* ===== Custom Push UI style (scoped) ===== */
     #view-custom-push {
@@ -1999,7 +2296,8 @@
       flex:1 1 auto; width: 64%;
       border:2px solid var(--violet-500); border-radius:14px;
       background:#fff; color:#1f1637;
-      padding:12px 14px; font-size:16px; outline:none;
+      padding:12px 14px; font-size:16px; -webkit-text-size-adjust: 100%; /* 保険 */
+      outline:none;
     }
     #view-custom-push .select:focus, 
     #view-custom-push .textarea:focus{
@@ -2035,7 +2333,14 @@
     
     /* 本文 */
     #view-custom-push .textarea{ min-height: 180px; }
-    
+    /* --- iOS ズーム防止：カスタム通知の本文だけ最終上書き（必ずCSSの末尾に） --- */
+    #view-custom-push textarea,
+    #view-custom-push textarea#cp_body,
+    #view-custom-push .textarea,
+    #view-custom-push .field-col textarea {
+      font-size: 16px !important;
+      -webkit-text-size-adjust: 100%;
+    }
     /* アクション行 */
     #view-custom-push .actions{
       display:flex; gap:12px; justify-content:flex-end; margin-top:16px;
@@ -2234,6 +2539,334 @@
     }
     #view-custom-push .card:first-of-type{
       margin-top: 8px !important;     /* 1枚目カードの上マージンだけ薄く */
+    }
+    
+    /* === ご意見FAB：仕上げ版 === */
+    #feedbackFab.fab{
+      position: fixed;
+      right: 16px;
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px)); /* iOSセーフエリア */
+      width: 56px;
+      height: 56px;
+      border: none;
+      border-radius: 9999px;
+      padding: 0;
+      background: linear-gradient(180deg, #7c6ae6 0%, #6f5dbd 100%); /* 紫グラデ */
+      color: #fff;              /* ← SVGをcurrentColorで白く */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      cursor: pointer;
+      z-index: 1200;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+    }
+    #feedbackFab.fab img{
+      width: 26px; height: 26px; display: block; pointer-events: none; filter: invert(1) brightness(100%);
+    }
+    /* ホバー&押下（デスクトップ向け） */
+    @media (hover:hover){
+      #feedbackFab.fab:hover { box-shadow: 0 12px 28px rgba(0,0,0,.28); transform: translateY(-1px); }
+    }
+    #feedbackFab.fab:active{ transform: translateY(1px); }
+    
+    /* キーボード操作のフォーカスリング */
+    #feedbackFab.fab:focus-visible{
+      outline: 3px solid rgba(255,255,255,.9);
+      outline-offset: 2px;
+    }
+    
+    /* ダークモード配色の微調整（任意） */
+    @media (prefers-color-scheme: dark){
+      #feedbackFab.fab{
+        background: linear-gradient(180deg, #6c5bd5 0%, #5b4aa8 100%);
+        box-shadow: 0 10px 24px rgba(0,0,0,.45);
+      }
+    }
+    
+    /* 低モーションユーザーへ配慮 */
+    @media (prefers-reduced-motion: reduce){
+      #feedbackFab.fab{ transition: none; }
+    }
+    
+    /* 視覚的に非表示（既存） */
+    .sr-only{
+      position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    /* ========== モーダル ========== */
+    #feedbackModal .modal-backdrop{
+      position: fixed; inset:0; background: rgba(0,0,0,.42);
+    }
+    #feedbackModal .modal-card{
+      position: fixed; left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(90vw, 420px);
+      background:#fff; border-radius: 14px;
+      box-shadow: 0 16px 48px rgba(0,0,0,.25);
+      padding: 12px 12px 10px; z-index: 1300;
+      max-height: 80vh;              /* 画面内スクロール */
+      overflow: auto;
+    }
+    #feedbackModal .modal-header{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+    }
+    #feedbackModal .modal-title{ font-weight:700; font-size:16px; }
+    #feedbackModal .icon-btn{ border:none; background:transparent; font-size:20px; }
+    
+    #feedbackModal .label{ font-size:13px; color:#555; display:block; margin-bottom:4px; }
+    #feedbackModal .select, 
+    #feedbackModal .textarea{
+      width:100%; border:1px solid #ddd; border-radius:8px; padding:6px 10px;
+      font-size:16px; background:#fff;  
+    }
+    #feedbackModal .counter{ font-size:12px; color:#666; text-align:right; margin-top:4px; }
+    #feedbackModal .modal-footer{
+      margin-top:10px; display:flex; justify-content:flex-end; gap:8px;
+    }
+    #feedbackModal .btn{ padding:6px 12px; border-radius:8px; }
+    #feedbackModal .btn-outline{ background:#fff; border:1px solid #bbb; }
+    #feedbackModal .btn-primary{ background:#6f5dbd; color:#fff; border:1px solid #6f5dbd; }
+    
+    /* ========== スナックバー ========== */
+    #snackbar.snackbar{
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: rgba(35,35,35,.95); color:#fff; padding:10px 14px; border-radius:10px;
+      font-size:14px; opacity:0; pointer-events:none; transition: opacity .2s ease;
+      z-index: 1400;
+    }
+    #snackbar.show{ opacity:1; }
+   
+   /* ==== Changelog modal ==== */
+    /* 初期は非表示 */
+    #changelogModal[hidden]{ display:none; }
+    
+    /* 背景（クリックで閉じる） */
+    #changelogModal .modal-backdrop{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.42);
+      z-index: 1300;
+    }
+    
+    /* 本体：中央固定＋見た目 */
+    #changelogModal .modal-card{
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(92vw, 560px);
+      z-index: 1310;
+      background: #fff;
+      border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.15);
+      padding: 18px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+    }
+    
+    /* リストまわり */
+    .cg-item{
+      border: 1px solid #e5e5ef;
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background: #fafafa;
+    }
+    .cg-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+    .cg-title{ font-size:15px; font-weight:600; color:#333; }
+    .cg-tags{ display:flex; gap:6px; }
+    .cg-tag{ font-size:11px; color:#666; background:#f1f1f6; padding:2px 6px; border-radius:6px; }
+    .cg-date{ font-size:12px; color:#999; margin-bottom:6px; }
+    .cg-body{ font-size:13px; line-height:1.5; color:#444; }
+    
+    /* フッター＆ボタン */
+    #changelogModal .modal-footer{ display:flex; justify-content:flex-end; gap:10px; margin-top:12px; }
+    #changelogModal .btn{ border-radius:8px; padding:6px 14px; font-size:13px; }
+    #changelogModal .btn-outline{ background:#fff; border:1px solid #ccc; color:#444; }
+    #changelogModal .btn-primary{ background:#6f5dbd; border:1px solid #6f5dbd; color:#fff; }
+    
+    /* タイトル控えめ */
+    #changelogModal .modal-title{ font-size:16px; font-weight:600; color:#222; }
+    
+    /* バージョン表示の未読ドット */
+    #ver{ position:relative; display:inline-block; }
+    #ver.has-unread::after{
+      content:""; position:absolute; top:-3px; right:-6px; width:8px; height:8px;
+      background:#e11d48; border-radius:9999px;
+    }
+    /* ご意見BOX 用の軽いスタイル */
+    .fb-cat { font-weight:700; margin:12px 0 6px; }
+    .fb-acc { border:1px solid #eee; border-radius:10px; padding:8px 10px; margin:8px 0; background:#fff; }
+    .fb-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .fb-meta{ font-size:13px; color:#666; }
+    .badge-st { font-size:11px; padding:2px 8px; border-radius:999px; background:#f0f0f7; color:#555; }
+    .select-mini{ font-size:13px; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
+    .fb-msg { font-size:14px; line-height:1.6; white-space:pre-wrap; color:#333; }
+    details.fb-acc > summary { cursor:pointer; list-style:none; }
+    details.fb-acc > summary::-webkit-details-marker{ display:none; }
+    /* ご意見BOXの各行レイアウト */
+    .fb-item { border:1px solid #eee; border-radius:10px; padding:8px 10px; margin:8px 0; background:#fff; }
+    .fb-sum { display:flex; align-items:center; gap:10px; }
+    .fb-sum .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight:600; }
+    .fb-sum .name { font-weight:600; }
+    .fb-sum .date { margin-left:auto; color:#666; font-size:12px; }
+    
+    /* 本文＋ステータスの2カラム */
+    .fb-body-row { display:flex; align-items:flex-start; gap:10px; }
+    .fb-msg { flex:1 1 auto; white-space:pre-wrap; word-break:break-word; color:#333; }
+    .fb-status-wrap { flex:0 0 auto; }
+    
+    /* ステータスのプルダウンを“控えめ”に */
+    .fb-status {
+      font-size: 13px; padding: 6px 8px;
+      border:1px solid #ddd; border-radius:8px; background:#fff; color:#333;
+    }
+    /* ご意見BOX：ヘッダー行を左右に配置 */
+    #view-feedback .row.header{
+      display:flex; align-items:center; gap:8px; margin-bottom:8px;
+    }
+    #view-feedback .row.header .sectionTitle{ flex:1; } /* ←これでボタンが右端へ */
+    /* 行のレイアウト微調整 */
+    #view-feedback .fb-row{ border-bottom:1px solid #eee; padding:8px 4px; }
+    #view-feedback .fb-row:last-child{ border-bottom:0; }
+    
+    #view-feedback .fb-row-head{
+      display:flex; align-items:center; gap:10px; margin-bottom:4px;
+    }
+    #view-feedback .fb-row-head .mono{ font-variant-numeric: tabular-nums; color:#666; }
+    #view-feedback .fb-row-head .name{ font-weight:600; }
+    #view-feedback .fb-row-head .date{ margin-left:auto; color:#666; }
+    
+    /* 本文とステータスを左右に */
+     /* 1件ぶんの枠 */
+    #view-feedback .fb-row{
+      border-bottom: 1px solid #eee;
+      padding: 8px 4px;
+    }
+    #view-feedback .fb-row:last-child{
+      border-bottom: 0;
+    }
+    
+    /* 1行目：#No / 名前 / 日時（これは今のまま） */
+    #view-feedback .fb-row-head{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;          /* ← 1行目と2行目の間にちょっと余白 */
+    }
+    #view-feedback .fb-row-head .mono{
+      font-variant-numeric: tabular-nums;
+      color:#666;
+    }
+    #view-feedback .fb-row-head .name{
+      font-weight: 600;
+    }
+    #view-feedback .fb-row-head .date{
+      margin-left: auto;
+      color:#666;
+    }
+    
+    /* 2行目：コメント + ステータスを「必ず」別行にして左右に並べる */
+    #view-feedback .fb-row-body{
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      width: 100%;
+    }
+    #view-feedback .fb-row-body .fb-msg{
+      flex: 1 1 auto;             /* 左側は広く使う */
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+    }
+    #view-feedback .fb-status-wrap{
+      flex: 0 0 auto;
+      margin-left: auto;          /* 右端に寄せる */
+      display: flex;
+      align-items: center;
+    }
+    
+    /* セレクトの見た目は今の設定をそのまま使う */
+    #view-feedback .fb-status{
+      min-width: 112px;
+      border:1px solid #ddd;
+      border-radius:8px;
+      padding:6px 8px;
+      font-size:13px;
+      background:#f7f7f9;
+      color:#444;
+    }
+    
+    /* セレクトのベース */
+    #view-feedback .fb-status{
+      min-width: 112px;
+      border:1px solid #ddd; border-radius:8px; padding:6px 8px;
+      background:#f7f7f9; color:#444;
+    }
+    
+    /* ステータス色（select 自体に色を付ける） */
+    #view-feedback .fb-status.is-未対応{ background:#f3f4f6; color:#374151; } /* Gray */
+    #view-feedback .fb-status.is-対応中{ background:#fef9c3; color:#92400e; } /* Yellow */
+    #view-feedback .fb-status.is-保留  { background:#e0f2fe; color:#1e3a8a; } /* Blue */
+    #view-feedback .fb-status.is-完了  { background:#ecfdf5; color:#065f46; } /* Green */
+    #view-feedback .fb-status.is-却下  { background:#fee2e2; color:#991b1b; } /* Red */
+    
+    /* カテゴリ <summary> 見た目控えめに＆右側に件数 */
+    /* ご意見BOX：カテゴリ見出し（summary）を太字＋大きめ */
+    #view-feedback .fb-cat-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 2px;
+      cursor: pointer;
+    }
+    
+    #view-feedback .fb-cat-head .sectionTitle {
+      font-size: 17px;          /* ←少し大きく */
+      font-weight: 700;         /* ←太字 */
+      color: #2b2346;           /* ←落ち着いたインク色 */
+    }
+    
+    #view-feedback .fb-cat-head .fb-count {
+      margin-left: auto;
+      font-size: 13px;
+      color: #777;
+      background: #f1f1f6;
+      border-radius: 999px;
+      padding: 2px 8px;
+}
+    
+    /* スピナー（既存の .spinner を流用するなら不要） */
+    #view-feedback .spinner{
+      display:inline-block; width:14px; height:14px; border-radius:50%;
+      border:2px solid #ccc; border-top-color:#6f5dbd; animation: sp 0.8s linear infinite;
+      vertical-align:-2px; margin-left:6px;
+    }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    /* ご意見BOXヘッダ行：タイトルを左、ボタンを右端へ */
+    #view-feedback .row.header{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    #view-feedback .row.header .sectionTitle{
+      flex: 1 1 auto;   /* ←これが“右寄せ”のキモ。タイトルが余白を食ってボタンが右端へ */
+    }
+    #btnFeedbackBack { margin-left: auto !important; }
+    #view-feedback .row.header { display:flex; align-items:center; gap:8px; }
+    #view-feedback .row.header > .sectionTitle { flex: 1 1 auto !important; }
+    #view-feedback .row.header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+
+    /* カテゴリタイトル右上の「新規あり」ドット */
+    #view-feedback .fb-cat.has-unread > .fb-cat-head::after {
+      content: "";
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-left: 6px;
+      border-radius: 9999px;
+      background: #e11d48; /* 赤 */
     }
   </style>
 
@@ -2471,7 +3104,7 @@
         const events = (openList || []).map(x => ({
           id      : x.id ?? x.eventId ?? x.eid ?? '',
           ymd     : x.ymd ?? x.date ?? '',
-          hm      : x.hm ?? x.time ?? '',
+          hm      : x.hm ?? x.time ?? x['時間'] ?? '',
           place   : x.place ?? x.venue ?? x.location ?? '',
           deadline: x.deadline ?? x.limit ?? x.deadlineYmd ?? '',
           isNew   : (x.isNew === true) || (x.is_new === 'Y') || (x.new === true),
@@ -2661,6 +3294,12 @@ function updateSubmitButton(){
 }
 
 /* ===== ユーティリティ ===== */
+  // HTMLエスケープ（XSS/崩れ防止）
+function h(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => (
+    {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]
+  ));
+}
 const $ = s => document.querySelector(s);
 /* ===== 区分(セグメント) 正規化 & 判定ヘルパー ===== */
 const INCLUDE_BOTH_FOR_ALL = true;
@@ -2948,6 +3587,29 @@ function bindHandlers(){
     show("#view-custom-push");                 // 画面表示
     window.initCustomPushPage?.();             // 初期化（イベント候補読込・参加のみONなど）
   };
+  // 管理メニュー：サマリ
+  document.getElementById('btnSummary')?.addEventListener('click', () => {
+    if (!state.isAdmin) { alert('管理者のみアクセス可能です'); return; }
+    show('#view-summary');                  // サマリ画面を表示（内部で hidden=false）
+    const v = document.getElementById('view-summary');  
+    window.loadSummaryFreeQuota?.();        // 無料枠の初期表示
+  });
+  
+  // サマリ内ボタン
+  document.getElementById('btnSummaryFreeQuota')
+    ?.addEventListener('click', () => window.loadSummaryFreeQuota?.());
+  document.getElementById('btnSummaryReload')
+    ?.addEventListener('click', () => window.loadSummaryFreeQuota?.());
+  document.getElementById('btnSummaryToTop')
+  ?.addEventListener('click', ()=> show('#view-home'));
+  
+  // 管理メニュー：ご意見BOX
+  document.getElementById('btnFeedback')?.addEventListener('click', async () => {
+    if (!state.isAdmin){ alert('管理者のみアクセス可能です'); return; }
+    show('#view-feedback');          // ← 既存と同じ切替
+    await window.loadFeedbackList?.(); // ← 初回ロード（下で定義）
+  });
+  
   // 管理画面
   $("#btnAdminBack").onclick = ()=> show("#view-home");
   document.getElementById('btnAdminReload')
@@ -3133,7 +3795,7 @@ function bootHomeQuickRender(){
   const events = filteredEvents.map(x => ({
     id      : String(x.eventId ?? x.id ?? ''),
     ymd     : ymdDow(parseYmdStrict(x.date)) || String(x.date || x.ymd || ''),
-    hm      : hmFromTimeCell(x.time ?? x.hm ?? ''),
+    hm      : hmFromTimeCell(x.time ?? x.hm ?? x['時間'] ?? ''),
     place   : x.place ?? x.venue ?? x.location ?? '',
     deadline: String(x.deadline ?? x.limit ?? x.deadlineYmd ?? ''),
     isNew   : (x.isNew === true) || (x.is_new === 'Y') || (x.new === true),
@@ -3152,7 +3814,7 @@ function mountHomeWithFilters(){
   const events = filteredEvents.map(x => ({
     id      : String(x.eventId ?? x.id ?? ''),
     ymd     : ymdDow(parseYmdStrict(x.date)) || String(x.date || x.ymd || ''),
-    hm      : hmFromTimeCell(x.time ?? x.hm ?? ''),
+    hm      : hmFromTimeCell(x.time ?? x.hm ?? x['時間'] ?? ''),
     place   : x.place ?? x.venue ?? x.location ?? '',
     deadline: String(x.deadline ?? x.limit ?? x.deadlineYmd ?? ''),
     isNew   : (x.isNew === true) || (x.is_new === 'Y') || (x.new === true),
@@ -3770,12 +4432,26 @@ async function onRegister(){
       (it.meetPlace || "")
     ].filter(Boolean).join(" ");
     const placeTxt = it.place ? `@${it.place}` : "";
+    const _hm = it.performAt || it.time || it.hm || it['時間'] || "";
+    const timeForHeader = _hm
+      ? (kindText === '発表' ? `演奏開始 ${_hm}` : _hm)
+      : '';
+    const timeForPanel = _hm
+      ? (kindText === '発表'
+         ? `<span class="lbl">演奏開始</span> ${_hm}`
+         : `${_hm}`)
+      : '';
   
-    // 折りたたみ内の中身（フルタイトル → メモ → 場所/集合）
+    // 折りたたみ内の中身（タイトルは出さない：演奏開始 / 集合 / @場所）
     const panelInner = `
-      <div class="scFullTitle">${it.title || ""}</div>
-      ${memoText ? `<div class="scMemo">${memoText}</div>` : ``}
-      ${(placeTxt || meetTxt) ? `<div class="scMeta">${[placeTxt, meetTxt].filter(Boolean).join("　")}</div>` : ``}
+      ${[_hm, meetTxt, placeTxt].filter(Boolean).length ? `
+       <div class="scMeta">
+         ${placeTxt ? `<div class="scLine">${placeTxt}</div>` : ``}
+         ${_hm     ? `<div class="scLine">${timeForPanel}</div>` : ``}
+         ${meetTxt  ? `<div class="scLine">${meetTxt}</div>` : ``}
+         ${memoText ? `<div class="scLine scMemo">${memoText}</div>` : ``}
+       </div>
+     ` : ``}
     `;
   
     return `
@@ -4132,11 +4808,6 @@ async function adminSubmit(){
     else if (seg.includes("両方")) seg = "両方";
 
     if (!title || !type || !ymdIn){ throw new Error("タイトル/種別/公演日は必須です"); }
-
-    // ④-2 大人の部ならタイトル先頭に【大人の部】を必ず付与（種別問わず）
-    if (seg === "大人" && !title.startsWith("【大人の部】")){
-      title = `【大人の部】${title}`;
-    }
 
     if (type === "発表"){
       const flag = $("#ad_flag").value.trim();
@@ -4567,15 +5238,9 @@ window.reportReload = function(){ initAdminReportPage(); };
     for (const c of cands) if (Array.isArray(c)) return c;
     return [];
   }
-  // HTMLエスケープ（XSS/崩れ防止）
-  function h(s){
-    return String(s ?? '').replace(/[&<>"']/g, m => (
-      { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;', "'":'&#39;' }[m]
-    ));
-  }
   // 行の正規化
   function mapRow(x){
-    const name   = x.name ?? x.member ?? x.performerName ?? x.performer ?? '';
+    const name   = x.displayName ?? x.name ?? x.member ?? x.performerName ?? x.performer ?? '';
     const raw    = x.answer ?? x.attend ?? x.attendStatus ?? x.status ?? '';
     const attend = ['参加','欠席','未定','未回答'].includes(String(raw).trim())
       ? String(raw).trim()
@@ -4636,32 +5301,59 @@ window.reportReload = function(){ initAdminReportPage(); };
   
     // ★ 家族フィルタは一切しない（= 全員表示）
     const rows = list.map(mapRow);
+ 
+    // --- 比較用：名前の正規化（全角空白→半角、前後/重複空白除去、接頭辞除去） ---
+     const canonName = (s) => {
+       const t = String(s||'')
+         .replace(/\u3000/g,' ')            // 全角空白→半角
+         .replace(/^\s+|\s+$/g,'')          // 前後空白
+        .replace(/\s+/g,' ');              // 連続空白
+       // 先頭の【大人の部】/【子どもの部】などの角括弧ラベルを除去
+       return t.replace(/^【[^】]+】\s*/,'');
+     };
   
-    // ===== ここから：未回答の合成（roster が文字列配列でもOK） =====
-    const normName = s => String(s||'').replace(/\u3000/g,' ').replace(/\s+/g,' ').trim();
-  
-    // 回答済みの名前集合（正規化）
-    const answered = new Set(rows.map(r => normName(r.name)).filter(Boolean));
+     // members から「名前→区分」索引（未回答表示で接頭辞付与に使う）
+     const segIndex = {};
+     if (Array.isArray(payload?.members)) {
+       payload.members.forEach(m=>{
+         const nm = canonName(m?.displayName ?? m?.name ?? m?.member ?? m?.performerName ?? '');
+         if (nm) segIndex[nm] = String(m?.seg || m?.segment || m?.attendSegment || '');
+       });
+     }
+    
+    // 回答済みの名前集合（正規化キーで保持）
+    const answeredCanon = new Set(rows.map(r => canonName(r.name)).filter(Boolean));
   
     // 候補名（roster優先。無ければ members / candidates から名前欄を拾う）
     let candidates = [];
     if (Array.isArray(payload?.roster)) {
       // GAS 側は roster を ["氏名", ...] で返す想定
-      candidates = payload.roster.map(normName).filter(Boolean);
+      candidates = payload.roster
+        .map(n => ({ name: String(n||'').trim(), seg: segIndex[canonName(n)] || '' }))
+        .filter(x => x.name);
     } else if (Array.isArray(payload?.members)) {
-      candidates = payload.members
-        .map(m => normName(m?.name ?? m?.member ?? m?.performerName ?? ''))
-        .filter(Boolean);
+      candidates = payload.members.map(m=>{
+        const raw = m?.displayName ?? m?.name ?? m?.member ?? m?.performerName ?? '';
+        return { name: String(raw||'').trim(), seg: String(m?.seg || m?.segment || m?.attendSegment || '') };
+      }).filter(x => x.name);
     } else if (Array.isArray(payload?.candidates)) {
-      candidates = payload.candidates
-        .map(m => normName(m?.name ?? m?.member ?? m?.performerName ?? ''))
-        .filter(Boolean);
+      candidates = payload.candidates.map(m=>{
+        const raw = m?.displayName ?? m?.name ?? m?.member ?? m?.performerName ?? '';
+        return { name: String(raw||'').trim(), seg: String(m?.seg || m?.segment || m?.attendSegment || '') };
+      }).filter(x => x.name);
     }
   
-    // 未回答 = 候補 − 回答済み
+    // 未回答 = 候補 − 回答済み（正規化キーで差集合）
     const naRows = candidates
-      .filter(nm => !answered.has(nm))
-      .map(nm => ({ name: nm, attend: '未回答', at: '', seg: '' }));
+      .filter(c => !answeredCanon.has(canonName(c.name)))
+      .map(c => {
+        // 表示名はここで「大人の部」接頭辞を統一付与
+        const seg = c.seg || segIndex[canonName(c.name)] || '';
+        const display = seg.includes('大人') && !/^【[^】]+】/.test(c.name)
+          ? `【大人の部】${c.name}`
+          : c.name;
+        return { name: display, attend: '未回答', at: '', seg };
+      });
   
     // rows を未回答で拡張
     const rowsAll = rows.concat(naRows);
@@ -4745,7 +5437,14 @@ window.reportReload = function(){ initAdminReportPage(); };
     
     repBox.innerHTML = `<div class="repCard">${head}${body}</div>`;
   }
-
+  
+  function nameWithSegPrefix(p){
+  const nm = String(p?.name||"");
+  if (nm.startsWith("【大人の部】")) return nm; // 既に付いていればそのまま
+  const s = String(p?.seg||"");
+  return s.includes("大人") ? `【大人の部】${nm}` : nm;
+}
+  
   // 公演メタ（セレクトの選択肢）を取得して #repEvent を埋める
   async function loadReportMeta(){
     const sel = document.getElementById('repEvent');
@@ -5373,11 +6072,612 @@ window.reportReload = function(){ initAdminReportPage(); };
           }
         });
       });
+    // ========= サマリ：無料枠カードの描画 =========
+    window.renderFreeQuotaCard = function (data) {
+      // data: { status:'ok', kind:'freeQuota', used, limit, remain, followers, followersEffective }
+      const used      = Number(data.used ?? 0);
+      const limit     = Number(data.limit ?? 0);
+      const remain    = Number(data.remain ?? Math.max(0, limit - used));
+      const followers = Number(data.followers ?? data.followersEffective ?? 0);
     
+      const perBlast  = followers > 0 ? Math.floor(remain / followers) : 0;
+    
+      return `
+        <div class="card" style="margin-top:6px;">
+          <div class="sectionTitle">無料枠 確認</div>
+          <div class="list">
+            <div>当月送信：<b>${used}</b> / <b>${limit}</b>（残り：<b>${remain}</b>通）</div>
+            <div>フォロワー：<b>${followers}</b> 人</div>
+            <div>全体配信あと：<b>${perBlast}</b> 回</div>
+          </div>
+        </div>`;
+    };
+    
+    // ========= サマリ：無料枠の取得＆描画 =========
+    window.loadSummaryFreeQuota = async function () {
+      const box = document.getElementById('summaryFreeQuotaBox');
+      if (!box) {
+        console.warn('#summaryFreeQuotaBox が見つかりません');
+        return;
+      }
+      box.innerHTML = '読み込み中… <span class="spinner"></span>';
+    
+      try {
+        const r = await api('?summary=1&freeQuota=1');
+        console.log('freeQuota resp:', r);
+    
+        if (!r || r.status !== 'ok') {
+          box.innerHTML = `<div class="err">取得に失敗しました：${r?.message || 'unknown'}</div>`;
+          return;
+        }
+        // 期待キーが欠けても描けるように防御
+        box.innerHTML = window.renderFreeQuotaCard(r);
+      } catch (e) {
+        console.error(e);
+        box.innerHTML = `<div class="err">エラー：${e.message || e}</div>`;
+      }
+    };
+      // ===== サマリ：タブ切替共通 =====
+      (function(){
+        const btnFree = document.getElementById('btnSummaryFreeQuota');
+        const btnPush = document.getElementById('btnSummaryPushStats');
+        const boxFree = document.getElementById('summaryFreeQuotaBox');
+        const boxPush = document.getElementById('summaryPushStatsBox');
+      
+        function setActive(tab){ // 'free' | 'push'
+          if (!btnFree || !btnPush || !boxFree || !boxPush) return;
+          const on  = (el)=>{ el.classList.remove('btn-outline'); el.classList.add('btn-primary'); };
+          const off = (el)=>{ el.classList.remove('btn-primary'); el.classList.add('btn-outline'); };
+          if (tab === 'free'){
+            on(btnFree);  off(btnPush);
+            boxFree.style.display = '';
+            boxPush.style.display = 'none';
+          } else {
+            on(btnPush);  off(btnFree);
+            boxFree.style.display = 'none';
+            boxPush.style.display = '';
+          }
+        }
+      
+        window.showSummaryFreeTab = function(){ setActive('free'); };
+        window.showSummaryPushTab = function(){ setActive('push'); };
+      
+        // 画面遷移時（サマリボタン）
+        document.getElementById('btnSummary')?.addEventListener('click', ()=>{
+          if (!state.isAdmin){ alert('管理者のみアクセス可能です'); return; }
+          show('#view-summary');
+          showSummaryFreeTab();           // デフォルトは無料枠タブ
+          window.loadSummaryFreeQuota?.();
+        });
+      
+        // タブクリック
+        btnFree?.addEventListener('click', ()=>{
+          showSummaryFreeTab();
+          window.loadSummaryFreeQuota?.();
+        });
+        btnPush?.addEventListener('click', ()=>{
+          showSummaryPushTab();
+          window.loadSummaryPushStats?.();
+        });
+      
+        // 再取得（アクティブタブに合わせて）
+        document.getElementById('btnSummaryReload')?.addEventListener('click', ()=>{
+          if (boxPush?.style.display !== 'none') {
+            window.loadSummaryPushStats?.();
+          } else {
+            window.loadSummaryFreeQuota?.();
+          }
+        });
+      })();
+      
+    // ===== サマリ：配信履歴（当月） =====
+    window.loadSummaryPushStats = async function(){
+      const box = document.getElementById('summaryPushStatsBox');
+      if (!box) return;
+      box.innerHTML = `取得中… <span class="spinner"></span>`;
+    
+      try {
+        const r = await api(`?summary=1&pushStats=1`);
+        if (r?.status !== 'ok'){
+          box.innerHTML = `<div class="err">エラー: ${h(r?.message||'取得に失敗しました')}</div>`;
+          return;
+        }
+        if (r.empty){
+          box.innerHTML = `<div class="small muted">データがありません</div>`;
+          return;
+        }
+    
+        const fmtNum = n => (typeof n==='number' ? n.toLocaleString() : String(n||'0'));
+        const month  = h(r.month || '');
+        const logs   = r.logs || {count:0,totalTargets:0,totalSuccess:0,totalFail:0};
+    
+        // KPI 4つ（スマホでも4列に）
+        const kpis = `
+          <div class="summaryKpis">
+            <div class="kpi"><div class="kpiLabel">ログ件数</div><div class="kpiValue">${fmtNum(logs.count)}</div></div>
+            <div class="kpi"><div class="kpiLabel">対象件数</div><div class="kpiValue">${fmtNum(logs.totalTargets)}</div></div>
+            <div class="kpi"><div class="kpiLabel">成功数</div><div class="kpiValue">${fmtNum(logs.totalSuccess)}</div></div>
+            <div class="kpi"><div class="kpiLabel">失敗数</div><div class="kpiValue">${fmtNum(logs.totalFail)}</div></div>
+          </div>`;
+    
+        // 履歴（対象列を削除し、成功/失敗だけ表示）
+        const recent = r.recent || [];
+        const recentRows = recent.map(x=>{
+          const isFail = Number(x.fail) > 0;
+          const resultLabel = isFail
+            ? `<span class="ng">失敗</span>`
+            : `<span class="ok">成功</span>`;
+          return `<tr>
+            <td class="nowrap">${h(x.at||'')}</td>
+            <td>${h(x.type||'')}</td>
+            <td class="mono">${h(x.eventId||'')}</td>
+            <td class="num">${resultLabel}</td>
+          </tr>`;
+        }).join('') || `<tr><td colspan="4" class="muted">直近20件なし</td></tr>`;
+    
+        box.innerHTML = `
+          <div class="summaryBlock">
+            <div class="summaryHeader">当月配信サマリ（${month}）</div>
+            <div class="small muted" style="margin: -4px 0 8px;">
+              ※ 本サマリの数値は「このシステム経由の送信」のみを対象としています。
+            ${kpis}
+          </div>
+        
+          <div class="summaryBlock historyBlock">
+            <div class="summarySubHeader">履歴（直近20件）</div>
+            <table class="table compact verysmall history">
+              <thead>
+                <tr><th>日時</th><th>種別</th><th>公演ID</th><th>結果</th></tr>
+              </thead>
+              <tbody>${recentRows}</tbody>
+            </table>
+          </div>
+        `;
+      } catch(err){
+        console.error(err);
+        box.innerHTML = `<div class="err">通信エラー: ${h(err?.message||err)}</div>`;
+      }
+    };
     })();
 
 </script> 
+ 
+  <script>
+  document.addEventListener('DOMContentLoaded', () => {
+    (function(){
+      const ENDPOINT = window.GAS_ENDPOINT || window.API_BASE || '';
+      const LIMIT = 300, COOLDOWN_SEC = 10, LS_KEY = 'fbCooldownAt';
   
+      async function getCurrentLineId(){
+        return window.STATE?.lineId || window.state?.lineId || '';
+      }
+      async function getCurrentDisplayName(){
+        return window.STATE?.displayName || window.state?.displayName || '';
+      }
+  
+      // --- ここで要素を取る（この時点ではもうDOMに存在する） ---
+      const $ = s => document.querySelector(s);
+      const modal = $('#feedbackModal');
+      const fab   = $('#feedbackFab');
+      const textarea = $('#fbMessage');
+      const counter  = $('#fbCount');
+      const sendBtn  = $('#fbSendBtn');
+      const snackbar = $('#snackbar');
+  
+      function openModal(){ modal.hidden = false; textarea.focus(); updateCount(); }
+      function closeModal(){ modal.hidden = true; }
+      function showSnack(message){
+        snackbar.textContent = message;
+        snackbar.classList.add('show');
+        setTimeout(()=> snackbar.classList.remove('show'), 2600);
+      }
+      function updateCount(){ counter.textContent = String(textarea.value.length); }
+      function nowTs(){ return Math.floor(Date.now()/1000); }
+    function cooldownLeft(){
+      const at = Number(localStorage.getItem('fbCooldownAt')||'0');
+      return Math.max(0, COOLDOWN_SEC - (nowTs()-at));
+    }
+    function startCooldown(){ localStorage.setItem('fbCooldownAt', String(nowTs())); }
+
+    fab?.addEventListener('click', openModal);
+    modal?.addEventListener('click', (e)=>{ if (e.target.dataset.close) closeModal(); });
+    textarea?.addEventListener('input', updateCount);
+
+    let sending = false;
+    sendBtn?.addEventListener('click', async ()=>{
+      if (sending) return;
+      const cd = cooldownLeft();
+      if (cd > 0){ showSnack(`連続送信はできません。${cd}秒後に再度お試しください`); return; }
+
+      const message = (textarea.value || '').replace(/\s+/g,' ').trim();
+      const category = (document.getElementById('fbCategory')?.value || 'その他').trim();
+      if (!message){ showSnack('メッセージを入力してください'); textarea.focus(); return; }
+      if (message.length > LIMIT){ showSnack('文字数上限を超えています'); return; }
+
+      // 送信
+      try{
+        sending = true; sendBtn.disabled = true; sendBtn.textContent = '送信中…';
+      
+        const lineId = await getCurrentLineId();
+        const name   = await getCurrentDisplayName();
+        
+        console.debug('fb endpoint', ENDPOINT); // デバッグ用に一時的に出すと安心
+        
+        const esc = encodeURIComponent;
+        const j = await api(
+          `?feedbackSubmit=1` +
+          `&lineId=${esc(lineId || '')}` +
+          `&name=${esc(name || '')}` +
+          `&category=${esc(category || 'その他')}` +
+          `&message=${esc(message || '')}`
+        );
+        console.debug('fb response', j);
+      
+        const ok = j && (j.status === 'ok' || j.inserted === true);
+        if (ok){
+          showSnack('送信しました。ご協力ありがとうございます！');
+          textarea.value = ''; updateCount(); startCooldown(); closeModal();
+        }else{
+          showSnack(j?.message || '送信に失敗しました');
+        }
+      }catch(err){
+        console.error(err); showSnack('通信エラーが発生しました');
+      }finally{
+        sending = false; sendBtn.disabled = false; sendBtn.textContent = '送信';
+      }
+    });
+
+    // デバッグしやすいように（任意）
+    window.__fbDebug = {
+      getCurrentLineId, getCurrentDisplayName,
+      hasFab: !!fab, hasModal: !!modal
+    };
+  })();
+});
+</script>
+  <script>
+    (function () {
+      // --- 1. エントリ一覧（共通設定にあればそれを使う） ---
+      const ENTRIES =
+        window.CHANGELOG_ENTRIES ||   // 共通設定側で定義している場合
+        window.__CHANGELOG_ENTRIES__ || // 名前違いの保険
+        [];                            // どれも無ければ空
+  
+      const LS_KEY = "changelogLastSeen"; // 既読管理キー
+  
+      const modal = document.querySelector("#changelogModal");
+      const list  = document.querySelector("#changelogList");
+      const verEl = document.getElementById("ver");   // ヘッダーのバージョン表示
+  
+      // --- 2. HTMLエスケープ ---
+      function escapeHtml(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, c => (
+          {"&":"&amp;","<":"&lt;","~":"&tilde;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c] || c
+        ));
+      }
+  
+      // --- 3. 更新履歴の描画 ---
+      function render() {
+        if (!list) return;
+        list.innerHTML = ENTRIES.map(e => `
+          <div class="cg-item">
+            <div class="cg-head">
+              <div class="cg-title">${escapeHtml(e.title)}</div>
+              <div class="cg-tags">
+                ${(e.tags || []).map(t =>
+                  `<span class="cg-tag">${escapeHtml(t)}</span>`
+                ).join("")}
+              </div>
+            </div>
+            <div class="cg-date">${escapeHtml(e.date || "")}</div>
+            <div class="cg-body">${escapeHtml(e.body || "")}</div>
+          </div>
+        `).join("");
+      }
+  
+      // --- 4. 未読管理 ---
+      function latestDate() {
+        return ENTRIES.map(e => e.date).sort().slice(-1)[0] || "";
+      }
+  
+      function refreshBadge() {
+        const lastSeen = localStorage.getItem(LS_KEY) || "";
+        const latest   = latestDate();
+        const unread   = latest && (!lastSeen || lastSeen < latest);
+  
+        if (verEl) {
+          verEl.classList.toggle("has-unread", !!unread);
+        }
+      }
+  
+      function markAsRead() {
+        const latest = latestDate();
+        if (latest) {
+          localStorage.setItem(LS_KEY, latest);
+        }
+        refreshBadge();
+      }
+  
+      // --- 5. モーダル開閉 ---
+      function openModal() {
+        if (!modal) return;
+        render();         // ← ここで毎回描画する（これが抜けていると中身が空になる）
+        modal.hidden = false;
+        markAsRead();     // 開いたタイミングで既読扱い
+      }
+  
+      function closeModal() {
+        if (!modal) return;
+        modal.hidden = true;
+      }
+  
+      // --- 6. イベント設定 ---
+  
+      // ヘッダのバージョン文字をボタンとして扱う
+      if (verEl) {
+        verEl.setAttribute("role", "button");
+        verEl.setAttribute("tabindex", "0");
+        verEl.style.cursor = "pointer";
+  
+        const openHandler = () => openModal();
+  
+        verEl.addEventListener("click", openHandler);
+        verEl.addEventListener("keydown", e => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openHandler();
+          }
+        });
+  
+        // 外からも呼べるようにしておく（既存コード用）
+        window.openChangelogModal = openHandler;
+      }
+  
+      // モーダル内の×ボタン／背景クリック
+      modal?.addEventListener("click", e => {
+        if (e.target.dataset.close) {
+          closeModal();
+        }
+      });
+  
+      // Escキーで閉じる
+      document.addEventListener("keydown", e => {
+        if (e.key === "Escape" && !modal.hidden) {
+          closeModal();
+        }
+      });
+  
+      // --- 7. 初期バッジ更新 ---
+      refreshBadge();
+    })();
+  </script>
+
+    <script>
+    (function(){
+      function attachVersionButton() {
+        const el = document.getElementById('ver');
+        if (!el) return;
+    
+        // バージョン文字列が未表示なら FRONT_VERSION を反映
+        if (!el.textContent) el.textContent = (typeof FRONT_VERSION === 'string' ? FRONT_VERSION : '');
+    
+        // 見た目はテキスト、挙動はボタン
+        el.setAttribute('role', 'button');
+        el.setAttribute('tabindex', '0');
+        el.style.cursor = 'pointer';
+    
+        // クリック/Enter/Space で changelog を開く
+        const open = () => {
+          if (typeof window.openChangelogModal === 'function') {
+            window.openChangelogModal();   // ← ここに変更
+          } else {
+            // フォールバック：既存のボタンがあればクリック
+            document.getElementById('btnChangelog')?.click();
+          }
+        };
+        el.addEventListener('click', open);
+        el.addEventListener('keydown', (e)=>{
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+        });
+      }
+    
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachVersionButton);
+      } else {
+        attachVersionButton();
+      }
+    })();
+    </script>
+   <script>
+    (function () {
+      // 戻る / 再読込ボタン
+      document.getElementById('btnFeedbackBack')
+        ?.addEventListener('click', () => show('#view-home'));
+      document.getElementById('fbReload')
+        ?.addEventListener('click', () => window.loadFeedbackList?.());
+    
+      // 「どこまで読んだか」を保存するキー（Noベース）
+      const FB_LS_KEY = 'feedbackLastSeenNo';
+    
+      // ステータス → CSS クラス
+      function statusClass(value) {
+        switch (value) {
+          case '完了':   return 'is-完了';
+          case '却下':   return 'is-却下';
+          case '保留':   return 'is-保留';
+          case '対応中': return 'is-対応中';
+          default:       return 'is-未対応';
+        }
+      }
+      function applyStatusColor(sel) {
+        sel.classList.remove('is-未対応','is-対応中','is-保留','is-完了','is-却下');
+        sel.classList.add(statusClass(sel.value));
+      }
+    
+      // ご意見一覧（カテゴリ別表示）
+      window.loadFeedbackList = async function () {
+        console.debug('[fb] loadFeedbackList invoked');
+    
+        // 念のためビューを可視化
+        document.querySelector('#view-feedback')?.removeAttribute('hidden');
+    
+        // 日時整形
+        const pad = n => String(n).padStart(2, '0');
+        const fmtDate = (s) => {
+          if (!s) return '';
+          if (/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}/.test(s)) return s.slice(0, 16);
+          const d = new Date(s);
+          if (isNaN(d.getTime())) return String(s);
+          return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+    
+        const box = document.getElementById('feedbackListBox');
+        if (!box) return;
+        box.innerHTML = '読み込み中… <span class="spinner"></span>';
+    
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])
+        );
+    
+        try {
+          const lid = (window.state?.lineId || window.STATE?.lineId || '');
+          const j = await api(`?feedbackList=1&lineId=${encodeURIComponent(lid)}`);
+          console.debug('[fb] api response', j);
+    
+          if (j?.status !== 'ok' || !Array.isArray(j.items)) {
+            box.innerHTML = '<div class="err">取得に失敗しました</div>';
+            return;
+          }
+    
+          // 正規化
+          const items = j.items.map(it => ({
+            no:       it.no ?? it.No ?? '',
+            name:     it.name ?? it.名前 ?? '',
+            at:       it.at ?? it.date ?? it.送信日時 ?? '',
+            category: it.category ?? it.カテゴリ ?? 'その他',
+            message:  it.message ?? it.メッセージ ?? '',
+            status:   it.status ?? it.ステータス ?? '未対応',
+          }));
+    
+          // カテゴリごとにグルーピング
+          const byCat = {};
+          for (const it of items) {
+            const c = it.category || 'その他';
+            (byCat[c] ||= []).push(it);
+          }
+    
+          // カテゴリの表示順
+          const CAT_ORDER = ['要望', '不具合', 'デザイン', 'その他'];
+          const orderKey = (c) => {
+            const i = CAT_ORDER.indexOf(c);
+            return i >= 0 ? i : 999;
+          };
+    
+          const lastSeen = Number(localStorage.getItem(FB_LS_KEY) || '0');
+    
+          // 1件の行（アコーディオンなし）
+          const row = it => `
+            <div class="fb-row">
+              <div class="fb-row-head">
+                <span class="mono">#${esc(it.no)}</span>
+                <span class="name">${esc(it.name || '（名無し）')}</span>
+                <span class="date">${esc(fmtDate(it.at))}</span>
+              </div>
+              <div class="fb-row-body">
+                <div class="fb-msg">${esc(it.message)}</div>
+                <div class="fb-status-wrap">
+                  <select class="fb-status" data-no="${esc(it.no)}" data-cur="${esc(it.status)}">
+                    ${['未対応','対応中','保留','完了','却下'].map(s =>
+                      `<option value="${s}" ${s === it.status ? 'selected' : ''}>${s}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+              </div>
+            </div>
+          `;
+    
+          // カテゴリごとに <details> で折りたたみ（※デフォルト閉じる）
+          const html = Object.keys(byCat)
+            .sort((a, b) => orderKey(a) - orderKey(b) || a.localeCompare(b))
+            .map(cat => {
+              const arr = byCat[cat];
+              const maxNo = Math.max(...arr.map(it => Number(it.no) || 0));
+              const hasUnread = maxNo > lastSeen;
+              return `
+                <details class="fb-cat card${hasUnread ? ' has-unread' : ''}" data-maxno="${maxNo}">
+                  <summary class="fb-cat-head">
+                    <span class="sectionTitle">${esc(cat)}</span>
+                    <span class="fb-count">${arr.length}件</span>
+                  </summary>
+                  <div class="fb-list">
+                    ${arr.map(row).join('') || '<div class="small muted">なし</div>'}
+                  </div>
+                </details>
+              `;
+            })
+            .join('') || '<div class="small muted">データがありません</div>';
+    
+          box.innerHTML = html;
+    
+          // ステータス色の初期適用
+          box.querySelectorAll('.fb-status').forEach(sel => applyStatusColor(sel));
+    
+          // カテゴリを開いたら「新規あり」バッジを消して既読を更新
+          box.querySelectorAll('details.fb-cat').forEach(det => {
+            det.addEventListener('toggle', () => {
+              if (!det.open) return;
+              if (!det.classList.contains('has-unread')) return;
+    
+              const catMax = Number(det.dataset.maxno || '0');
+              const cur = Number(localStorage.getItem(FB_LS_KEY) || '0');
+              const next = Math.max(cur, catMax);
+              localStorage.setItem(FB_LS_KEY, String(next));
+              det.classList.remove('has-unread');
+            });
+          });
+    
+        } catch (err) {
+          console.error(err);
+          box.innerHTML = `<div class="err">通信エラー: ${esc(err?.message || err)}</div>`;
+        }
+      };
+    
+      // ステータス変更イベント（イベント委任）
+      (function () {
+        const box = document.getElementById('feedbackListBox');
+        if (!box) return;
+    
+        box.addEventListener('change', async (e) => {
+          const sel = e.target;
+          if (!sel.classList || !sel.classList.contains('fb-status')) return;
+    
+          const no = sel.dataset.no;
+          const to = sel.value;
+          const prev = sel.dataset.cur || sel.getAttribute('data-cur') || '';
+    
+          sel.disabled = true;
+    
+          try {
+            const lid = (window.state?.lineId || window.STATE?.lineId || '');
+            const q = `?feedbackSetStatus=1&lineId=${encodeURIComponent(lid)}&no=${encodeURIComponent(no)}&status=${encodeURIComponent(to)}`;
+            const r = await api(q);
+            if (r?.status === 'ok') {
+              sel.dataset.cur = to;
+              applyStatusColor(sel);
+            } else {
+              sel.value = prev;
+              alert(r?.message || '更新に失敗しました');
+            }
+          } catch (err) {
+            sel.value = prev;
+            alert('通信エラー:' + (err?.message || err));
+          } finally {
+            sel.disabled = false;
+          }
+        });
+      })();
+    })();
+    </script>
 <script>
 // ===== 起動 =====
 document.addEventListener('DOMContentLoaded', () => {
