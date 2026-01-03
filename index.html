@@ -12,7 +12,15 @@
   const FRONT_VERSION = "v1.2.0";  // stable ver→v1.1.0
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
-
+  const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
+             
+              // D1 のベースURL
+              const D1_BASE = (typeof D1_API_BASE_URL === "string"
+                  ? D1_API_BASE_URL
+                  : ""
+              ).replace(/\/+$/, "");
+  
+              const D1_ORIGIN = D1_BASE || window.location.origin;
   // 更新履歴
   window.__CHANGELOG_ENTRIES__ = [
   {
