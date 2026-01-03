@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.0";  // stable ver→v1.1.0
+  const FRONT_VERSION = "v1.2.1";  // stable ver→v1.2.0
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -21,29 +21,48 @@
               ).replace(/\/+$/, "");
   
               const D1_ORIGIN = D1_BASE || window.location.origin;
-  // 更新履歴
-  window.__CHANGELOG_ENTRIES__ = [
-  {
-    date: "2026-01-04",
-    title: "システムの読み込みを高速化",
-    tags: ["改善", "内部"],
-    body: "トップ画面の「今後の予定」「会員情報」などの読み込み処理を変更し、表示速度と安定性を改善しました。"
-  },
-  {
-    date: "2026-01-04",
-    title: "出欠入力フォームに締切後のイベントの回答内容を表示",
-    tags: ["改善", "UI"],
-    body: "回答締切後もそのイベントへの回答内容を確認できるように改善しました。"
-  },
-  {
-    date: "2026-01-04",
-    title: "保存中のモーダル表示を追加",
-    tags: ["改善", "UI"],
-    body: "編集画面で保存ボタンを押した際に、「保存中…」などのモーダルを表示するようにしました。処理中かどうかが一目で分かります。"
-  }
-  ];
   
-// === キャッシュ名前空間（環境ごとに localStorage を分離） ===
+  // === 更新履歴（アプリ内「変更履歴」表示用） ===
+            window.__CHANGELOG_ENTRIES__ = [
+                {
+                    date: "2026-01-04",
+                    title: "システムの読み込みを高速化",
+                    tags: ["改善", "内部"],
+                    body: "トップ画面の「今後の予定」「会員情報」などの読み込み処理を変更し、表示速度と安定性を改善しました。"
+                },
+                {
+                    date: "2026-01-04",
+                    title: "出欠入力フォームに締切後のイベントの回答内容を表示",
+                    tags: ["改善", "UI"],
+                    body: "回答締切後もそのイベントへの回答内容を確認できるように改善しました。"
+                },
+                {
+                    date: "2026-01-04",
+                    title: "保存中のモーダル表示を追加",
+                    tags: ["改善", "UI"],
+                    body: "編集画面で保存ボタンを押した際に、「保存中…」などのモーダルを表示するようにしました。処理中かどうかが一目で分かります。"
+                },
+                {
+                date: "2025-11-15",
+                title: "ご意見BOX（右下ボタン）を追加",
+                tags: ["機能追加","UI"],
+                body: "気づいた点や改善要望を送信できるフォームを追加しました。右下の吹き出しボタンから利用できます。"
+                },
+                {
+                date: "2025-11-15",
+                title: "今後の予定に演奏開始時間を表示",
+                tags: ["改善","UI"],
+                body: "イベント一覧に演奏開始時間を表示するようにしました。"
+                },
+                {
+                date: "2025-11-15",
+                title: "更新履歴ページを追加",
+                tags: ["機能追加","UI"],
+                body: "アプリ内の変更点を確認できるようになりました。右上「vX.X.X」から開けます。未読マークも表示されます。"
+                }
+            ];
+
+            // === キャッシュ名前空間（環境ごとに localStorage を分離） ===
             const ENV_NS = (() => {
                 const raw = [location.origin, LIFF_ID, API_ENDPOINT].join("|");
                 // ざっくりハッシュ（djbx33a）
@@ -711,6 +730,12 @@
                 .fEvent.readonly .selectBtn,
                 .fEvent.readonly input.evComment {
                 pointer-events: none;
+                }
+                /* 展開後の「＠場所」(締切済みカード内) を小さく・控えめに */
+                .fPlaceDetail {
+                font-size: 12px;          /* ← ここで小さくする。11〜13あたりお好みで */
+                color: var(--c-muted);    /* 既存の muted とトーンを合わせる */
+                margin-bottom: 4px;       /* 下にちょっと余白 */
                 }
     /* ===== Schedules（今後の予定） ===== */   
         /* 2行のラベル プルダウン配置 */
@@ -2094,8 +2119,10 @@
         box-shadow: 0 8px 28px rgba(0,0,0,.15);
         padding: 18px 16px;
         font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
+        max-height: 80vh;              /* 画面の8割までの高さに制限 */
+        overflow-y: auto;              /* 中身が増えたらカード内スクロール */
+        -webkit-overflow-scrolling: touch; /* iOSでぬるっとスクロール */
         }
-
         /* リスト */
         .cg-item{
         border: 1px solid #e5e5ef;
@@ -2181,6 +2208,10 @@
         height: 8px;
         background: #e11d48;
         border-radius: 9999px;
+        }
+        /* リスト部分だけスクロールさせる */
+        #changelogList{
+        margin-top: 8px;        /* タイトルとの余白が欲しければ */
         }
     /* ===== 回答受付中の公演リスト 専用 ===== */
         const css = document.createElement('style');
@@ -4845,38 +4876,46 @@
         if (readOnly) {
             return `
                 <div class="fEvent readonly"
-                    data-evt="${ev.eventId}"
-                    data-seg="${evSegNorm || "both"}">
-                    <div class="fHead">
-                        <div class="fRow1" title="${dateDisp} ${timeDisp}">
-                            <span class="t-date">
-                                ${dateDisp}${timeDisp ? ` <small>${timeDisp}</small>` : ``}
-                            </span>
-                            ${
-                                place
-                                    ? `<span class="t-place-inline" style="font-size:12px; opacity:0.8;">
-                                        ＠ ${h(place)}
-                                    </span>`
-                                    : ``
-                            }
-                            ${segBadgeLabel ? `<span class="seg-badge ${segBadgeCls}">${segBadgeLabel}</span>` : ``}
-                            <!-- ← ここにあった「締切済み」バッジは削除 -->
-                        </div>
-                        <!-- 出欠バッジ -->
-                        <div class="fStatusRow">${pills}</div>
+                data-evt="${ev.eventId}"
+                data-seg="${evSegNorm || "both"}">
+
+                <div class="fHead">
+                    <!-- 1行目：日付 + 時間 + 区分バッジ（場所はここから外す） -->
+                    <div class="fRow1" title="${dateDisp} ${timeDisp}">
+                    <span class="t-date">
+                        ${dateDisp}${timeDisp ? ` <small>${timeDisp}</small>` : ``}
+                    </span>
+                    ${segBadgeLabel ? `<span class="seg-badge ${segBadgeCls}">${segBadgeLabel}</span>` : ``}
                     </div>
 
-                    <!-- 展開時の中身は今のままでOK -->
-                    <div class="fBody">
-                        <div class="fRow2" title="${h(titleAttr)}" style="margin-bottom:4px;">
-                            <span class="t-title">${h(titleStr || "（無題）")}</span>
-                        </div>
-                        <div class="fSub" style="margin-bottom:8px;">
-                            ${deadlineLabel}
-                        </div>
-                        ${rows}
-                        ${commentPartReadOnly}
+                    <!-- 2行目：イベント名 -->
+                    <div class="fRow2" title="${h(titleAttr)}">
+                    <span class="t-title">${h(titleStr || "（無題）")}</span>
                     </div>
+
+                    <!-- 3行目：出欠バッジ -->
+                    <div class="fStatusRow">
+                    ${pills}
+                    </div>
+                </div>
+
+                <!-- 展開時の中身 -->
+                <div class="fBody">
+                    <!-- ＠場所 をここに移動 -->
+                    ${
+                    place
+                        ? `<div class="fPlaceDetail">＠ ${h(place)}</div>`
+                        : ``
+                    }
+
+                    <!-- 締切表示 -->
+                    <div class="fSub" style="margin-bottom:8px;">
+                    ${deadlineLabel}
+                    </div>
+
+                    ${rows}
+                    ${commentPartReadOnly}
+                </div>
                 </div>
             `;
         }
@@ -6527,6 +6566,15 @@
                     "",
                     // ★ 対象区分
                     segment: segRaw,
+
+                    // ★ 締切日（YYYYMMDD 相当）をメタ情報として保持しておく
+                    deadlineYmd:
+                        ev.deadlineYmd ??
+                        ev.deadline_date ??
+                        ev.deadlineDate ??
+                        ev.deadline ??
+                        ev.limit ?? 
+                        "",
                 };
                 })
                 .filter(e => e && e.id);
@@ -6627,15 +6675,15 @@
           renderReport();
         },
 
-    // 初期配線
-    mount(){
-      if (this.mounted) return;
-      this.mounted = true;
-      document.querySelector("#repEvent")?.addEventListener("change", ()=>this.onChange());
-      // ← 実HTMLは #btnReportReload なのでこちらに合わせます
-      document.querySelector("#btnReportReload")?.addEventListener("click", ()=>this.loadMeta());
-    }
-  };
+        // 初期配線
+        mount(){
+        if (this.mounted) return;
+        this.mounted = true;
+        document.querySelector("#repEvent")?.addEventListener("change", ()=>this.onChange());
+        // ← 実HTMLは #btnReportReload なのでこちらに合わせます
+        document.querySelector("#btnReportReload")?.addEventListener("click", ()=>this.loadMeta());
+        }
+    };
 
     // 管理レポート初期化（公演メタ一覧の取得＆セレクト更新）
     async function initAdminReportPage(){
@@ -7272,39 +7320,144 @@
         const time  = fmtTime(payload.hm   || payload.time || "");
         const place = payload.place || payload.venue || "";
 
-        // accepting が来ていればそれを優先（'closed' なら締切）
-        const open =
-            typeof payload.accepting !== "undefined"
-            ? String(payload.accepting).toLowerCase() !== "closed"
-            : (payload.isOpen ?? payload.open ?? payload.status === "open")
-                ? true
-                : false;
+        // === 受付状態（ヘッダ右側の「受付中 / 締切」バッジ）を決定 ===
+
+        // 今日（JST）を YYYYMMDD
+        const now = new Date();
+        const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+        const ty  = jst.getFullYear();
+        const tm  = String(jst.getMonth() + 1).padStart(2, "0");
+        const td  = String(jst.getDate()).padStart(2, "0");
+        const todayYmd = `${ty}${tm}${td}`;
+
+        // 0-A) meta側（/line/schedules）から該当イベント
+        let metaHit = null;
+        if (Array.isArray(state.reportMeta) && id) {
+            metaHit = state.reportMeta.find(e => String(e.id) === String(id)) || null;
+        }
+
+        // 0-B) 管理一覧（adminItemsRaw）から該当イベント
+        let adminHit = null;
+        if (Array.isArray(state.adminItemsRaw) && id) {
+            adminHit = state.adminItemsRaw.find(e => String(e.id) === String(id)) || null;
+        }
+
+        // 1) payload 内から締切日っぽい値を拾う
+        let rawDeadline =
+            payload.deadline ||
+            payload.limit ||
+            payload.deadlineYmd ||
+            payload.deadline_ymd ||
+            payload.deadlineDate ||
+            payload.deadline_date ||
+            (payload.event && (
+                payload.event.deadline ||
+                payload.event.limit ||
+                payload.event.deadlineYmd ||
+                payload.event.deadline_ymd ||
+                payload.event.deadlineDate ||
+                payload.event.deadline_date
+            )) ||
+            "";
+
+        // 2) 無ければ metaHit / adminHit から拾う
+        if (!rawDeadline && metaHit) {
+            rawDeadline =
+                metaHit.deadline ||
+                metaHit.deadlineYmd ||
+                metaHit.deadline_ymd ||
+                metaHit.deadlineDate ||
+                metaHit.deadline_date ||
+                "";
+        }
+
+        if (!rawDeadline && adminHit) {
+            // ★ adminListFetch で正規化した deadline を最優先で使う
+            rawDeadline =
+                adminHit.deadline ||
+                adminHit.deadlineYmd ||
+                adminHit.deadline_ymd ||
+                adminHit.deadlineDate ||
+                adminHit.deadline_date ||
+                "";
+        }
+
+        // 3) 数字だけ抜く
+        let deadlineDigits = String(rawDeadline || "").replace(/[^0-9]/g, "");
+
+        // 3.5) 公演日（締切が取れなかった場合のフォールバック用）
+        let dateDigits = "";
+        {
+            const rawDate =
+                payload.ymd ||
+                payload.date ||
+                (payload.event && (payload.event.ymd || payload.event.date)) ||
+                (metaHit  && (metaHit.ymd  || metaHit.date)) ||
+                (adminHit && (adminHit.ymd || adminHit.date)) ||
+                "";
+            const d = String(rawDate || "").replace(/[^0-9]/g, "");
+            if (d.length >= 8) {
+                dateDigits = d.slice(0, 8);
+            }
+        }
+
+        // 4) 実際の open 判定
+        let open;
+
+        // 4-1) まずは締切日で判定（締切日 < 今日 → 締切）
+        if (deadlineDigits.length >= 8) {
+            const dlYmd = deadlineDigits.slice(0, 8); // 先頭8桁 yyyyMMdd
+            const isClosedByDeadline = dlYmd < todayYmd;
+            open = !isClosedByDeadline;
+        }
+        // 4-2) 締切が取れない場合は「公演日」で判定（公演日 < 今日 → 締切）
+        else if (dateDigits.length === 8) {
+            const isPastEvent = dateDigits < todayYmd;
+            open = !isPastEvent;
+        }
+        // 4-3) それでも判断できない場合だけ accepting / status でフォールバック
+        else if (typeof payload.accepting !== "undefined") {
+            const v = String(payload.accepting).toLowerCase();
+            open = !(
+                v === "closed" ||
+                v === "close"  ||
+                v === "false"  ||
+                v === "n"
+            );
+        } else {
+            const flag =
+                payload.isOpen ??
+                payload.open ??
+                (payload.status &&
+                    String(payload.status).toLowerCase() === "open");
+            open = !!flag;
+        }
 
         // ★ここからヘッダーHTML
         const head = `
-            <div class="repHeader">
+        <div class="repHeader">
             <!-- 1行目：タイトルだけ -->
             <div class="repLine">
-                <div class="repLeft">
+            <div class="repLeft">
                 <span class="repTitle">${title || "(無題)"}</span>
-                </div>
+            </div>
             </div>
 
             <!-- 2行目：日時・場所（左）／受付バッジ（右） -->
             <div class="repLine repHeadRow">
-                <div class="repLeft">
+            <div class="repLeft">
                 <span class="repMeta">
-                    ${date}${time ? ` ${time}` : ""}
-                    ${place ? `<span class="repPlace"> @${place}</span>` : ""}
+                ${date}${time ? ` ${time}` : ""}
+                ${place ? `<span class="repPlace"> @${place}</span>` : ""}
                 </span>
-                </div>
-                <div class="repRight">
-                <span class="badge-status ${open ? "open" : "closed"}">
-                    ${open ? "受付中" : "締切"}
-                </span>
-                </div>
             </div>
-            </div>`;
+            <div class="repRight">
+                <span class="badge-status ${open ? "open" : "closed"}">
+                ${open ? "受付中" : "締切"}
+                </span>
+            </div>
+            </div>
+        </div>`;
 
         // 出欠ごとにグルーピング（画面フィルタを反映した view を対象に）
         const by = { "参加": [], "未定": [], "欠席": [], "未回答": [] };
@@ -7410,8 +7563,8 @@
                         "/ fallback raw=", raw2, "norm2=", norm);
 
         return norm;
-        }
-
+    }
+    
     // ▼ 名前 + 区分から表示名を組み立て（大人の部の接頭辞を付ける）
     function nameWithSegPrefix(p){
         const nm = String(p?.name || "");
