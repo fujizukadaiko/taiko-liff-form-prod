@@ -5371,6 +5371,9 @@
             newBtn.id = "btnSubmit";
             newBtn.style.display = "";
 
+            // ★ 追加：クローンしたボタンに onSubmit をバインド
+            newBtn.addEventListener("click", onSubmit);
+
             // まずは「区切り線」の直前に差し込む
             const divider = document.getElementById("formReadonlyDivider");
 
