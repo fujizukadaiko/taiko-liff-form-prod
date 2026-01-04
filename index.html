@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.2";  // stable ver→v1.2.2
+  const FRONT_VERSION = "v1.2.3";  // stable ver→v1.2.2
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -3694,19 +3694,31 @@
             function viewerRowHtml(ev){
                 const rawYmd = ev.ymd || ev.date || "";
                 const rawHm  = ev.hm || ev.time || ev.performAt || ev["時間"] || "";
+
+                // 場所（フォールバック用）
                 const place  = ev.place || ev.venue || ev.location || "";
+
+                // ★ イベント名（なければ場所を使う）
+                const titleRaw =
+                    ev.title ||
+                    ev.eventTitle ||
+                    ev.name ||
+                    ev.eventName ||
+                    "";
+                const title = (titleRaw || "").trim() || place;
 
                 const ymdDisp = fmtYmd(rawYmd);
                 const hmDisp  = fmtTime(rawHm);
-                const atMark  = place ? " @" : "";
 
+                // ツールチップ用：日付 + 時刻 + イベント名
                 const titleText = hmDisp
-                    ? `${ymdDisp} ${hmDisp}${atMark} ${place}`
-                    : `${ymdDisp}${atMark} ${place}`;
+                    ? `${ymdDisp} ${hmDisp} ${title}`
+                    : `${ymdDisp} ${title}`;
 
+                // 画面表示用：左側は日付＋時刻だけ
                 const dateLineHtml = hmDisp
-                    ? `${ymdDisp} <small>${hmDisp}</small>${atMark}`
-                    : `${ymdDisp}${atMark}`;
+                    ? `${ymdDisp} <small>${hmDisp}</small>`
+                    : `${ymdDisp}`;
 
                 // 区分バッジ
                 const segNorm  = normSeg(ev.segment || "");
@@ -3721,28 +3733,27 @@
                 // 種別バッジ（発表 / 練習）
                 const kindInfo  = getKindInfo(ev);
                 const kindBadge = kindInfo.label
-                    ? `<span class="scKind ${kindInfo.cls}">${kindInfo.label}</span>`
+                    ? `<span class="kind-badge ${kindInfo.cls}">${kindInfo.label}</span>`
                     : "";
 
                 return `
                     <div class="eventRow" data-evt="${ev.id}" data-seg="${segNorm || "both"}">
-                    <div class="eventMeta">
-                        <!-- 1行目：左=区分 / 右=種別 -->
-                        <div class="eventHead">
-                            <div class="eventHead-left">
-                                ${segBadge}
+                        <div class="eventMeta">
+                            <!-- 1行目：区分 + 種別 -->
+                            <div class="eventHead">
+                                <div class="eventHead-left">
+                                    ${segBadge}
+                                    ${kindBadge}
+                                </div>
+                                <div class="eventHead-right"></div>
                             </div>
-                            <div class="eventHead-right">
-                                ${kindBadge}
-                            </div>
-                        </div>
 
-                        <!-- 2行目：日付 時刻 @ 場所 -->
-                        <div class="eventTitle" title="${titleText}">
-                            <span class="title-date">${dateLineHtml}</span>
-                            <span class="title-place">${place}</span>
+                            <!-- 2行目：日付 時刻 + イベント名 -->
+                            <div class="eventTitle" title="${titleText}">
+                                <span class="title-date">${dateLineHtml}</span>
+                                <span class="title-place">${title}</span>
+                            </div>
                         </div>
-                    </div>
                     </div>
                 `;
             }
@@ -5603,13 +5614,14 @@
         const editableEvents = [];
         const readonlyEvents = [];
 
-        // 今日（JST）を "YYYYMMDD" で用意
-        const now = new Date();
-        const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-        const y   = jst.getFullYear();
-        const m   = String(jst.getMonth() + 1).padStart(2, "0");
-        const d   = String(jst.getDate()).padStart(2, "0");
-        const todayYmd = `${y}${m}${d}`;
+        // ★ 今日をローカルタイムゾーンの「日付だけ」で判定する
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);  // その日の 0:00 にそろえる
+
+            const y = today.getFullYear();
+            const m = String(today.getMonth() + 1).padStart(2, "0");
+            const d = String(today.getDate()).padStart(2, "0");
+            const todayYmd = `${y}${m}${d}`;
 
         (allEvents || []).forEach(ev => {
             // 1) まずは既存フラグを優先して解釈
