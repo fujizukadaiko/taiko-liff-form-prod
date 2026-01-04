@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.1";  // stable ver→v1.2.0
+  const FRONT_VERSION = "v1.2.2";  // stable ver→v1.2.2
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -2311,7 +2311,7 @@
                 <button id="btnReload" type="button" style="display:none;"></button>
 
             <!-- 回答受付中の公演（密リスト＋バッジ） -->
-                <div class="card">
+                <div class="card" id="cardEventsActive">
                     <div class="row-space">
                         <div class="sectionTitle">回答受付中の公演</div>
                         <label id="homeOnlyNALabel" style="margin-left:auto;">
@@ -2333,6 +2333,18 @@
                     会員情報照会中… <span class="spinner"></span>
                     </div>
                 </div>
+
+            <!-- ★ 閲覧者用：今後の予定（直近5件） -->
+            <div class="card" id="cardViewerUpcoming" style="display:none;">
+            <div class="row-space">
+                <div class="sectionTitle">今後の予定（直近5件）</div>
+            </div>
+            <div id="viewerEventsBox">
+                <div class="muted">
+                読み込み中… <span class="spinner"></span>
+                </div>
+            </div>
+            </div>
 
             <div id="homeLog" class="muted" style="margin-top:8px;"></div>
         </section>
@@ -3157,23 +3169,29 @@
 
 
 <!-- ===== 回答受付中の公演リスト設定 v7 ===== -->
-    <script>
+<script>
     (function(){
         if (window.HomeEventsUI && window.HomeEventsUI.__v === 7) return;
     
         /* 状態 */
         const S = {
-        events: [],          // [{id, ymd, hm, place, deadline, isNew, segment}]
-        ansMap: {},          // { eventId: [{name, answer}] }
-        names : [],          // 登録演奏者
-        onlyNA: true,
-        nameSegMap: {}       // { [name]: 'adult'|'child' }
+            events: [],          // [{id, ymd, hm, place, deadline, isNew, segment}]
+            ansMap: {},          // { eventId: [{name, answer}] }
+            names : [],          // 登録演奏者
+            onlyNA: true,
+            nameSegMap: {},      // { [name]: 'adult'|'child' }
+            isViewer: false,     // ★ 閲覧者フラグ
+            membersRaw: [],      // ★ 追加：生のメンバーデータを保持
+            allEvents: [],       // ★ 追加：今後の予定（発表+練習など全部）
         };
-    
+                
         /* 参照 */
         const E = {
         box : () => document.getElementById('eventsBox'),
         ckN : () => document.getElementById('homeOnlyNA'),
+        viewerBox  : () => document.getElementById('viewerEventsBox'),
+        cardActive : () => document.getElementById('cardEventsActive'),
+        cardViewer : () => document.getElementById('cardViewerUpcoming'),
         };
     
         /* Util */
@@ -3320,8 +3338,27 @@
         }
     
         function render(){
-            const box = E.box(); if (!box) return;
+            const box = E.box(); 
+            if (!box) return;
 
+            console.log("[home] render: S.isViewer =", S.isViewer);
+
+            const cardActive = E.cardActive();
+            const cardViewer = E.cardViewer();
+
+            if (S.isViewer) {
+                // 閲覧者：回答受付中カードは非表示、代わりに今後の予定カードを描画
+                if (cardActive) cardActive.style.display = "none";
+                if (cardViewer) cardViewer.style.display = "";
+                renderViewerUpcoming();
+                return;  // ここで終わり
+            } else {
+                // 演者・管理者：閲覧者用カードは隠し、従来のリストを描画
+                if (cardActive) cardActive.style.display = "";
+                if (cardViewer) cardViewer.style.display = "none";
+            }
+
+            // ==== ここから下は今まで通りの「回答受付中の公演」描画 ====
             // ★ ここで「締切を過ぎた公演」は除外する
             const activeEvents = (S.events || []).filter(ev => !isPastDeadline(ev));
 
@@ -3381,21 +3418,79 @@
         });
     
         /* 公開API */
-        const API = {
-        __v: 7,
-        mount({events = [], myAnswersMap = {}, performers = [], nameSegMap = {}} = {}){
-            S.events = Array.isArray(events) ? events : [];
-            S.ansMap = myAnswersMap || {};
-            S.names  = Array.isArray(performers) ? performers : [];
-            S.nameSegMap = nameSegMap || {};
-            const n = E.ckN(); if (n) S.onlyNA = !!n.checked;
-            render();
-        },
-        setEvents(e){ S.events = e || []; render(); },
-        setAnswers(a){ S.ansMap = a || {}; render(); },
-        setPerformers(arr){ S.names = Array.isArray(arr) ? arr : []; render(); },
-        render
-        };
+            const API = {
+            __v: 7,
+            mount({
+                events = [],
+                allEvents = [],      // ★ 追加
+                myAnswersMap = {},
+                performers = [],
+                nameSegMap = {},
+                isViewer,
+                members,            // ★ 追加済み
+            } = {}){
+                console.log("[home] API.mount called:", {
+                isViewerArg: isViewer,
+                membersLen: Array.isArray(window.state?.members) ? window.state.members.length : 0,
+                membersArgLen: Array.isArray(members) ? members.length : 0,
+                });
+
+                S.events     = Array.isArray(events) ? events : [];
+                S.allEvents  = Array.isArray(allEvents) && allEvents.length
+                     ? allEvents
+                     : S.events;  // ★ allEvents が無ければ events を流用
+                S.ansMap     = myAnswersMap || {};
+                S.names      = Array.isArray(performers) ? performers : [];
+                S.nameSegMap = nameSegMap || {};
+                if (Array.isArray(members)) {
+                S.membersRaw = members;
+                }
+
+                // ★ 閲覧者フラグの決定
+                if (typeof isViewer === "boolean") {
+                // ① 引数で明示的に渡された場合
+                S.isViewer = isViewer;
+                } else {
+                // ② members / state.members から判定を試みる
+                const srcMembers =
+                    Array.isArray(members) ? members :
+                    (window.state && Array.isArray(window.state.members) ? window.state.members :
+                    S.membersRaw);
+
+                if (Array.isArray(srcMembers) && srcMembers.length) {
+                    console.log("[home] mount members sample:", srcMembers[0]);
+                    S.isViewer = srcMembers.some(m => {
+                    const v = String(m.viewer || m.閲覧者 || "").trim().toUpperCase();
+                    return v === "Y";
+                    });
+                } else {
+                    // ③ members 情報が一切無いときのフォールバック
+                    //    → 演奏者リストが 0 人 かつ 管理者ではないなら「閲覧者扱い」
+                    const isAdmin = !!(window.state && window.state.isAdmin);
+                    if (!isAdmin && Array.isArray(S.names) && S.names.length === 0) {
+                    S.isViewer = true;
+                    } else {
+                    S.isViewer = false;
+                    }
+                    console.log("[home] mount fallback by performers:", {
+                    isAdmin,
+                    performersLen: Array.isArray(S.names) ? S.names.length : -1,
+                    decidedViewer: S.isViewer,
+                    });
+                }
+                }
+
+                console.log("[home] mount: S.isViewer decided =", S.isViewer);
+
+                const n = E.ckN();
+                if (n) S.onlyNA = !!n.checked;
+                render();
+            },
+            setEvents(e){ S.events = e || []; render(); },
+            setAnswers(a){ S.ansMap = a || {}; render(); },
+            setPerformers(arr){ S.names = Array.isArray(arr) ? arr : []; render(); },
+            render,
+            };
         window.HomeEventsUI = API;
         window.renderEventsDense = API.mount;
     
@@ -3412,57 +3507,247 @@
         }
 
         window.addEventListener('home:data', (e)=>{
-        const d = e.detail || {};
-        API.mount({ events: d.events||[], myAnswersMap: d.myAnswersMap||{}, performers: d.performers||[] });
-        });
-        if (!tryMountFromGlobals()){
-        let waited = 0;
-        const iv = setInterval(()=>{
-            if (tryMountFromGlobals()) { clearInterval(iv); }
-            else if ((waited += 300) > 5000) { clearInterval(iv); }
-        }, 300);
-        }
+            const d = e.detail || {};
+
+            console.log("[home] home:data keys =", Object.keys(d || {}));
+            console.log("[home] home:data sample schedules[0] =", d.schedules && d.schedules[0]);
+            console.log("[home] home:data sample allEvents[0] =", d.allEvents && d.allEvents[0]);
+
+            // members が detail に乗ってくる場合はこちらから、
+            // 無ければ state.members から
+            const members =
+                d.members ||
+                (window.state && Array.isArray(window.state.members) ? window.state.members : []);
+
+            let isViewer = false;
+            if (Array.isArray(members)) {
+                console.log("[home] home:data members sample:", members[0]);
+                isViewer = members.some(m => {
+                const v = String(m.viewer || m.閲覧者 || "").trim().toUpperCase();
+                return v === "Y";
+                });
+            }
+
+            console.log("[home] home:data computed isViewer =", isViewer);
+
+            API.mount({
+                events      : d.events || [],
+                allEvents   : d.allEvents                   // ★ ここを実データに合わせて
+                  || d.schedules                // 例えばこんな候補…
+                  || d.upcomingEvents
+                  || [],
+                myAnswersMap: d.myAnswersMap || {},
+                performers  : d.performers || [],
+                nameSegMap  : d.nameSegMap || {},
+                members,          // ★ 追加
+                isViewer,         // ★ 追加
+            });
+            });
+
+        // if (!tryMountFromGlobals()){
+        // let waited = 0;
+        // const iv = setInterval(()=>{
+        //    if (tryMountFromGlobals()) { clearInterval(iv); }
+        //    else if ((waited += 300) > 5000) { clearInterval(iv); }
+        // }, 300);
+        // }
     
         // ブリッジ関数（互換）
         window.renderHomeFromRaw = function(openList, myFamilyAnswers, membersArray){
-        try {
-            const events = (openList || []).map(x => ({
-            id      : x.id ?? x.eventId ?? x.eid ?? '',
-            ymd     : x.ymd ?? x.date ?? '',
-            hm      : x.hm ?? x.time ?? x['時間'] ?? '',
-            place   : x.place ?? x.venue ?? x.location ?? '',
-            deadline: x.deadline ?? x.limit ?? x.deadlineYmd ?? '',
-            isNew   : (x.isNew === true) || (x.is_new === 'Y') || (x.new === true),
-            segment : x.segment || x.targetSegment || x.attendSegment || x.segmentCode || ""
-            }));
-    
-            const map = {};
-            for (const a of (myFamilyAnswers || [])){
-            const eid = a.eventId ?? a.id ?? a.eid ?? '';
-            if (!eid) continue;
-            if (!map[eid]) map[eid] = [];
-            map[eid].push({ name: a.name ?? a.member ?? '', answer: (a.answer ?? '').trim() || '未回答' });
+            try {
+                const events = (openList || []).map(x => ({
+                id      : x.id ?? x.eventId ?? x.eid ?? '',
+                ymd     : x.ymd ?? x.date ?? '',
+                hm      : x.hm ?? x.time ?? x['時間'] ?? '',
+                place   : x.place ?? x.venue ?? x.location ?? '',
+                deadline: x.deadline ?? x.limit ?? x.deadlineYmd ?? '',
+                isNew   : (x.isNew === true) || (x.is_new === 'Y') || (x.new === true),
+                segment : x.segment || x.targetSegment || x.attendSegment || x.segmentCode || ""
+                }));
+
+                const map = {};
+                for (const a of (myFamilyAnswers || [])){
+                const eid = a.eventId ?? a.id ?? a.eid ?? '';
+                if (!eid) continue;
+                if (!map[eid]) map[eid] = [];
+                map[eid].push({ name: a.name ?? a.member ?? '', answer: (a.answer ?? '').trim() || '未回答' });
+                }
+
+                const members =
+                membersArray ||
+                (window.state && Array.isArray(window.state.members) ? window.state.members : []);
+
+                console.log("[home] renderHomeFromRaw members sample:", members[0]);
+
+                const performers = Array.from(new Set(members.map(m => m.performerName).filter(Boolean)));
+                const nameSegMap = {};
+                members.forEach(m => {
+                const n = (m.performerName||'').trim();
+                const s = normSeg(m.segment || m.区分 || '');
+                if (n && s) nameSegMap[n] = s;
+                });
+
+                const isViewer = Array.isArray(members) && members.some(m => {
+                const v = String(m.viewer || m.閲覧者 || "").trim().toUpperCase();
+                return v === "Y";
+                });
+
+                console.log("[home] renderHomeFromRaw isViewer =", isViewer);
+
+                window.__HOME_EVENTS__   = events;
+                window.__HOME_ANSWERS__  = map;
+                window.__HOME_MEMBERS__  = performers;
+
+                window.renderEventsDense({
+                events,
+                myAnswersMap: map,
+                performers,
+                nameSegMap,
+                members,    // ★ 追加
+                isViewer,   // ★ 追加
+                });
+            } catch (err){
+                console.error('renderHomeFromRaw failed:', err);
             }
-    
-            const members = membersArray || (window.state && Array.isArray(window.state.members) ? window.state.members : []);
-            const performers = Array.from(new Set(members.map(m => m.performerName).filter(Boolean)));
-            const nameSegMap = {};
-            members.forEach(m=>{
-            const n = (m.performerName||'').trim();
-            const s = normSeg(m.segment || m.区分 || '');
-            if (n && s) nameSegMap[n] = s;
+            };
+
+        function renderViewerUpcoming(){
+            const card = E.cardViewer();
+            const box  = E.viewerBox();
+            if (!card || !box) return;
+
+            card.style.display = "";
+
+            const today = new Date();
+            today.setHours(0,0,0,0);
+
+            // ★ どの配列をベースにするか決める（優先順位を変更）
+            const hasGlobal = Array.isArray(window.__ALL_SCHEDULES__) && window.__ALL_SCHEDULES__.length > 0;
+            const hasAll    = Array.isArray(S.allEvents) && S.allEvents.length > 0;
+            const hasEvents = Array.isArray(S.events) && S.events.length > 0;
+
+            const base =
+                hasGlobal ? window.__ALL_SCHEDULES__ :
+                hasAll    ? S.allEvents :
+                hasEvents ? S.events :
+                            [];
+
+            console.log("[home] viewerUpcoming: lengths", {
+                S_allEvents: hasAll ? S.allEvents.length : null,
+                globalSchedules: hasGlobal ? window.__ALL_SCHEDULES__.length : null,
+                S_events: hasEvents ? S.events.length : null,
             });
-    
-            window.__HOME_EVENTS__   = events;
-            window.__HOME_ANSWERS__  = map;
-            window.__HOME_MEMBERS__  = performers;
-            window.renderEventsDense({ events, myAnswersMap: map, performers, nameSegMap });
-        } catch (err){
-            console.error('renderHomeFromRaw failed:', err);
+            console.log("[home] viewerUpcoming: using base =",
+                hasGlobal ? "__ALL_SCHEDULES__" :
+                hasAll    ? "S.allEvents" :
+                hasEvents ? "S.events" : "[]"
+            );
+            console.log("[home] viewerUpcoming: base[0] sample =", base[0]);
+
+            const upcoming = base
+                .map(ev => {
+                    const dt = parseYmd(ev.ymd || ev.date);
+                    return { ev, dt };
+                })
+                .filter(x => x.dt && x.dt >= today)
+                .sort((a,b) => a.dt - b.dt)
+                .slice(0,5)
+                .map(x => x.ev);
+
+            if (!upcoming.length){
+                box.innerHTML = '<div class="listEmpty">直近の予定はありません</div>';
+                return;
+            }
+
+            box.innerHTML = `
+                <div class="evList">
+                ${upcoming.map(ev => viewerRowHtml(ev)).join("")}
+                </div>
+            `;
         }
-        };
+
+            function getKindInfo(ev){
+            // ★ 種別フィールドを推測して拾う（実データに合わせて調整OK）
+            const raw =
+                ev.kind ||
+                ev.type ||
+                ev.category ||
+                ev.eventType ||
+                ev.種別 ||
+                ev.種目 ||
+                "";
+            const s = String(raw).trim();
+            if (!s) return { label: "", cls: "" };
+
+            const lower = s.toLowerCase();
+
+            if (lower.includes("練") || lower.includes("practice")) {
+                // ★ 今後の予定と同じクラス名を返す
+                return { label: "練習", cls: "badge--practice" };
+            }
+            if (lower.includes("発") || lower.includes("本番") || lower.includes("stage")) {
+                return { label: "発表", cls: "badge--announce" };
+            }
+            return { label: s, cls: "badge--other" };
+        }
+
+            function viewerRowHtml(ev){
+                const rawYmd = ev.ymd || ev.date || "";
+                const rawHm  = ev.hm || ev.time || ev.performAt || ev["時間"] || "";
+                const place  = ev.place || ev.venue || ev.location || "";
+
+                const ymdDisp = fmtYmd(rawYmd);
+                const hmDisp  = fmtTime(rawHm);
+                const atMark  = place ? " @" : "";
+
+                const titleText = hmDisp
+                    ? `${ymdDisp} ${hmDisp}${atMark} ${place}`
+                    : `${ymdDisp}${atMark} ${place}`;
+
+                const dateLineHtml = hmDisp
+                    ? `${ymdDisp} <small>${hmDisp}</small>${atMark}`
+                    : `${ymdDisp}${atMark}`;
+
+                // 区分バッジ
+                const segNorm  = normSeg(ev.segment || "");
+                const segLbl   = dispSeg(segNorm);
+                const segCls   = segNorm === "adult" ? "seg-adult"
+                                : segNorm === "child" ? "seg-child"
+                                : "seg-both";
+                const segBadge = segLbl
+                    ? `<span class="seg-badge ${segCls}">${segLbl}</span>`
+                    : "";
+
+                // 種別バッジ（発表 / 練習）
+                const kindInfo  = getKindInfo(ev);
+                const kindBadge = kindInfo.label
+                    ? `<span class="scKind ${kindInfo.cls}">${kindInfo.label}</span>`
+                    : "";
+
+                return `
+                    <div class="eventRow" data-evt="${ev.id}" data-seg="${segNorm || "both"}">
+                    <div class="eventMeta">
+                        <!-- 1行目：左=区分 / 右=種別 -->
+                        <div class="eventHead">
+                            <div class="eventHead-left">
+                                ${segBadge}
+                            </div>
+                            <div class="eventHead-right">
+                                ${kindBadge}
+                            </div>
+                        </div>
+
+                        <!-- 2行目：日付 時刻 @ 場所 -->
+                        <div class="eventTitle" title="${titleText}">
+                            <span class="title-date">${dateLineHtml}</span>
+                            <span class="title-place">${place}</span>
+                        </div>
+                    </div>
+                    </div>
+                `;
+            }
     })();
-    </script>
+</script>
 
 <script>
 /* ===== アプリ共通ステート（全画面で共有する状態） ===== */
@@ -5801,12 +6086,22 @@
             }
 
             if (!r || r.status !== "ok" || !Array.isArray(r.schedules)) {
-            box.innerHTML = `<span class="err">取得に失敗しました</span>`;
-            return;
+                box.innerHTML = `<span class="err">取得に失敗しました</span>`;
+                return;
             }
 
             // ★ 生データを保持（以後はローカルでフィルタ）
             state.schedulesRaw = r.schedules.slice();
+
+            // ★ Home の閲覧者カード用に、全予定をグローバルへも公開
+            window.__ALL_SCHEDULES__ = state.schedulesRaw;
+            console.log("[sched] window.__ALL_SCHEDULES__ length =", window.__ALL_SCHEDULES__.length);
+
+            // ★ HomeEventsUI に「データ入ったよ」と知らせて再描画
+            if (window.HomeEventsUI && typeof window.HomeEventsUI.render === "function") {
+                console.log("[sched] call HomeEventsUI.render() after schedules load");
+                window.HomeEventsUI.render();
+            }
         }
 
         // 取得済みデータを UI 値でフィルタして描画
@@ -5876,6 +6171,12 @@
             panel.hidden = expanded;                  // true→隠す / false→表示
             caret.textContent = expanded ? '∨' : '∧'; // 矢印を文字で切り替え
         });
+        // ★ ここを追加：閲覧者カード用にスケジュールを事前取得
+            if (document.getElementById('viewerEventsBox')) {
+                window.renderSchedules(true).catch(err => {
+                    console.error("[sched] initial renderSchedules error", err);
+                });
+            }
     });
     })();
 
