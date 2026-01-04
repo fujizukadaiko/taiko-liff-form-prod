@@ -22,7 +22,7 @@
   
               const D1_ORIGIN = D1_BASE || window.location.origin;
   
-  // === 更新履歴（アプリ内「変更履歴」表示用） ===
+  / === 更新履歴（アプリ内「変更履歴」表示用） ===
             window.__CHANGELOG_ENTRIES__ = [
                 {
                     date: "2026-01-04",
@@ -3695,10 +3695,9 @@
                 const rawYmd = ev.ymd || ev.date || "";
                 const rawHm  = ev.hm || ev.time || ev.performAt || ev["時間"] || "";
 
-                // 場所（フォールバック用）
                 const place  = ev.place || ev.venue || ev.location || "";
 
-                // ★ イベント名（なければ場所を使う）
+                // ★ イベント名（なければ場所をタイトルに使う）
                 const titleRaw =
                     ev.title ||
                     ev.eventTitle ||
@@ -3710,12 +3709,10 @@
                 const ymdDisp = fmtYmd(rawYmd);
                 const hmDisp  = fmtTime(rawHm);
 
-                // ツールチップ用：日付 + 時刻 + イベント名
                 const titleText = hmDisp
                     ? `${ymdDisp} ${hmDisp} ${title}`
                     : `${ymdDisp} ${title}`;
 
-                // 画面表示用：左側は日付＋時刻だけ
                 const dateLineHtml = hmDisp
                     ? `${ymdDisp} <small>${hmDisp}</small>`
                     : `${ymdDisp}`;
@@ -3739,13 +3736,14 @@
                 return `
                     <div class="eventRow" data-evt="${ev.id}" data-seg="${segNorm || "both"}">
                         <div class="eventMeta">
-                            <!-- 1行目：区分 + 種別 -->
+                            <!-- 1行目：左=区分 / 右=種別 -->
                             <div class="eventHead">
                                 <div class="eventHead-left">
                                     ${segBadge}
+                                </div>
+                                <div class="eventHead-right">
                                     ${kindBadge}
                                 </div>
-                                <div class="eventHead-right"></div>
                             </div>
 
                             <!-- 2行目：日付 時刻 + イベント名 -->
@@ -9586,3 +9584,4 @@ document.addEventListener('DOMContentLoaded', () => {
   try { init(); } catch (e) { console.error(e); }
 });
 </script>
+
