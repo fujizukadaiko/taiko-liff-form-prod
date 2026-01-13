@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.4";  // stable ver→v1.2.4
+  const FRONT_VERSION = "v1.2.5";  // stable ver→v1.2.5
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -22,8 +22,14 @@
   
               const D1_ORIGIN = D1_BASE || window.location.origin;
   
-  // === 更新履歴（アプリ内「変更履歴」表示用） ===
+// === 更新履歴（アプリ内「変更履歴」表示用） ===
             window.__CHANGELOG_ENTRIES__ = [
+                {
+                    date: "2026-01-13",
+                    title: "備考の表示追加",
+                    tags: ["改善", "UI"],
+                    body: "今後の予定画面に備考がある場合はその内容を表示するようにしました。"
+                },
                 {
                     date: "2026-01-04",
                     title: "システムの読み込みを高速化",
@@ -97,7 +103,7 @@
             })();
         </script>
 
-        <!-- ===== フォント / UI スタイル系 ===== -->
+    <!-- ===== フォント / UI スタイル系 ===== -->
         <!-- Google Fonts（本文=ゴシック / 見出し=明朝） -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -936,7 +942,7 @@
             white-space:nowrap;
         }
 
-    /* ===== Admin（管理画面） ===== */
+    /* ===== Admin（管理画面） ===== */adminListFetch
         /* 管理アコーディオン：ラベル｜プルダウンの2列グリッド */
         .adminControls{
             display:grid;
@@ -1059,6 +1065,34 @@
         font-size:10px;     /* hint と同じ */
         line-height:1.35;
         margin-top:2px;
+        }
+
+        /* 管理画面：備考 textarea を他inputと同じ見た目に寄せる */
+        #view-admin #ad_note{
+        -webkit-appearance: none;
+        appearance: none;
+
+        border: 1px solid var(--c-border) !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+
+        padding: 8px !important;
+        font-size: 15px !important;
+        line-height: 1.4;
+
+        box-shadow: none !important;
+        resize: none; /* つまみが出る端末対策 */
+        }
+
+        /* フォーカス時も他と同じ */
+        #view-admin #ad_note:focus{
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--c-primary) 25%, transparent) !important;
+        border-color: color-mix(in srgb, var(--c-primary-2) 40%, var(--c-border)) !important;
+        }
+
+        /* プレースホルダの見え方も揃える（必要なら） */
+        #view-admin #ad_note::placeholder{
+        color: #9aa;
         }
 
     /* ===== Register（氏名編集） ===== */
@@ -2704,7 +2738,14 @@
                     <label for="ad_deadline">締切日</label>
                     <input id="ad_deadline" type="date" />
                 </div>
-
+                <div>
+                    <label for="ad_note">備考</label>
+                    <textarea
+                        id="ad_note"
+                        rows="3"
+                        placeholder="例：駐車場は裏手、着替えて集合 など"
+                    ></textarea>
+                </div>
                 <div>
                     <label for="ad_publish">
                         公開
@@ -5948,7 +5989,8 @@
         const rawDateText = ymdDow(parseYmdStrictLocal(it.ymd || it.date)) || (it.date || "");
         const kindText    = String(it.kind || "").trim();
         const kindCls     = KIND_CLASS[kindText] || "";
-        const memoText    = String(it.memo || "").trim();
+        const noteText  = String(it.note || it.memo || "").trim();
+        const noteSafe  = h(noteText);
         const titleText   = String(it.title || "").trim();
         const placeText   = String(it.place || "").trim();
         const meetPlace   = String(it.meetPlace || "").trim();
@@ -5956,7 +5998,6 @@
         // エスケープ済み文字列
         const dateSafe     = h(rawDateText);
         const kindSafe     = h(kindText);
-        const memoSafe     = h(memoText);
         const titleSafe    = h(titleText);
         const placeSafe    = h(placeText);
         const segLabelSafe = h(segLabel || "");
@@ -5988,12 +6029,12 @@
 
         // 折りたたみ内の中身（タイトルは出さない：演奏開始 / 集合 / @場所）
         const panelInner = `
-        ${[hm, meetTxtRaw, placeTxt, memoText].filter(Boolean).length ? `
+        ${[hm, meetTxtRaw, placeTxt, noteText].filter(Boolean).length ? `
             <div class="scMeta">
             ${placeTxt   ? `<div class="scLine">${placeTxt}</div>` : ``}
             ${hm         ? `<div class="scLine">${timeForPanel}</div>` : ``}
             ${meetTxtRaw ? `<div class="scLine">${meetTxtSafe}</div>` : ``}
-            ${memoText   ? `<div class="scLine scMemo">${memoSafe}</div>` : ``}
+            ${noteText ? `<div class="scLine scMemo">備考：${noteSafe}</div>` : ``}
             </div>
         ` : ``}
         `;
@@ -6394,6 +6435,7 @@
         $("#ad_meetPlace").value = "藤塚小学校";
         $("#ad_attendTarget").value = "N";
         $("#ad_deadline").value = "";
+        $("#ad_note").value = "";
             const dl = $("#ad_deadline");
             if (dl){
             dl.dataset.touched = "0";
@@ -6487,6 +6529,7 @@
         $("#ad_status").value  = it.status  || "active";
         $("#ad_status").disabled = false; // ★ 追加：編集時はプルダウンを有効化
         $("#ad_segment").value = it.segment || "子ども";
+        $("#ad_note").value = it.note || "";
 
         adminTypeChangeAdapt();
         $("#ad_flag").value = it.flag || "N";
@@ -6527,6 +6570,7 @@
                 const attT  = $("#ad_attendTarget").value.trim().toUpperCase();
                 const dlIn  = $("#ad_deadline").value.trim();
                 const pub   = $("#ad_publish").value.trim();
+                const note = $("#ad_note").value.trim();
                 const st    = (adminMode === "create")
                                 ? "active"
                                 : $("#ad_status").value.trim();
@@ -6585,7 +6629,8 @@
                     + `&attendTarget=${esc(attSend)}`
                     + (dl?        `&deadline=${esc(dl)}`               : "")
                     + `&publish=${esc(pub)}&status=${esc(st)}`
-                    + `&segment=${esc(seg)}`;
+                    + `&segment=${esc(seg)}`
+                    + (note ? `&note=${esc(note)}` : "");
 
                 $("#btnAdminSubmit").disabled = true;
                 $("#btnAdminSubmit").textContent = isEdit ? "保存中…" : "登録中…";
@@ -6761,6 +6806,9 @@
             ev.targetGroup    ||
             ev.target_group   ||
             "",
+            note:
+            ev.note ||
+            "",
         }))
         .filter(it => it.id); // id 無しは念のため除外
 
@@ -6771,16 +6819,16 @@
         adminItemsMap = {};
         raw.forEach(it => {
         adminItemsMap[String(it.id)] = it;
-        });
+    });
 
-        // 既存のローカル描画（期間・区分フィルタ & status=active フィルタ）が走る
-        adminListRenderLocal();
-    } catch (err) {
-        const topEl = document.getElementById("adminListBoxTop");
-        if (topEl) {
-        topEl.innerHTML = `<span class="err">エラー：${h(err.message || String(err))}</span>`;
+    // 既存のローカル描画（期間・区分フィルタ & status=active フィルタ）が走る
+    adminListRenderLocal();
+        } catch (err) {
+            const topEl = document.getElementById("adminListBoxTop");
+            if (topEl) {
+            topEl.innerHTML = `<span class="err">エラー：${h(err.message || String(err))}</span>`;
+            }
         }
-    }
     }
 
     /* ▼ 取得済みの adminItemsRaw を期間/区分でローカルフィルタして一覧に描画 */
@@ -9694,4 +9742,5 @@ document.addEventListener('DOMContentLoaded', () => {
   try { init(); } catch (e) { console.error(e); }
 });
 </script>
+
 
