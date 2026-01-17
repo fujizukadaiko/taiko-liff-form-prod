@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.5";  // stable ver→v1.2.5
+  const FRONT_VERSION = "v1.2.6";  // stable ver→v1.2.6
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -2655,16 +2655,7 @@
             </div>
 
             <div class="adminGrid">
-                <div>
-                    <label for="ad_title">タイトル *</label>
-                    <input
-                    id="ad_title"
-                    type="text"
-                    placeholder="例：秋祭り演奏会"
-                    />
-                </div>
-
-                <!-- 種別 *：placeholder + selectBtn -->
+             <!-- 種別 *：placeholder + selectBtn -->
                 <div>
                     <label for="ad_type">種別 *</label>
                     <select id="ad_type" class="selectBtn" required>
@@ -2673,6 +2664,25 @@
                         <option value="練習">練習</option>
                         <option value="その他">その他</option>
                     </select>
+                </div>
+
+                <!-- 対象区分 -->
+                <div>
+                    <label for="ad_segment">対象区分 *</label>
+                    <select id="ad_segment" class="selectBtn" required>
+                    <option value="子ども" selected>子ども</option>
+                    <option value="大人">大人</option>
+                    <option value="両方">両方</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="ad_title">タイトル *</label>
+                    <input
+                    id="ad_title"
+                    type="text"
+                    placeholder="例：秋祭り演奏会"
+                    />
                 </div>
 
                 <div>
@@ -2716,14 +2726,13 @@
                     />
                 </div>
 
-                <!-- 対象区分 -->
                 <div>
-                    <label for="ad_segment">対象区分 *</label>
-                    <select id="ad_segment" class="selectBtn" required>
-                    <option value="子ども" selected>子ども</option>
-                    <option value="大人">大人</option>
-                    <option value="両方">両方</option>
-                    </select>
+                    <label for="ad_note">備考</label>
+                    <textarea
+                        id="ad_note"
+                        rows="3"
+                        placeholder="例：駐車場は裏手、着替えて集合 など"
+                    ></textarea>
                 </div>
 
                 <div>
@@ -2738,14 +2747,7 @@
                     <label for="ad_deadline">締切日</label>
                     <input id="ad_deadline" type="date" />
                 </div>
-                <div>
-                    <label for="ad_note">備考</label>
-                    <textarea
-                        id="ad_note"
-                        rows="3"
-                        placeholder="例：駐車場は裏手、着替えて集合 など"
-                    ></textarea>
-                </div>
+                
                 <div>
                     <label for="ad_publish">
                         公開
@@ -6283,11 +6285,18 @@
             if (deadline) deadline.dataset.touched = "0"; 
             updateFlagOptions({ type:t, forceN:true, disable:true });
 
-            // ★ デフォルト自動入力（未入力のときだけ）
-            if (hm && !hm.value){
-            hm.value = "17:15";
-            hm.dataset.autofilled = "1";
+            const seg = $("#ad_segment")?.value || "";
+            const practiceHm = getPracticeDefaultHmBySeg(seg);
+
+            // ★ デフォルト自動入力（未入力 or 自動入力済みなら追従）
+            if (hm) {
+            const wasAuto = (hm.dataset.autofilled === "1");
+            if (!hm.value || wasAuto) {
+                hm.value = practiceHm;
+                hm.dataset.autofilled = "1";
             }
+            }
+
             if (place && !place.value){
             place.value = "藤塚小学校体育館";
             place.dataset.autofilled = "1";
@@ -6300,6 +6309,12 @@
             deadline.disabled  = false;
             updateFlagOptions({ type:t, forceN:false, disable:false });
 
+            // ★ 追加：練習で自動入力された開始時刻なら消す
+            if (hm?.dataset.autofilled === "1") {
+                hm.value = "";
+                hm.dataset.autofilled = "0";
+                }
+            
             // 新規作成時のみ、かつ未タッチなら Y を既定セット
             if (typeof adminMode !== "undefined" && adminMode === "create" &&
                 attend && attend.dataset.touched !== "1"){
@@ -6323,6 +6338,12 @@
             deadline.disabled  = false;
             updateFlagOptions({ type:t, forceN:true, disable:true });
 
+            // ★ 追加：練習で自動入力された開始時刻なら消す
+            if (hm?.dataset.autofilled === "1") {
+                hm.value = "";
+                hm.dataset.autofilled = "0";
+                }
+            
             // ★ 新規のみ：締切が空＆未タッチなら「公演日-7日」を自動セット
             adminAutoDeadlineIfNeeded();
 
@@ -6332,6 +6353,14 @@
             if (hm) hm.dataset.autofilled = "0";
             if (place) place.dataset.autofilled = "0";
         }
+    }
+
+    /* 練習のデフォルト時刻を決める関数 */
+    function getPracticeDefaultHmBySeg(seg){
+        const s = String(seg || "").trim();
+        if (s.includes("大人")) return "17:30";
+        // "両方" は子ども扱いで良ければ 17:15、迷うなら空でもOK
+        return "17:15";
     }
 
     /* 締切日を「公演日の7日前」で自動入力 */
@@ -6458,6 +6487,7 @@
     function bindAdminAutoDeadlineOnce(){
         const ymd = document.getElementById("ad_ymd");
         const typ = document.getElementById("ad_type");
+        const seg = document.getElementById("ad_segment");
         const dl  = document.getElementById("ad_deadline");
 
         if (dl && !dl.__touchBound){
@@ -6478,6 +6508,13 @@
             adminAutoDeadlineIfNeeded();
             });
             typ.__boundAutoDL = true;
+        }
+        if (seg && !seg.__boundAdapt){
+            seg.addEventListener("change", () => {
+            adminTypeChangeAdapt();        // ← 練習時刻の追従が効く
+            adminAutoDeadlineIfNeeded();   // ← 発表の締切自動も整合
+            });
+            seg.__boundAdapt = true;
         }
     }
 
@@ -6537,6 +6574,9 @@
             $("#ad_flag").value = "N";
         }
         logAdmin("");
+
+        const hmEl = $("#ad_hm");
+        if (hmEl) hmEl.dataset.autofilled = "0";
     }
 
    /* ▼ 管理フォームの入力値を検証し、API に投げて新規登録/更新する */
