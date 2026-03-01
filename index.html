@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.6";  // stable ver→v1.2.6
+  const FRONT_VERSION = "v1.2.7";  // stable ver→v1.2.7
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -24,6 +24,12 @@
   
 // === 更新履歴（アプリ内「変更履歴」表示用） ===
             window.__CHANGELOG_ENTRIES__ = [
+                {
+                    date: "2026-03-01",
+                    title: "今後の予定の見た目変更",
+                    tags: ["改善", "UI"],
+                    body: "今後の予定画面の日付と詳細表示のデザインを変更しました。"
+                },    
                 {
                     date: "2026-01-13",
                     title: "備考の表示追加",
@@ -800,84 +806,85 @@
         }
     
     /* ===== Schedules: カードレイアウト（ホーム） ===== */
-        /* === 今後の予定：新カードレイアウト === */
-        .scheduleCard{ position:relative; cursor:pointer; }
-
-        .scheduleCard .row1{
-            display:flex;
-            align-items:center;
-            gap:8px;
-            margin-bottom:4px;
+        /* === 今後の予定：左日付カラム版 === */
+        .scheduleCard{
+            position:relative;
+            cursor:pointer;
+            display:grid;
+            grid-template-columns:92px minmax(0,1fr);
+            gap:12px;
+            padding:12px;
         }
-        .scheduleCard .row2{
-            font-weight:700;
-            margin:2px 0 0;
+        .scDateCol{
+            position:relative;
+            padding-right:10px;
             display:flex;
-            gap:8px;
-            flex-wrap:wrap;
-        }
-        .scheduleCard .row2 .date{ white-space:nowrap; }
-        .scheduleCard .row2 .title{ min-width:0; }
-
-        .scheduleCard .row3{
-            font-size:12px;
-            color:#444;
-            margin-top:4px;
-            display:flex;
-            align-items:baseline;
-            gap:8px;
-            flex-wrap:nowrap;
-        }
-        .scheduleCard .row3 .place{
-            flex:1 1 auto;
+            flex-direction:column;
+            justify-content:center;
             min-width:0;
-            overflow:hidden;
-            text-overflow:ellipsis;
-            white-space:nowrap;
         }
-        .scheduleCard .row3 .meet{
-            flex:0 0 auto;
-            white-space:nowrap;
+        .scDateCol::after{
+            content:"";
+            position:absolute;
+            top:6px;
+            bottom:6px;
+            right:0;
+            width:1px;
+            background:var(--c-border);
+        }
+        .scMonth{
+            font-size:13px;
+            color:var(--c-muted);
+            line-height:1.2;
+        }
+        .scDay{
+            font-size:48px;
+            font-weight:800;
+            line-height:1;
+            margin:2px 0;
+            letter-spacing:.01em;
+        }
+        .scDow{
+            font-size:13px;
+            color:var(--c-muted);
+            line-height:1.2;
+            min-height:1.2em;
+        }
+        .scBodyCol{
+            min-width:0;
+            display:grid;
+            gap:8px;
+            align-content:start;
+        }
+        .scTopRow{
+            display:flex;
+            align-items:flex-start;
+            gap:8px;
+            min-width:0;
+        }
+        .scTopRow .seg-badge{ margin-right:0; }
+        .scRight{
             margin-left:auto;
-        }
-
-        .scheduleCard .row1 .kind-badge{
-            margin-left:auto;
-        }
-        
-        /* 折りたたみ付きカード */
-        .scTop{
+            min-width:0;
             display:flex;
             align-items:center;
             gap:8px;
-            margin-bottom:6px;
         }
-        .scKind{
-            margin-left:auto;
-            display:inline-flex;
-            align-items:center;
-            height:22px;
-            padding:0 10px;
-            font-size:12px;
-            font-weight:700;
-            background:#f7f7fb;
-            border:1px solid var(--c-border);
-            border-radius:8px;
-            color:#444;
-        }
-
+        .scRight .kind-badge{ margin-right:0; }
         .scTitleBtn{
             all:unset;
+            cursor:pointer;
+            min-width:0;
+            width:100%;
             display:flex;
             align-items:baseline;
             gap:8px;
-            width:100%;
-            cursor:pointer;
         }
-        .scTitleBtn .scDate{
+        .scTitleBtn .scTime{
             flex:0 0 auto;
-            font-weight:700;
+            font-weight:600;
             white-space:nowrap;
+            color:#333;
         }
         .scTitleBtn .scTitle{
             flex:1 1 auto;
@@ -885,6 +892,7 @@
             white-space:nowrap;
             overflow:hidden;
             text-overflow:ellipsis;
+            font-weight:700;
         }
         .scTitleBtn[aria-expanded="true"] .scTitle{
             white-space:normal;
@@ -894,52 +902,45 @@
             -webkit-box-orient:vertical;
             -webkit-line-clamp:2;
         }
-        .scTitleBtn .scTime{
-            margin-left:.6rem;
-            font-weight:600;
-            white-space:nowrap;
-            opacity:.9;
-        }
         .scTitleBtn .scCaret{
             flex:0 0 auto;
             margin-left:8px;
             font-size:16px;
             line-height:1;
-            transition:transform .12s ease;
         }
-        .scTitleBtn[aria-expanded="true"] .scCaret{
-            transform:rotate(180deg);
-        }
-
-        .scPanel{ margin-top:8px; }
-        .scFullTitle{ font-weight:700; margin-bottom:6px; }
+        .scPanel{ margin-top:2px; }
         .scMemo{
-            margin:6px 0 2px;
-            padding:0;
-            border:0;
-            background:transparent;
-            border-radius:0;
+            margin:0;
             font-size:13px;
             color:#444;
         }
         .scMeta{
             font-size:13px;
             color:var(--c-text);
-            margin-top:6px;
+            margin-top:4px;
             display:flex;
             flex-direction:column;
             gap:4px;
         }
         .scMeta .scLine{
             display:flex;
-            align-items:baseline;
+            align-items:flex-start;
             gap:.5em;
             min-width:0;
         }
         .scMeta .lbl{
+            flex:0 0 4.6em;
             font-weight:700;
-            margin-right:6px;
             white-space:nowrap;
+        }
+        @media (max-width:420px){
+            .scheduleCard{
+                grid-template-columns:84px minmax(0,1fr);
+                gap:10px;
+                padding:10px;
+            }
+            .scDay{ font-size:42px; }
+            .scTitleBtn{ gap:6px; }
         }
 
     /* ===== Admin（管理画面） ===== */adminListFetch
@@ -4908,11 +4909,20 @@
             let res2;
             const tFetchAtt0 = performance.now();
             try {
+                const form = new URLSearchParams();
+                const safeLineId = String(lineId || "").trim();
+                if (safeLineId) form.set("lineId", safeLineId);
+                if (eventIds.length === 1) {
+                form.set("id", String(eventIds[0]));
+                } else if (eventIds.length > 1) {
+                form.set("id", JSON.stringify(eventIds));
+                }
+
                 res2 = await fetch(`${d1Base}/line/attendance/all`, {
                 method: "POST",
                 signal: ctl2.signal,
-                headers: { "content-type": "application/json; charset=utf-8" },
-                body: JSON.stringify({ lineId: lineId, eventIds: eventIds }),
+                headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" },
+                body: form.toString(),
                 });
             } finally {
                 clearTimeout(t2Timeout);
@@ -5983,81 +5993,109 @@
         return `${z(d.getHours())}:${z(d.getMinutes())}`;
     }
 
+    function splitScheduleDateParts(rawDateText, dateObj) {
+        if (dateObj instanceof Date && !isNaN(dateObj)) {
+        const w = "日月火水木金土"[dateObj.getDay()];
+        return {
+            month: `${dateObj.getMonth() + 1}月`,
+            day: String(dateObj.getDate()),
+            dow: `(${w})`,
+        };
+        }
+
+        const s = String(rawDateText || "").trim();
+        const full = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+        const short = s.match(/^(\d{1,2})[\/\-](\d{1,2})/);
+        const w = s.match(/[（(]([日月火水木金土])[）)]/);
+
+        const monthNum = full ? Number(full[2]) : (short ? Number(short[1]) : NaN);
+        const dayNum = full ? Number(full[3]) : (short ? Number(short[2]) : NaN);
+
+        return {
+        month: Number.isFinite(monthNum) ? `${monthNum}月` : "日付",
+        day: Number.isFinite(dayNum) ? String(dayNum) : "--",
+        dow: w ? `(${w[1]})` : "",
+        };
+    }
+
     // === 1件分カード描画 ==============================================
     function renderScheduleCard(it) {
         const segNorm  = normSeg(it.segment || it.segmentCode || it.targetSegment || it.attendSegment || "");
         const segLabel = dispSeg(segNorm);
 
-        const rawDateText = ymdDow(parseYmdStrictLocal(it.ymd || it.date)) || (it.date || "");
+        const dObj        = parseYmdStrictLocal(it.ymd || it.date);
+        const rawDateText = ymdDow(dObj) || String(it.ymd || it.date || "").trim();
+        const dateParts   = splitScheduleDateParts(rawDateText, dObj);
         const kindText    = String(it.kind || "").trim();
         const kindCls     = KIND_CLASS[kindText] || "";
         const noteText  = String(it.note || it.memo || "").trim();
-        const noteSafe  = h(noteText);
         const titleText   = String(it.title || "").trim();
         const placeText   = String(it.place || "").trim();
         const meetPlace   = String(it.meetPlace || "").trim();
 
         // エスケープ済み文字列
         const dateSafe     = h(rawDateText);
+        const monthSafe    = h(dateParts.month);
+        const daySafe      = h(dateParts.day);
+        const dowSafe      = h(dateParts.dow);
         const kindSafe     = h(kindText);
         const titleSafe    = h(titleText);
         const placeSafe    = h(placeText);
+        const noteSafe     = h(noteText);
         const segLabelSafe = h(segLabel || "");
+        const meetPlaceSafe = h(meetPlace);
 
-        // 本番会場（@若竹苑 など）
-        const placeTxt = placeText ? `@${placeSafe}` : "";
-
-        // ★ 時刻はどんな形式でも HH:MM に揃える
+        // 時刻はどんな形式でも HH:MM に揃える
         const hm        = toHmFromAny(it.performAt || it.time || it.hm || it["時間"] || "");
         const meetAtHHM = toHmFromAny(it.meetAt || "");
+        const hmSafe    = h(hm);
+        const meetAtSafe = h(meetAtHHM);
+        const startLabel = kindText === "発表" ? "演奏開始" : "開始時間";
 
-        // 集合 行きのテキスト：「集合 HH:MM 場所」
-        const meetTxtRaw = [
-        (meetAtHHM ? `集合 ${meetAtHHM}` : ""),
-        meetPlace
-        ].filter(Boolean).join(" ");
-        const meetTxtSafe = h(meetTxtRaw);
-
-        const timeForHeader = hm
-        ? (kindText === "発表" ? `演奏開始 ${hm}` : hm)
-        : "";
-
-        // ここは HTML 断片を含むのでエスケープしない
-        const timeForPanel = hm
-        ? (kindText === "発表"
-            ? `<span class="lbl">演奏開始</span> ${hm}`
-            : `${hm}`)
-        : "";
-
-        // 折りたたみ内の中身（タイトルは出さない：演奏開始 / 集合 / @場所）
+        // 折りたたみ内の中身
         const panelInner = `
-        ${[hm, meetTxtRaw, placeTxt, noteText].filter(Boolean).length ? `
+        ${[placeText, hm, meetAtHHM, meetPlace, noteText].filter(Boolean).length ? `
             <div class="scMeta">
-            ${placeTxt   ? `<div class="scLine">${placeTxt}</div>` : ``}
-            ${hm         ? `<div class="scLine">${timeForPanel}</div>` : ``}
-            ${meetTxtRaw ? `<div class="scLine">${meetTxtSafe}</div>` : ``}
-            ${noteText ? `<div class="scLine scMemo">備考：${noteSafe}</div>` : ``}
+            ${placeText  ? `<div class="scLine"><span class="lbl">場所</span><span>${placeSafe}</span></div>` : ``}
+            ${hm         ? `<div class="scLine"><span class="lbl">${h(startLabel)}</span><span>${hmSafe}</span></div>` : ``}
+            ${meetAtHHM  ? `<div class="scLine"><span class="lbl">集合時間</span><span>${meetAtSafe}</span></div>` : ``}
+            ${meetPlace  ? `<div class="scLine"><span class="lbl">集合場所</span><span>${meetPlaceSafe}</span></div>` : ``}
+            ${noteText   ? `<div class="scLine scMemo"><span class="lbl">備考</span><span>${noteSafe}</span></div>` : ``}
             </div>
         ` : ``}
         `;
 
+        const segCls = segNorm === "adult"
+        ? "seg-adult"
+        : segNorm === "child"
+            ? "seg-child"
+            : "seg-both";
+
         return `
-        <div class="card scheduleCard" data-seg="${segNorm || 'both'}">
-            <!-- 1行目：左=区分 / 右=種別 -->
-            <div class="scTop">
-            ${segLabel ? `<span class="seg-badge ${segNorm==='adult'?'seg-adult':segNorm==='child'?'seg-child':'seg-both'}">${segLabelSafe}</span>` : ``}
-            ${kindText ? `<span class="scKind ${kindCls}">${kindSafe}</span>` : ``}
+        <div class="card scheduleCard" data-seg="${segNorm || 'both'}" data-expanded="false">
+            <div class="scDateCol" aria-hidden="true">
+            <div class="scMonth">${monthSafe}</div>
+            <div class="scDay">${daySafe}</div>
+            <div class="scDow">${dowSafe}</div>
             </div>
 
-            <!-- 2行目：日付 + タイトル（1行省略） -->
+            <div class="scBodyCol">
+            <div class="scTopRow">
+                ${segLabel ? `<span class="seg-badge ${segCls}">${segLabelSafe}</span>` : ``}
+                <div class="scRight">
+                ${kindText ? `<span class="kind-badge ${kindCls}">${kindSafe}</span>` : ``}
+                </div>
+            </div>
+
             <button type="button" class="scTitleBtn" aria-expanded="false">
-            <span class="scDate">${dateSafe}</span>
-            <span class="scTitle">${titleSafe}</span>
-            <span class="scCaret" aria-hidden="true">∨</span>
+                <span class="sr-only">${dateSafe}</span>
+                ${hm ? `<span class="scTime">${hmSafe}</span>` : ``}
+                <span class="scTitle">${titleSafe}</span>
+                <span class="scCaret" aria-hidden="true">∨</span>
             </button>
 
-            <!-- 3行目以降：折りたたみ（フルタイトル/メモ/@場所・集合） -->
             <div class="scPanel" hidden>${panelInner}</div>
+            </div>
         </div>`;
     }
 
@@ -9782,5 +9820,3 @@ document.addEventListener('DOMContentLoaded', () => {
   try { init(); } catch (e) { console.error(e); }
 });
 </script>
-
-
