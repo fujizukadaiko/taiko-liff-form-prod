@@ -9,10 +9,23 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.7";  // stable ver→v1.2.7
+  const FRONT_VERSION = "v1.2.8";  // stable ver→v1.2.8
   const LIFF_ID = "2008270687-9qV1G3yq";
-  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbxKxpI2o-ySG6LId__qtpA8hPiESMczrQn-KO46ln7wU7D51yPrB4lNdTUyoEBi-C-l/exec";     // GAS v1.1.0
+  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzsy6CWUNxzjrUmPJ08p7yA8FxrD8ZBHyWuqRjMgKvJ8jUu-9RNQgiFwPd6QA9l4lHN/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
+  /*
+   * ICS配信デプロイ手順:
+   * 1) Apps Script をウェブアプリとしてデプロイ
+   *    - 実行ユーザー: 自分
+   *    - アクセス: 全員（匿名ユーザー含む）
+   * 2) 発行された /exec URL を ICS_FEED_BASE_URL に反映
+   */
+  const ICS_FEED_BASE_URL = API_ENDPOINT;
+  const ICS_FEED_URL = (() => {
+      if (!ICS_FEED_BASE_URL) return "";
+      const sep = ICS_FEED_BASE_URL.includes("?") ? "&" : "?";
+      return `${ICS_FEED_BASE_URL}${sep}ics=1&range=next6m`;
+  })();
              
               // D1 のベースURL
               const D1_BASE = (typeof D1_API_BASE_URL === "string"
@@ -24,6 +37,12 @@
   
 // === 更新履歴（アプリ内「変更履歴」表示用） ===
             window.__CHANGELOG_ENTRIES__ = [
+                {
+                    date: "2026-03-08",
+                    title: "カレンダー購読機能を追加",
+                    tags: ["機能追加"],
+                    body: "予定画面で購読URLをコピーし、Google/Apple/Outlook のカレンダーに自動表示できるようになりました。"
+                },
                 {
                     date: "2026-03-01",
                     title: "今後の予定の見た目変更",
@@ -105,7 +124,7 @@
                 );
                 }
                 // 他スクリプトから参照しやすいよう window にまとめて公開
-                window.__APP_CONFIG__ = { FRONT_VERSION, LIFF_ID, API_ENDPOINT, D1_BASE, ENV_NS };
+                window.__APP_CONFIG__ = { FRONT_VERSION, LIFF_ID, API_ENDPOINT, D1_BASE, ENV_NS, ICS_FEED_URL };
             })();
         </script>
 
@@ -2578,6 +2597,35 @@
                 読み込み待機中
                 </div>
             </div>
+
+            <div class="card">
+                <div class="sectionTitle" style="margin:0 0 6px;">カレンダーに予定を自動で表示する（購読）</div>
+                <div class="small muted" style="margin-bottom:8px;">
+                    このURLを登録すると、太鼓の予定があなたの Googleカレンダー / iPhone(Apple)カレンダー / Outlook に表示されます。
+                    予定が追加・変更されたときも、カレンダー側が自動で更新します（反映まで少し時間がかかることがあります）。
+                </div>
+                <div class="small muted" style="margin-bottom:6px;">手順</div>
+                <ol class="small muted" style="margin:0 0 8px 18px; padding:0;">
+                    <li>①下の「購読URLをコピー」を押す</li>
+                    <li>②お使いのカレンダーアプリで「URLで購読（照会カレンダー）」に貼り付けて登録する</li>
+                </ol>
+                <label for="icsFeedUrl">購読URL</label>
+                <input
+                    id="icsFeedUrl"
+                    type="text"
+                    readonly
+                    placeholder="ICSフィードURL"
+                />
+                <div class="row" style="margin-top:8px;">
+                    <button
+                        type="button"
+                        class="btn btn-ghost btn-sm"
+                        onclick="copyIcsFeed()"
+                    >
+                        購読URLをコピー
+                    </button>
+                </div>
+            </div>
         </section>
 
     <!-- ===== View: 予定登録（管理者） ===== -->
@@ -4457,6 +4505,7 @@
     $("#btnRegister").onclick    = onRegister;
     $("#btnSchedules").onclick   = ()=>{ 
         show("#view-schedules"); 
+        window.setIcsFeedUrl?.();
         updateSegFilterUI(); 
         window.__schedLoadFilters?.();   // ← 追加：前回の選択を復元
         window.renderSchedules(true); 
@@ -6224,6 +6273,14 @@
         window.renderSchedules(false);
     };
 
+    function setIcsFeedUrl_() {
+        const ipt = $("#icsFeedUrl");
+        if (!ipt) return;
+        const v = (window.__APP_CONFIG__ && window.__APP_CONFIG__.ICS_FEED_URL) || ICS_FEED_URL || "";
+        ipt.value = v;
+    }
+    window.setIcsFeedUrl = setIcsFeedUrl_;
+
     // === ICS フィード URL コピー =======================================
     window.copyIcsFeed = async function () {
         const ipt = $("#icsFeedUrl");
@@ -6250,6 +6307,7 @@
 
     // === DOM ロード後のイベントバインド ================================
     document.addEventListener('DOMContentLoaded', () => {
+        setIcsFeedUrl_();
         document.getElementById('selDays')
         ?.addEventListener('change', () => { renderSchedulesLocal(); saveFilters(); });
         document.getElementById('selKind')
