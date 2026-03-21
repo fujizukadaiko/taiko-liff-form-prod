@@ -9,9 +9,9 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.2.9";  // stable ver→v1.2.9
+  const FRONT_VERSION = "v1.3.0";  // stable ver→v1.3.0
   const LIFF_ID = "2008270687-9qV1G3yq";
-  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwLI3J8COMkcfsuoi9tPS8mkeQz2s4frljCoMuwdfasfUUQldRbQdtGDv3XadMV5xsG/exec";     // GAS v1.1.0
+  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbyRTRbVoJc4aFd4hMA2ec1soWKDSZF96ndv2EvKzzuu3zXdmMRpCgmY02Jum0ZYHPj-/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
   /*
    * ICS配信デプロイ手順:
@@ -4070,9 +4070,14 @@
     const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     return m ? `${m[1]}/${m[2]}/${m[3]}` : "";
     }
-    function toDateInputFromYmdSlash(v){ // "yyyy/MM/dd" -> "yyyy-mm-dd"
-    const m = String(v||"").match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
-    return m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+    function toDateInputFromYmdSlash(v){ // "yyyy/MM/dd" / "yyyyMMdd" / "yyyy-mm-dd" -> "yyyy-mm-dd"
+    const str = String(v || "").trim();
+    if (!str) return "";
+    const m8 = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (m8) return `${m8[1]}-${m8[2]}-${m8[3]}`;
+    const m = str.replace(/\//g, "-").match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!m) return "";
+    return `${m[1]}-${String(m[2]).padStart(2, "0")}-${String(m[3]).padStart(2, "0")}`;
     }
 
     // イベントセレクト用の表示ラベル生成
@@ -6657,7 +6662,7 @@
         $("#ad_meetAt").value = it.meetAt || "";
         $("#ad_meetPlace").value = it.meetPlace || "";
         $("#ad_attendTarget").value = (it.attendTarget||"N");
-        $("#ad_deadline").value = toDateInputFromYmdSlash(it.deadline || "");
+        $("#ad_deadline").value = toDateInputFromAnyYmd(it.deadline || "");
         $("#ad_publish").value = it.publish || "Yes";
         $("#ad_status").value  = it.status  || "active";
         $("#ad_status").disabled = false; // ★ 追加：編集時はプルダウンを有効化
@@ -7551,13 +7556,14 @@
             : "na";
     }
 
-    // ▼ 名前の正規化（全角空白→半角、余分な空白・先頭ラベル除去）
+    // ▼ 名前の正規化（全角空白→半角、余分な空白・区分ラベル除去）
     function canonName(s){
         return String(s || "")
         .replace(/\u3000/g, " ")       // 全角空白→半角
         .replace(/^\s+|\s+$/g, "")     // 前後空白
         .replace(/\s+/g, " ")          // 連続空白
-        .replace(/^【[^】]+】\s*/, ""); // 接頭の【大人の部】等を除去
+        .replace(/^【[^】]+】\s*/, "")  // 接頭の【大人の部】等を除去
+        .replace(/\s*【[^】]+】$/, ""); // 接尾の【大人の部】等を除去
     }
 
     // ▼ members から「正規化名前 → 区分」索引を作成
@@ -7878,6 +7884,10 @@
             const segFromIdx = segIndex[nmKey];
             if (segFromIdx) r.seg = segFromIdx;
         }
+        const baseName = canonName(r.name);
+        if (baseName) {
+            r.name = nameWithSegPrefix({ name: baseName, seg: r.seg });
+        }
         });
 
         // ▼ イベントの対象区分で「回答済み rows」をフィルタ
@@ -8173,12 +8183,12 @@
         return norm;
     }
     
-    // ▼ 名前 + 区分から表示名を組み立て（大人の部の接頭辞を付ける）
+    // ▼ 名前 + 区分から表示名を組み立て（大人の部の接尾辞を付ける）
     function nameWithSegPrefix(p){
         const nm = String(p?.name || "");
-        if (nm.startsWith("【大人の部】")) return nm; // 既に付いていればそのまま
+        if (nm.endsWith("【大人の部】")) return nm; // 既に付いていればそのまま
         const s  = String(p?.seg || "");
-        return s.includes("大人") ? `【大人の部】${nm}` : nm;
+        return s.includes("大人") ? `${nm}【大人の部】` : nm;
     }
 
     // 既存ハンドラとつながるように公開
