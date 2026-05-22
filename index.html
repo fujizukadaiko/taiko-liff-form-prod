@@ -9,7 +9,7 @@
 <script>
   // 以後、このブロックだけを更新してください
   /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.3.1";  // stable ver→v1.3.0
+  const FRONT_VERSION = "v1.3.2";  // stable ver→v1.3.0
   const LIFF_ID = "2008270687-9qV1G3yq";
   const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwMb6KAgQOJGDXo1rD6zbiJubqujJ_ZqQ07cmMtCFBFTILatXMqSbcEXRDrccvTy7vG/exec";     // GAS v1.1.0
   const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -4186,6 +4186,14 @@
     }
     return true;
     }
+    function filterEventsForUserSegments(events, userSegSet){
+    const list = Array.isArray(events) ? events : [];
+    if (!userSegSet || userSegSet.size === 0) return list.slice();
+    return list.filter(e => {
+        const evSeg = e.segment || e.targetSegment || e.attendSegment || e.segmentRaw || e.segmentCode || e.targetGroup || "";
+        return eventVisibleForUser(evSeg, userSegSet, INCLUDE_BOTH_FOR_ALL);
+    });
+    }
     function buildNameSegMap(){
     const map = {};
     (state.members||[]).forEach(m=>{
@@ -4786,12 +4794,7 @@
     /* --- 先にイベントだけで描画（回答は空でOK） --- */
     function bootHomeQuickRender(){
     const userSegSet = getMemberSegSet();
-
-    let filteredEvents = (state.events||[]).filter(e=>{
-    const evSeg = e.segment || e.targetSegment || e.attendSegment || e.segmentRaw || e.segmentCode || "";
-    return eventVisibleForUser(evSeg, userSegSet, INCLUDE_BOTH_FOR_ALL);
-    });
-    if (userSegSet.size === 0) filteredEvents = (state.events||[]).slice(); // 未登録＝全表示
+    const filteredEvents = filterEventsForUserSegments(state.events || [], userSegSet);
 
     // performers（家族名）は会員情報がまだ無くても空配列でOK
     const performers = Array.from(
@@ -4812,12 +4815,14 @@
     window.HomeEventsUI?.mount({ events, myAnswersMap: {}, performers, nameSegMap });
     // フォーム側でも使えるよう保持
     state._filteredEventsForViews = filteredEvents;
+    state._filteredEventsForViewsReady = true;
     }
 
     /* --- 回答が届いたら差し替え描画 --- */
     function mountHomeWithFilters(){
-    const filteredEvents = (state._filteredEventsForViews && state._filteredEventsForViews.length)
-    ? state._filteredEventsForViews : (state.events || []);
+    const filteredEvents = state._filteredEventsForViewsReady
+    ? (state._filteredEventsForViews || [])
+    : filterEventsForUserSegments(state.events || [], getMemberSegSet());
     const events = filteredEvents.map(x => ({
         id      : String(x.eventId ?? x.id ?? ''),
         ymd     : ymdDow(parseYmdStrict(x.date)) || String(x.date || x.ymd || ''),
