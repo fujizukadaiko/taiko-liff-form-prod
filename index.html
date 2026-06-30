@@ -8,7 +8,7 @@
     <!-- ===== 共通設定（環境・バージョン） ===== -->
         <script>
             // === 基本設定 ===
-            const FRONT_VERSION = "v1.4.0";  // テスト版UI・配車補助を本番反映
+            const FRONT_VERSION = "v1.4.1";  // テスト版UI・配車補助を本番反映
             const LIFF_ID = "2008270687-9qV1G3yq";         // ←差し替え
             const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwMb6KAgQOJGDXo1rD6zbiJubqujJ_ZqQ07cmMtCFBFTILatXMqSbcEXRDrccvTy7vG/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
             const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
@@ -2501,6 +2501,26 @@
         font-weight:700;
         font-size:16px;
         }
+        #feedbackModal .modal-desc{
+        margin:10px 0 12px;
+        padding:10px 12px;
+        border:1px solid rgba(160,60,32,.16);
+        border-radius:10px;
+        background:#fff8f3;
+        color:#5f4b40;
+        font-size:12px;
+        line-height:1.65;
+        }
+        #feedbackModal .modal-desc p{
+        margin:0;
+        }
+        #feedbackModal .modal-desc p + p{
+        margin-top:4px;
+        }
+        #feedbackModal .modal-desc .important{
+        color:#6b2210;
+        font-weight:700;
+        }
         #feedbackModal .icon-btn{
         border:none;
         background:transparent;
@@ -3977,6 +3997,7 @@
             role="dialog"
             aria-modal="true"
             aria-labelledby="fbTitle"
+            aria-describedby="fbDescription"
         >
             <div class="modal-header">
                 <div id="fbTitle" class="modal-title">ご意見BOX</div>
@@ -3991,6 +4012,12 @@
             </div>
 
             <div class="modal-body">
+                <div id="fbDescription" class="modal-desc">
+                    <p>システムや団体運営について、気づいたこと・改善してほしいことがあればお聞かせください。</p>
+                    <p>いただいた内容は定期的に確認していますが、すぐに返信・対応できない場合があります。</p>
+                    <p class="important">当日の連絡や急ぎの用件は、直接担当者へご連絡ください。</p>
+                </div>
+
                 <label class="label">カテゴリ（任意）</label>
                 <select id="fbCategory" class="select">
                     <option value="その他" selected>その他</option>
@@ -10685,10 +10712,7 @@
         function openModal(){
         if (!modal) return;
         modal.hidden = false;
-        if (textarea){
-            textarea.focus();
-            updateCount();
-        }
+        updateCount();
         }
         function closeModal(){
         if (!modal) return;
