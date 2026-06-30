@@ -5,57 +5,62 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>藤塚太鼓 出欠・予定</title>
   
-<!-- ===== 設定（共通） v1：ページ先頭に固定 ===== -->
-<script>
-  // 以後、このブロックだけを更新してください
-  /* ===== 設定 ===== */
-  const FRONT_VERSION = "v1.3.3";  // stable ver→v1.3.3
-  const LIFF_ID = "2008270687-9qV1G3yq";
-  const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwMb6KAgQOJGDXo1rD6zbiJubqujJ_ZqQ07cmMtCFBFTILatXMqSbcEXRDrccvTy7vG/exec";     // GAS v1.1.0
-  const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
-  /*
-   * ICS配信デプロイ手順:
-   * 1) Apps Script をウェブアプリとしてデプロイ
-   *    - 実行ユーザー: 自分
-   *    - アクセス: 全員（匿名ユーザー含む）
-   * 2) 発行された /exec URL を ICS_FEED_BASE_URL に反映
-   */
-  const ICS_FEED_BASE_URL = API_ENDPOINT;
-  const ICS_FEED_URL = (() => {
-      if (!ICS_FEED_BASE_URL) return "";
-      const sep = ICS_FEED_BASE_URL.includes("?") ? "&" : "?";
-      return `${ICS_FEED_BASE_URL}${sep}ics=1&range=next6m`;
-  })();
-  const ICS_FEED_URLS = (() => {
-      if (!ICS_FEED_BASE_URL) {
-          return { all: "", adult: "", child: "" };
-      }
-      const base = ICS_FEED_BASE_URL.replace(/\/+$/, "");
-      if (base.includes("?")) {
-          return {
-              all: ICS_FEED_URL,
-              adult: `${base}&ics=1&range=next6m&feed=adult-and-both`,
-              child: `${base}&ics=1&range=next6m&feed=child-and-both`
-          };
-      }
-      const sep = base.includes("?") ? "&" : "?";
-      return {
-          all: ICS_FEED_URL,
-          adult: `${base}${sep}ics=1&range=next6m&feed=adult-and-both`,
-          child: `${base}${sep}ics=1&range=next6m&feed=child-and-both`
-      };
-  })();
-             
-              // D1 のベースURL
-              const D1_BASE = (typeof D1_API_BASE_URL === "string"
-                  ? D1_API_BASE_URL
-                  : ""
-              ).replace(/\/+$/, "");
-  
-              const D1_ORIGIN = D1_BASE || window.location.origin;
-  
-// === 更新履歴（アプリ内「変更履歴」表示用） ===
+    <!-- ===== 共通設定（環境・バージョン） ===== -->
+        <script>
+            // === 基本設定 ===
+            const FRONT_VERSION = "v1.4.0";  // テスト版UI・配車補助を本番反映
+            const LIFF_ID = "2008270687-9qV1G3yq";         // ←差し替え
+            const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbwMb6KAgQOJGDXo1rD6zbiJubqujJ_ZqQ07cmMtCFBFTILatXMqSbcEXRDrccvTy7vG/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
+            const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
+            /*
+             * ICS配信デプロイ手順:
+             * 1) Apps Script をウェブアプリとしてデプロイ
+             *    - 実行ユーザー: 自分
+             *    - アクセス: 全員（匿名ユーザー含む）
+             * 2) 発行された /exec URL を ICS_FEED_BASE_URL に反映
+             */
+            const ICS_FEED_BASE_URL = API_ENDPOINT;
+            const ICS_FEED_URL = (() => {
+                if (!ICS_FEED_BASE_URL) return "";
+                const sep = ICS_FEED_BASE_URL.includes("?") ? "&" : "?";
+                return `${ICS_FEED_BASE_URL}${sep}ics=1&range=next6m`;
+            })();
+            const ICS_FEED_URLS = (() => {
+                if (!ICS_FEED_BASE_URL) {
+                    return { all: "", adult: "", child: "" };
+                }
+                const base = ICS_FEED_BASE_URL.replace(/\/+$/, "");
+                if (base.includes("?")) {
+                    return {
+                        all: ICS_FEED_URL,
+                        adult: `${base}&ics=1&range=next6m&feed=adult-and-both`,
+                        child: `${base}&ics=1&range=next6m&feed=child-and-both`
+                    };
+                }
+                const sep = base.includes("?") ? "&" : "?";
+                return {
+                    all: ICS_FEED_URL,
+                    adult: `${base}${sep}ics=1&range=next6m&feed=adult-and-both`,
+                    child: `${base}${sep}ics=1&range=next6m&feed=child-and-both`
+                };
+            })();
+
+            // D1 のベースURL
+            const D1_BASE = (typeof D1_API_BASE_URL === "string"
+                ? D1_API_BASE_URL
+                : ""
+            ).replace(/\/+$/, "");
+
+            const D1_ORIGIN = D1_BASE || window.location.origin;
+
+            // === 更新履歴（アプリ内「変更履歴」表示用） ===
             window.__CHANGELOG_ENTRIES__ = [
+                {
+                    date: "2026-06-30",
+                    title: "画面の見た目を新しくしました",
+                    tags: ["改善", "UI"],
+                    body: "藤塚太鼓らしい和風の雰囲気に合わせて、アプリの色合いを朱色系に変更しました。トップ画面の表示やボタン名も一部見直し、より分かりやすく操作できるようにしました。"
+                },
                 {
                     date: "2026-03-08",
                     title: "カレンダー購読機能を追加",
@@ -63,22 +68,16 @@
                     body: "予定画面で購読URLをコピーし、Google/Apple/Outlook のカレンダーに自動表示できるようになりました。"
                 },
                 {
-                    date: "2026-03-01",
-                    title: "今後の予定の見た目変更",
-                    tags: ["改善", "UI"],
-                    body: "今後の予定画面の日付と詳細表示のデザインを変更しました。"
-                },    
-                {
                     date: "2026-01-13",
                     title: "備考の表示追加",
                     tags: ["改善", "UI"],
-                    body: "今後の予定画面に備考がある場合はその内容を表示するようにしました。"
+                    body: "予定表画面に備考がある場合はその内容を表示するようにしました。"
                 },
                 {
                     date: "2026-01-04",
                     title: "システムの読み込みを高速化",
                     tags: ["改善", "内部"],
-                    body: "トップ画面の「今後の予定」「会員情報」などの読み込み処理を変更し、表示速度と安定性を改善しました。"
+                    body: "トップ画面の「予定表」「会員情報」などの読み込み処理を変更し、表示速度と安定性を改善しました。"
                 },
                 {
                     date: "2026-01-04",
@@ -100,7 +99,7 @@
                 },
                 {
                 date: "2025-11-15",
-                title: "今後の予定に演奏開始時間を表示",
+                    title: "予定表に演奏開始時間を表示",
                 tags: ["改善","UI"],
                 body: "イベント一覧に演奏開始時間を表示するようにしました。"
                 },
@@ -164,7 +163,7 @@
             theme: {
             extend: {
                 colors: {
-                primary: '#7f6aa5',
+                primary: '#a03c20',
                 },
                 boxShadow: {
                 card: '0 2px 10px rgba(0,0,0,0.04)',
@@ -180,9 +179,24 @@
     <style>
     /* ===== Base / Layout / Typography ===== */
         :root{
-        --c-bg:#f7f5fa; --c-panel:#fff; --c-border:#e8e2f0;
-        --c-text:#202022; --c-muted:#6b6b6b;
-        --c-primary:#7f6aa5; --c-primary-2:#6d5a93; --c-accent:#a678b0;
+        --ui-bg:#f7f2ea;
+        --ui-card:#fdf9f4;
+        --ui-card-border:rgba(160,60,32,0.13);
+        --ui-primary:#a03c20;
+        --ui-primary-dark:#6b2210;
+        --ui-primary-gradient:linear-gradient(135deg, #c04c28 0%, #8c3218 100%);
+        --ui-primary-fg:#ffffff;
+        --ui-secondary:#f4e4dc;
+        --ui-secondary-fg:#6b2210;
+        --ui-accent:#d4957a;
+        --ui-accent-border:rgba(212,149,122,0.75);
+        --ui-muted:#ede5d8;
+        --ui-muted-fg:#6e5c50;
+        --ui-divider:rgba(160,60,32,0.13);
+        --ui-shadow:0 8px 26px rgba(107,34,16,0.08), 0 1px 3px rgba(107,34,16,0.06);
+        --c-bg:var(--ui-bg); --c-panel:var(--ui-card); --c-border:var(--ui-card-border);
+        --c-text:#2d211c; --c-muted:var(--ui-muted-fg);
+        --c-primary:var(--ui-primary); --c-primary-2:var(--ui-primary-dark); --c-accent:var(--ui-accent);
         --c-acc1:#d2e5b1; --c-acc2:#9ce78f; --c-acc2-dark:#6aa96a;
         --c-ok:#0a7; --c-err:#c33;
         --seg-child-border:#f59e9e;
@@ -194,8 +208,8 @@
         font-family:"Noto Sans JP",system-ui,-apple-system,Segoe UI,"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;
         letter-spacing:.02em;
         background:
-            radial-gradient(1200px 600px at 20% 10%, rgba(127,106,165,.05), transparent 40%),
-            radial-gradient(900px 500px  at 80% 60%, rgba(127,106,165,.04), transparent 35%),
+            radial-gradient(760px 360px at 16% 0%, rgba(212,149,122,.16), transparent 46%),
+            radial-gradient(780px 420px at 88% 66%, rgba(160,60,32,.08), transparent 48%),
             var(--c-bg);
         }
         h1,h2,h3{
@@ -213,14 +227,33 @@
         }
 
         header{
-        padding:14px 16px; font-size:18px;
-        background:#fff; border-bottom:1px solid var(--c-border);
+        padding:13px 18px 12px; font-size:18px;
+        background:var(--ui-primary-dark); border-bottom:1px solid rgba(255,255,255,.12);
+        color:#fff;
         display:flex; justify-content:space-between; align-items:center;
+        box-shadow:0 2px 14px rgba(107,34,16,.22);
         }
-        main{ padding:14px 16px; }
-        .ver{ font-size:12px; color:#888; font-weight:500; }
+        main{
+        width:100%;
+        max-width:480px;
+        box-sizing:border-box;
+        margin:0 auto;
+        padding:20px 16px 40px;
+        }
+        .brandBlock{ display:flex; align-items:center; gap:11px; min-width:0; }
+        .taikoMark{ width:28px; height:28px; flex:0 0 auto; opacity:.9; }
+        .siteTitleWrap{ min-width:0; }
+        .siteTitleSub{ font-size:10px; opacity:.72; letter-spacing:.06em; margin-top:1px; }
+        .ver{ font-size:11px; color:rgba(255,255,255,.58); font-weight:600; white-space:nowrap; }
 
-        .card{ background:#fff; border:1px solid var(--c-border); border-radius:12px; padding:12px; margin:10px 0; }
+        .card{
+        background:var(--ui-card);
+        border:1px solid var(--c-border);
+        border-radius:16px;
+        padding:14px 16px;
+        margin:14px 0;
+        box-shadow:var(--ui-shadow);
+        }
         .muted{ color:var(--c-muted); font-size:13px; }
         .row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
         .row-space{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
@@ -260,7 +293,11 @@
         .tag.open{ background:#e8f8f3; border-color:#cdeee4; color:#0a7; }
         .tag.closed{ background:#fdeaea; border-color:#f6cccc; color:#c33; }
 
-        header.is-sticky{ position:sticky; top:0; backdrop-filter:blur(6px); background:rgba(255,255,255,.9); z-index:50; }
+        header.is-sticky{
+        position:sticky; top:0; z-index:50;
+        backdrop-filter:blur(6px);
+        -webkit-backdrop-filter:blur(6px);
+        }
 
         .warnBox{ background:#fff7d6; border:1px solid #f3d27a; padding:10px; border-radius:10px; color:#7a5b00; }
         
@@ -280,19 +317,19 @@
         a.btn, button.btn{
         display:inline-flex; align-items:center; justify-content:center;
         min-height:40px; padding:10px 14px; border-radius:12px;
-        border:1px solid var(--c-border); background:#fff; color:var(--c-text);
+        border:1px solid var(--c-border); background:var(--ui-card); color:var(--c-text);
         text-decoration:none; font-size:15px; font-weight:600; letter-spacing:.01em; line-height:1;
-        box-shadow:0 2px 8px rgba(0,0,0,.06);
+        box-shadow:0 2px 8px rgba(107,34,16,.07);
         transition:transform .08s ease, filter .12s ease, box-shadow .12s ease;
         cursor:pointer;
         }
         .btn-primary{
         color:#fff !important;
-        border-color:color-mix(in srgb, var(--c-primary-2), #000 6%) !important;
-        background-image:linear-gradient(to bottom right, var(--c-primary), var(--c-primary-2)) !important;
+        border-color:#8c3218 !important;
+        background-image:var(--ui-primary-gradient) !important;
         background-color:var(--c-primary) !important;
         }
-        .btn-outline{ background:#fff !important; color:var(--c-primary-2) !important; border-color:var(--c-primary-2) !important; }
+        .btn-outline{ background:var(--ui-card) !important; color:var(--c-primary-2) !important; border-color:var(--ui-accent-border) !important; }
         .btn-sm{ padding:8px 12px; min-height:36px; font-size:14px; border-radius:10px; }
         .btn-lg{ padding:12px 16px; min-height:44px; font-size:16px; border-radius:14px; }
         .btnRow{ display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin:8px 0; }
@@ -301,6 +338,14 @@
         .btnRow{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
         .btnRow .btn{ width:100%; }
         }
+        a.btn:focus-visible,
+        button.btn:focus-visible,
+        summary:focus-visible,
+        a:focus-visible,
+        button:focus-visible{
+        outline:2px solid rgba(160,60,32,.45);
+        outline-offset:3px;
+        }
 
         /* Base: セレクトをボタン風にする共通スタイル */
             .selectBtn{
@@ -308,7 +353,7 @@
             background: #fff;
             color: var(--c-primary-2);
             border-radius: 10px;
-            box-shadow: 0 1px 4px rgba(127,106,165,0.14);
+            box-shadow: 0 1px 4px rgba(160,60,32,0.10);
 
             height: 36px;
             min-height: 36px;
@@ -318,10 +363,10 @@
             -webkit-appearance: none;
             appearance: none;
             }
-            .selectBtn:focus{
+        .selectBtn:focus{
             outline: none;
-            box-shadow: 0 0 0 3px rgba(127,106,165,.18);
-            }
+            box-shadow: 0 0 0 3px rgba(160,60,32,.16);
+        }
 
             /* === disabledテキスト入力の見た目をselectと統一（iOS/Safari対応） === */
             .selectBtn:disabled,
@@ -332,8 +377,8 @@
             color: #888 !important;                     /* テキスト色 */
             -webkit-text-fill-color: #888 !important;   /* iOS/Safariで薄くなるのを防ぐ */
             opacity: 1 !important;                      /* iOSの透明度低下を打ち消す */
-            background: #f7f5ff !important;             /* 既存ルールと統一 */
-            border-color: #e6e0f0 !important;
+            background: #f6eee7 !important;             /* 既存ルールと統一 */
+            border-color: #ead8ce !important;
             box-shadow: none;
             cursor: not-allowed;
             }
@@ -385,16 +430,16 @@
             .btn-remove{
             background:#fff !important;
             color:#222 !important;                         /* 黒系文字 */
-            border:1px solid #dcd2ef !important;           /* ごく薄い紫の枠 */
+            border:1px solid #ead8ce !important;           /* ごく薄い朱色の枠 */
             box-shadow:
-                0 2px 10px rgba(127,106,165,0.10),           /* 薄い紫のソフトシャドウ */
+                0 2px 10px rgba(160,60,32,0.08),             /* 薄い朱色のソフトシャドウ */
                 0 1px 0 rgba(0,0,0,0.02) inset;
             transition: transform .08s ease, filter .12s ease, box-shadow .12s ease;
             }
             .btn-remove:hover{
             filter: brightness(0.98);
             box-shadow:
-                0 3px 12px rgba(127,106,165,0.16),
+                0 3px 12px rgba(160,60,32,0.12),
                 0 1px 0 rgba(0,0,0,0.03) inset;
             }
             .btn-remove:active{
@@ -403,8 +448,8 @@
             .btn-remove:focus-visible{
             outline: none;
             box-shadow:
-                0 0 0 3px rgba(127,106,165,0.12),            /* フォーカス時に薄いリング */
-                0 2px 10px rgba(127,106,165,0.10);
+                0 0 0 3px rgba(160,60,32,0.12),              /* フォーカス時に薄いリング */
+                0 2px 10px rgba(160,60,32,0.10);
             }
             /* 無効時の視覚（全体ルールに準拠） */
             .btn-remove[disabled]{
@@ -708,8 +753,8 @@
             /* ===== 送信ボタン：送信中は薄い紫＆操作不可 ===== */
             .btn-primary[disabled],
             .btn-primary:disabled{
-                background: #ede7ff !important;          /* 薄い紫 */
-                border-color: #d6ccff !important;
+                background: var(--ui-secondary) !important;
+                border-color: #ead0c2 !important;
                 color: var(--c-primary-2) !important;
                 cursor: not-allowed !important;
                 pointer-events: none !important;          /* タップ無効（多重送信防止） */
@@ -735,14 +780,14 @@
                 background: #fff !important;
                 color: var(--c-primary-2) !important;
                 border: 1px solid color-mix(in srgb, var(--c-primary-2), #000 10%) !important;
-                box-shadow: 0 1px 4px rgba(127,106,165, 0.08); /* ごく薄い影 */
+                box-shadow: 0 1px 4px rgba(160,60,32, 0.08); /* ごく薄い影 */
                 transition: background-color .12s ease, border-color .12s ease, color .12s ease, box-shadow .12s ease;
             }
             .btn.btn-ghost:hover{
                 background: color-mix(in srgb, var(--c-primary), #fff 90%) !important; /* わずかに紫が乗る */
                 border-color: var(--c-primary) !important;
                 color: var(--c-primary-2) !important;
-                box-shadow: 0 2px 8px rgba(127,106,165, 0.12);
+                box-shadow: 0 2px 8px rgba(160,60,32, 0.12);
             }
             .btn.btn-ghost:focus-visible{
                 outline: 2px solid color-mix(in srgb, var(--c-primary), #000 0%) !important;
@@ -1026,11 +1071,11 @@
 
         /* 上部アコーディオンのヘッダーを常時うす紫、open時は少し濃く */
         #adminListAcc .fHead{
-            background:#f5efff !important;
+            background:#fbf1eb !important;
             border-radius:10px;
         }
         #adminListAcc.open .fHead{
-            background:#efe7ff !important;
+            background:var(--ui-secondary) !important;
         }
 
         /* アコーディオン内の編集ボタンを小さめ＆薄めトーンに */
@@ -1042,10 +1087,10 @@
             background:#fff !important;
             color: color-mix(in srgb, var(--c-primary-2), #000 0%) !important;
             border: 1px solid color-mix(in srgb, var(--c-primary-2), #000 12%) !important;
-            box-shadow: 0 1px 3px rgba(127,106,165,0.08);
+            box-shadow: 0 1px 3px rgba(160,60,32,0.08);
         }
         #adminListAcc .btn-edit:hover{
-            background:#f8f6ff !important;
+            background:#fff8f4 !important;
             border-color: color-mix(in srgb, var(--c-primary-2), #000 20%) !important;
         }
         
@@ -1070,26 +1115,261 @@
             display:inline-flex;
             align-items:center;
             gap:6px;
-            background:#fff !important;
+            background:transparent !important;
             border:0 !important;
             padding:0 !important;
             box-shadow:none !important;
-            font-size:13px;
-            color:var(--c-text);
+            font-size:12px;
+            color:var(--ui-muted-fg);
+            cursor:pointer;
+            white-space:nowrap;
         }
         #homeOnlyNALabel input{
             width:16px;
             height:16px;
+            accent-color:var(--ui-primary);
         }
 
-        /* 管理用カードの3ボタンを編集ボタンと同サイズに */
+        /* 管理用カードのボタンをチップ型に */
         #adminMenu a.btn,
         #adminMenu button.btn{
             min-height:30px !important;
-            padding:6px 10px !important;
+            padding:6px 12px !important;
             font-size:13px !important;
-            border-radius:9px !important;
-            box-shadow:0 1px 3px rgba(127,106,165,0.08);
+            border-radius:999px !important;
+            background:var(--ui-secondary) !important;
+            border-color:var(--ui-accent-border) !important;
+            color:var(--ui-secondary-fg) !important;
+            box-shadow:none !important;
+        }
+
+        #view-home{ padding-bottom:8px; }
+        #hello{
+            margin:0 0 18px;
+            font-size:15px;
+            line-height:1.7;
+            color:var(--ui-muted-fg);
+        }
+        #hello .helloName{
+            color:var(--ui-primary-dark);
+            font-weight:700;
+        }
+        .adminMenuCard{
+            overflow:hidden;
+            padding:0;
+        }
+        .adminMenuSummary{
+            list-style:none;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            padding:13px 16px;
+            cursor:pointer;
+            user-select:none;
+        }
+        .adminMenuSummary::-webkit-details-marker{ display:none; }
+        .adminMenuTitle{
+            font-size:13px;
+            font-weight:700;
+            color:var(--ui-muted-fg);
+            letter-spacing:.06em;
+        }
+        .adminMenuCaret{
+            width:18px;
+            height:18px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            color:var(--ui-muted-fg);
+            transition:transform .14s ease;
+        }
+        #adminMenu[open] .adminMenuCaret{ transform:rotate(180deg); }
+        .adminMenuBody{
+            border-top:1px solid var(--ui-divider);
+            padding:12px 14px 14px;
+        }
+        .adminMenuGrid{
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+        }
+        .homeActions{
+            display:grid;
+            grid-template-columns:1fr;
+            gap:12px;
+            margin:10px 0 20px;
+        }
+        .homeActions .btn{ width:100%; box-sizing:border-box; }
+        .homePrimary{
+            position:relative;
+            overflow:hidden;
+            min-height:78px !important;
+            padding:18px 22px !important;
+            border-radius:18px !important;
+            justify-content:space-between !important;
+            text-align:left;
+            box-shadow:0 8px 22px rgba(160,60,32,.22) !important;
+        }
+        .homePrimary::after{
+            content:"";
+            position:absolute;
+            right:-28px;
+            bottom:-38px;
+            width:116px;
+            height:116px;
+            border-radius:50%;
+            border:1px solid rgba(255,255,255,.30);
+            box-shadow:
+                0 0 0 18px rgba(255,255,255,.08),
+                0 0 0 38px rgba(255,255,255,.06);
+            pointer-events:none;
+        }
+        .homePrimaryText{
+            position:relative;
+            z-index:1;
+            display:flex;
+            align-items:center;
+            min-width:0;
+        }
+        .homePrimaryTitle{
+            font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic Medium","Yu Gothic","Meiryo",sans-serif;
+            font-size:21px;
+            line-height:1.25;
+            font-weight:600;
+            letter-spacing:.035em;
+            word-break:keep-all;
+        }
+        .homePrimarySub{
+            display:none;
+            font-size:13px;
+            line-height:1.45;
+            opacity:.84;
+            font-weight:500;
+        }
+        .homeArrow{
+            position:relative;
+            z-index:1;
+            font-size:25px;
+            line-height:1;
+            opacity:.88;
+        }
+        .homeSecondary{
+            min-height:60px !important;
+            padding:12px 16px !important;
+            border-radius:16px !important;
+            justify-content:space-between !important;
+            border-width:1.5px !important;
+            box-shadow:0 3px 12px rgba(107,34,16,.06) !important;
+        }
+        .homeSecondaryInner{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            min-width:0;
+        }
+        .homeIcon{
+            width:40px;
+            height:40px;
+            flex:0 0 auto;
+            border-radius:12px;
+            background:var(--ui-secondary);
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            color:var(--ui-primary);
+        }
+        .homeSecondaryText{
+            display:flex;
+            align-items:center;
+            text-align:left;
+            min-width:0;
+        }
+        .homeSecondaryTitle{
+            font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic Medium","Yu Gothic","Meiryo",sans-serif;
+            font-size:16px;
+            line-height:1.35;
+            font-weight:600;
+            letter-spacing:.03em;
+            color:var(--ui-primary-dark);
+        }
+        .homeSecondarySub{
+            display:none;
+            font-size:12px;
+            line-height:1.35;
+            color:var(--ui-muted-fg);
+            font-weight:500;
+        }
+        .homeProfileEditSlot{
+            display:flex;
+            justify-content:center;
+            margin:10px 0 16px;
+        }
+        .homeProfileEditSlot.is-viewer{
+            margin-top:-2px;
+            margin-bottom:18px;
+        }
+        .homeEditLink{
+            display:inline-flex !important;
+            align-items:center;
+            justify-content:center;
+            gap:.45em;
+            width:auto !important;
+            min-height:44px !important;
+            padding:5px 12px !important;
+                border:1px solid rgba(160,60,32,.14) !important;
+                border-radius:12px !important;
+                background:rgba(253,249,244,.88) !important;
+                color:var(--ui-primary-dark) !important;
+                box-shadow:0 4px 14px rgba(107,34,16,.08) !important;
+            justify-self:center;
+            text-decoration:none;
+            font-size:13px !important;
+            font-weight:700;
+            white-space:nowrap;
+            word-break:keep-all;
+        }
+        .homeEditLinkIcon{
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            width:1.55em;
+            height:1.55em;
+            border-radius:999px;
+            background:rgba(160,60,32,.10);
+            color:var(--ui-primary);
+            font-size:.9em;
+            line-height:1;
+            flex:0 0 auto;
+        }
+        .homeEditLink:hover{
+            background:rgba(244,228,220,.72) !important;
+            border-color:rgba(160,60,32,.22) !important;
+            box-shadow:0 6px 18px rgba(107,34,16,.12) !important;
+        }
+        .homeEditLink:focus-visible{
+            background:rgba(244,228,220,.72) !important;
+            border-color:rgba(160,60,32,.28) !important;
+            box-shadow:0 0 0 3px rgba(160,60,32,.14), 0 6px 18px rgba(107,34,16,.12) !important;
+        }
+        .homeCardTitle{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:var(--ui-primary-dark);
+        }
+        .homeCardTitle::before{
+            content:"";
+            width:3px;
+            height:16px;
+            border-radius:999px;
+            background:var(--ui-primary);
+            flex:0 0 auto;
+        }
+        .homePrimary:active,
+        .homeSecondary:active,
+        .homeEditLink:active{
+            transform:translateY(1px) scale(.99);
         }
 
         /* 管理フォームのみ：注釈の文字をさらに小さく（10px） */
@@ -1135,8 +1415,55 @@
         }
 
     /* ===== Register（氏名編集） ===== */
+        .notify-row{
+        display:flex;
+        align-items:flex-start;
+        gap:8px;
+        margin:10px 0 0;
+        cursor:pointer;
+        }
+        .notify-row input[type="checkbox"]{
+        flex:0 0 auto;
+        width:18px;
+        height:18px;
+        margin:2px 0 0;
+        accent-color:var(--ui-primary);
+        }
+        .notify-main-label{
+        min-width:0;
+        font-size:13.5px;
+        line-height:1.55;
+        color:var(--c-text);
+        }
+        .notify-note{
+        margin:4px 0 10px 26px;
+        font-size:12px;
+        line-height:1.65;
+        color:var(--ui-muted-fg);
+        word-break:normal;
+        overflow-wrap:anywhere;
+        }
         .regAddRow { 
         margin-top: 12px;               /* 上と詰まらないように余白を追加 */
+        align-items:center;
+        gap:12px;
+        flex-wrap:nowrap;
+        }
+        .regAddRow .sectionTitle{
+        min-width:0;
+        font-size:.98em;
+        line-height:1.35;
+        word-break:keep-all;
+        }
+        #btnAddPerf{
+        flex:0 0 auto;
+        min-width:144px;
+        padding-left:12px;
+        padding-right:12px;
+        font-size:13.5px;
+        white-space:nowrap;
+        word-break:keep-all;
+        line-height:1.25;
         }
         #regNote {
         margin: 6px 0 8px;               /* タイトル直下の注意書きの行間 */
@@ -1144,15 +1471,13 @@
         color: var(--c-muted);
         }
 
-        /* ===== 演奏者行（ラベルは1行、下段で入力と削除を2列に並べる） ===== */
-        /* ===== 演奏者行：名前 7 / 右カラム 3（区分+削除） ===== */
         .perfRow{
         display: grid;
-        grid-template-columns: 7fr 3fr;     /* ← 7:3 */
+        grid-template-columns:minmax(0, 1fr) minmax(132px, 0.34fr);
         grid-auto-rows: auto;
-        column-gap: 12px;
-        row-gap: 8px;
-        margin: 10px 0;
+        column-gap:10px;
+        row-gap:10px;
+        margin:12px 0;
         align-items: center;
         }
         .perfRow .perfLabel{
@@ -1164,25 +1489,63 @@
         grid-column: 1 / 2;                /* 左：名前 */
         width: 100%;
         height: 44px;
+        min-width:0;
         }
         .perfRow .regPerfSeg{
         grid-column: 2 / 3;                /* 右（上段）：区分セレクト */
         width: 100%;
+        min-width:132px;
         height: 44px;
+        white-space:nowrap;
+        word-break:keep-all;
+        text-align:center;
+        padding-left:10px;
+        padding-right:10px;
         }
         .perfRow .btn-remove{
         grid-column: 2 / 3;                /* 右（下段）：削除ボタン */
         width: 100%;
+        min-width:132px;
         min-height: 40px;
         height: 44px;
         padding: 0 12px;
         border-radius: 12px;
         justify-self: stretch;
         align-self: end;
+        white-space:nowrap;
+        word-break:keep-all;
         }
-        /* 狭い端末でも維持（必要なら 1列化にもできます） */
-        @media (max-width: 420px){
-        .perfRow{ column-gap: 10px; }
+        #view-register .btn,
+        #view-register .selectBtn{
+        white-space:nowrap;
+        word-break:keep-all;
+        }
+        @media (max-width: 430px){
+        .regAddRow{
+            display:grid;
+            grid-template-columns:1fr;
+            align-items:start;
+            justify-content:stretch;
+        }
+        .regAddRow .sectionTitle{
+            font-size:.95em;
+        }
+        #btnAddPerf{
+            justify-self:end;
+            min-width:0;
+        }
+        }
+        @media (max-width: 380px){
+        .perfRow{
+            grid-template-columns:1fr;
+        }
+        .perfRow .regPerf,
+        .perfRow .regPerfSeg,
+        .perfRow .btn-remove{
+            grid-column:1 / -1;
+            width:100%;
+            min-width:0;
+        }
         }
     
     /* ===== Admin Report（出欠レポート） ===== */
@@ -1382,6 +1745,263 @@
         border-color: #fecaca;
         }
 
+        /* ===== Admin Carpool（配車補助） ===== */
+        #view-admin-carpool .carpoolControls{
+            display:grid;
+            grid-template-columns:auto minmax(0, 1fr) auto minmax(72px, 120px);
+            gap:10px 14px;
+            align-items:center;
+        }
+        #view-admin-carpool,
+        #view-admin-carpool *{
+            box-sizing:border-box;
+        }
+        #view-admin-carpool .carpoolControls select,
+        #view-admin-carpool .carpoolControls input{
+            width:100%;
+            box-sizing:border-box;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolSummary{
+            display:grid;
+            grid-template-columns:repeat(6, minmax(0, 1fr));
+            gap:8px;
+            margin:12px 0;
+        }
+        #view-admin-carpool .carpoolKpi{
+            border:1px solid var(--c-border);
+            border-radius:10px;
+            background:#fff;
+            padding:10px;
+            min-height:58px;
+        }
+        #view-admin-carpool .carpoolKpiLabel{
+            font-size:12px;
+            color:var(--c-muted);
+            margin-bottom:4px;
+        }
+        #view-admin-carpool .carpoolKpiValue{
+            font-size:18px;
+            font-weight:700;
+            line-height:1.3;
+        }
+        #view-admin-carpool .carpoolKpiValue.ok{ color:#047857; }
+        #view-admin-carpool .carpoolKpiValue.warn{ color:#b91c1c; }
+        #view-admin-carpool .carpoolAlert{
+            border:1px solid #fecaca;
+            background:#fef2f2;
+            color:#991b1b;
+            border-radius:10px;
+            padding:10px 12px;
+            font-size:13px;
+            margin:10px 0;
+        }
+        #view-admin-carpool .carpoolHint{
+            color:var(--c-muted);
+            font-size:12px;
+            line-height:1.6;
+            margin-top:6px;
+        }
+        #view-admin-carpool .carpoolTable{
+            width:100%;
+            border:1px solid var(--c-border);
+            border-radius:12px;
+            background:#fff;
+            overflow:hidden;
+            box-sizing:border-box;
+        }
+        #view-admin-carpool .carpoolHead{
+            display:none;
+        }
+        #view-admin-carpool .carpoolRow{
+            padding:10px 12px;
+            border-top:1px dashed #eee;
+            display:block;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolHead + .carpoolRow{ border-top:0; }
+        #view-admin-carpool .carpoolCompact{
+            display:block;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolTopLine{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolCellName{
+            flex:1 1 auto;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolCellAttend{
+            flex:0 0 auto;
+        }
+        #view-admin-carpool .carpoolCellComment{
+            margin-top:6px;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolCellCandidate{
+            flex:0 0 auto;
+            display:inline-flex;
+            align-items:center;
+            gap:4px;
+            margin:0;
+            white-space:nowrap;
+            font-size:13px;
+        }
+        #view-admin-carpool .carpoolCellCapacity{ min-width:0; }
+        #view-admin-carpool .carpoolCellDrum{
+            display:inline-flex;
+            align-items:center;
+            gap:4px;
+            margin:0;
+            white-space:nowrap;
+            font-size:13px;
+        }
+        #view-admin-carpool .carpoolCellMemo{ min-width:0; }
+        #view-admin-carpool .carpoolName{
+            font-weight:700;
+            line-height:1.45;
+            overflow-wrap:anywhere;
+            min-width:0;
+        }
+        #view-admin-carpool .carpoolParticipants{
+            color:var(--c-muted);
+            font-size:11px;
+            line-height:1.45;
+            margin-top:2px;
+            overflow-wrap:anywhere;
+        }
+        #view-admin-carpool .carpoolComment{
+            display:-webkit-box;
+            -webkit-box-orient:vertical;
+            -webkit-line-clamp:2;
+            overflow:hidden;
+            color:#475569;
+            font-size:12px;
+            line-height:1.45;
+            overflow-wrap:anywhere;
+            word-break:break-word;
+        }
+        #view-admin-carpool .carpoolComment:empty::before{
+            content:"";
+        }
+        #view-admin-carpool .carpoolRow.is-open .carpoolComment{
+            display:block;
+            overflow:visible;
+        }
+        #view-admin-carpool .carpoolAssist{
+            display:inline-flex;
+            align-items:center;
+            margin-top:4px;
+            padding:2px 8px;
+            border-radius:999px;
+            border:1px solid #c7d2fe;
+            background:#eef2ff;
+            color:#3730a3;
+            font-size:11px;
+            font-weight:700;
+        }
+        #view-admin-carpool .carpoolAssist.weak{
+            border-color:#fed7aa;
+            background:#fff7ed;
+            color:#9a3412;
+        }
+        #view-admin-carpool .carpoolDetails{
+            display:none;
+            grid-template-columns:minmax(0, 1fr) auto;
+            gap:8px 10px;
+            align-items:end;
+            margin-top:8px;
+            padding-top:8px;
+            border-top:1px dashed #eee;
+        }
+        #view-admin-carpool .carpoolRow.is-open .carpoolDetails{
+            display:grid;
+        }
+        #view-admin-carpool .carpoolDetailLabel{
+            display:block;
+            color:var(--c-muted);
+            font-size:12px;
+            font-weight:700;
+            margin:0 0 4px;
+        }
+        #view-admin-carpool .carpoolCellCapacity{
+            grid-column:1 / 2;
+        }
+        #view-admin-carpool .carpoolCellDrum{
+            grid-column:2 / 3;
+            margin-bottom:3px;
+        }
+        #view-admin-carpool .carpoolCellMemo{
+            grid-column:1 / -1;
+        }
+        #view-admin-carpool .carpoolCap,
+        #view-admin-carpool .carpoolMemo{
+            width:100%;
+            box-sizing:border-box;
+            border:1px solid var(--c-border);
+            border-radius:8px;
+            padding:7px 8px;
+            font-size:16px;
+            min-width:0;
+        }
+        #view-admin-carpool input:disabled{
+            background:#f8fafc;
+            color:#94a3b8;
+        }
+        @media (max-width: 900px){
+            #view-admin-carpool{
+                max-width:100%;
+                overflow-x:clip;
+            }
+            #view-admin-carpool #carpoolBox{
+                max-width:100%;
+                overflow-x:clip;
+            }
+            #view-admin-carpool .carpoolControls{
+                grid-template-columns:1fr;
+            }
+            #view-admin-carpool #carpoolEvent,
+            #view-admin-carpool #carpoolExtraCount{
+                font-size:16px;
+            }
+            #view-admin-carpool .carpoolSummary{
+                grid-template-columns:repeat(2, minmax(0, 1fr));
+                gap:6px;
+            }
+            #view-admin-carpool .carpoolKpi{
+                min-width:0;
+                padding:8px;
+            }
+            #view-admin-carpool .carpoolKpiValue{
+                font-size:16px;
+            }
+            #view-admin-carpool .carpoolHead{
+                display:none;
+            }
+            #view-admin-carpool .carpoolTable{
+                border-radius:12px;
+                overflow:hidden;
+            }
+            #view-admin-carpool .carpoolRow{
+                padding:10px;
+            }
+            #view-admin-carpool .carpoolName{
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+            }
+            #view-admin-carpool .carpoolAssist{
+                margin-top:3px;
+                max-width:100%;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+            }
+        }
+
         .submitting-overlay {
         position: fixed;
         inset: 0;
@@ -1429,7 +2049,7 @@
         }
         #view-custom-push .cp-textarea{
             width:100%;
-            border:1.5px solid var(--c-primary-2);
+            border:1.5px solid rgba(160,60,32,.34);
             background:#fff;
             border-radius:10px;
             padding:10px 12px;
@@ -1450,19 +2070,20 @@
         }
 
         #view-custom-push .cp-pill{
-            border:1.5px dashed var(--c-primary-2);
-            background:#f7f5ff;
+            border:1.5px solid rgba(160,60,32,.16);
+            background:rgba(253,249,244,.92);
             border-radius:10px;
             padding:12px;
             margin:10px 0;
+            box-shadow:0 2px 10px rgba(107,34,16,.04);
         }
         #view-custom-push .cp-pill-title{
             font-weight:700;
             margin-bottom:4px;
-            color:var(--c-text);
+            color:var(--ui-primary-dark);
         }
         #view-custom-push .cp-pill-body{
-            color:var(--c-muted);
+            color:var(--ui-muted-fg);
         }
 
         #cp_extra{
@@ -1476,23 +2097,23 @@
         }
 
         #view-custom-push .statWrap.is-disabled{
-            background:#f5efff !important;
-            border:1.5px dashed #d8cef1 !important;
+            background:rgba(244,228,220,.72) !important;
+            border:1.5px dashed rgba(160,60,32,.24) !important;
             border-radius:12px !important;
             padding:10px !important;
             opacity:.95 !important;
         }
         #view-custom-push .statWrap.is-disabled label{
-            color:#7a6fa6 !important;
+            color:var(--ui-muted-fg) !important;
         }
         #view-custom-push .statWrap .lockTag{
             display:inline-flex !important;
             align-items:center;
             gap:6px;
             font-size:12px;
-            color:#7f6aa5;
-            background:#efe7ff;
-            border:1px solid #e6e0f0;
+            color:var(--ui-primary-dark);
+            background:rgba(253,249,244,.92);
+            border:1px solid rgba(160,60,32,.18);
             border-radius:999px;
             padding:2px 8px;
             margin-left:8px;
@@ -1503,6 +2124,38 @@
 
         #view-custom-push #cp_event{
             font-size:13px;
+        }
+        #view-custom-push .statWrap{
+            background:rgba(253,249,244,.92);
+            border:1px solid rgba(160,60,32,.16);
+            border-radius:12px;
+            padding:10px;
+        }
+        #view-custom-push .statWrap label{
+            display:inline-flex;
+            align-items:center;
+            gap:5px;
+            min-height:24px;
+            padding:0;
+            border:0;
+            border-radius:0;
+            background:transparent;
+            color:var(--ui-primary-dark) !important;
+            font-size:13px;
+            cursor:pointer;
+            box-shadow:none;
+        }
+        #view-custom-push .statWrap label:has(input:checked){
+            background:transparent;
+            border-color:transparent;
+            box-shadow:none;
+        }
+        #view-custom-push .statWrap input[type="checkbox"]{
+            accent-color:var(--ui-primary);
+        }
+        #view-custom-push .statWrap label:focus-within{
+            outline:2px solid rgba(160,60,32,.35);
+            outline-offset:2px;
         }
         .loadingHint{
             font-size:12px;
@@ -1591,7 +2244,8 @@
         margin: 4px 0 0;
         padding: 8px 10px;
         border-radius: 10px;
-        background: #f7f5ff;
+        background: #fdf9f4;
+        border:1px solid rgba(160,60,32,.14);
         font-family: inherit;
         font-size: 14px;
         line-height: 1.6;
@@ -1768,12 +2422,12 @@
         border: none;
         border-radius: 9999px;
         padding: 0;
-        background: linear-gradient(180deg, #7c6ae6 0%, #6f5dbd 100%);
+        background: var(--ui-primary-gradient);
         color: #fff;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 24px rgba(0,0,0,.22);
+        box-shadow: 0 10px 26px rgba(107,34,16,.24);
         cursor: pointer;
         z-index: 1200;
         -webkit-tap-highlight-color: transparent;
@@ -1788,14 +2442,16 @@
         }
         @media (hover:hover){
         #feedbackFab.fab:hover{
-            box-shadow: 0 12px 28px rgba(0,0,0,.28);
+            background:linear-gradient(135deg, #b84524 0%, #7b2a14 100%);
+            box-shadow: 0 12px 30px rgba(107,34,16,.30);
             transform: translateY(-1px);
         }
         }
         #feedbackFab.fab:active{ transform: translateY(1px); }
         #feedbackFab.fab:focus-visible{
-        outline: 3px solid rgba(255,255,255,.9);
+        outline: 3px solid rgba(160,60,32,.24);
         outline-offset: 2px;
+        box-shadow:0 0 0 5px rgba(253,249,244,.9), 0 12px 30px rgba(107,34,16,.30);
         }
         @media (prefers-reduced-motion: reduce){
         #feedbackFab.fab{ transition: none; }
@@ -1886,9 +2542,9 @@
         border:1px solid #bbb;
         }
         #feedbackModal .btn-primary{
-        background:#6f5dbd;
+        background:var(--ui-primary-gradient);
         color:#fff;
-        border:1px solid #6f5dbd;
+        border:1px solid #8c3218;
         }
 
         /* ===== スナックバー ===== */
@@ -2158,7 +2814,7 @@
         height:14px;
         border-radius:50%;
         border:2px solid #ccc;
-        border-top-color:#6f5dbd;
+        border-top-color:var(--ui-primary);
         animation: fbsp 0.8s linear infinite;
         vertical-align:-2px;
         margin-left:6px;
@@ -2295,12 +2951,23 @@
         margin-top: 8px;        /* タイトルとの余白が欲しければ */
         }
     /* ===== 回答受付中の公演リスト 専用 ===== */
-        const css = document.createElement('style');
-        css.textContent = `
         .evList { margin-top: 6px; }
         .eventRow{
-            display:block;border:1px solid var(--c-border);border-radius:12px;background:#fff;
-            padding:10px 12px;margin:8px 0;
+            display:block;
+            border:1px solid var(--c-border);
+            border-radius:12px;
+            background:rgba(255,255,255,.48);
+            padding:11px 12px;
+            margin:8px 0;
+            transition:background-color .12s ease, transform .08s ease, box-shadow .12s ease;
+            cursor:pointer;
+        }
+        .eventRow:active{
+            transform:translateY(1px);
+        }
+        .eventRow.open{
+            background:#fff;
+            box-shadow:0 3px 12px rgba(107,34,16,.07);
         }
         .eventHead{
             display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;
@@ -2317,9 +2984,12 @@
         .eventTitle .title-place{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; flex:1 1 auto; }
         .eventSub{ font-size:12px; color:var(--c-muted); margin-top:2px; }
         .deadline{ color:#666; } .deadline-soon{ color:#c33; font-weight:600; }
+        .eventDetail{
+            display:none;
+            margin:-2px 0 8px;
+            padding:0 2px;
+        }
         /* 区分バッジは既存 .seg-badge / .seg-adult / .seg-child / .seg-both を利用 */
-        `;
-        document.head.appendChild(css);
     </style>
     <!-- ===== Custom Overrides（最後に評価されるCSS） ===== -->
         <style id="custom-overrides">
@@ -2333,7 +3003,17 @@
 
 <body>
   <header class="is-sticky">
-  <div class="siteTitle">藤塚太鼓 出欠・予定</div>
+  <div class="brandBlock">
+    <svg class="taikoMark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
+      <circle cx="14" cy="14" r="11.5" fill="none" stroke="rgba(212,149,122,.75)" stroke-width="1.5"></circle>
+      <circle cx="14" cy="14" r="6.5" fill="rgba(212,149,122,.16)" stroke="rgba(212,149,122,.72)" stroke-width="1"></circle>
+      <circle cx="14" cy="14" r="2.8" fill="rgba(212,149,122,.9)"></circle>
+    </svg>
+    <div class="siteTitleWrap">
+      <div class="siteTitle">藤塚太鼓</div>
+      <div class="siteTitleSub">出欠・予定管理</div>
+    </div>
+  </div>
   <div class="ver" id="ver"></div>
 </header>
 
@@ -2353,14 +3033,21 @@
         <section id="view-home" data-view class="show">
             <div id="hello" class="muted"></div>
             <!-- 管理メニュー（管理者のみ表示） -->
-                <div id="adminMenu" class="card" style="display:none;">
-                <div class="sectionTitle">管理用</div>
-                <div class="row" style="gap:8px;">
+                <details id="adminMenu" class="card adminMenuCard" style="display:none;">
+                <summary class="adminMenuSummary" aria-expanded="false">
+                    <span class="adminMenuTitle">管理者メニュー</span>
+                    <span class="adminMenuCaret" aria-hidden="true">⌄</span>
+                </summary>
+                <div class="adminMenuBody">
+                <div class="adminMenuGrid">
                     <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin">
                         予定登録/編集
                     </button>
                     <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-report">
                         出欠結果一覧
+                    </button>
+                    <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-carpool">
+                        配車補助
                     </button>
                     <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" data-view-target="view-custom-push">
                         カスタム通知
@@ -2373,18 +3060,30 @@
                     </button>
                 </div>
                 <div class="small muted" style="margin-top:6px;">※ 管理者のみ表示されます</div>
-            </div>
+                </div>
+            </details>
 
             <!-- ★ トップ操作ボタン -->
-                <div class="btnRow" aria-label="主操作">
-                    <button id="btnPrimary" class="btn btn-primary btn-lg" data-view-target="view-form" disabled>
-                    読み込み中…
+                <div class="homeActions" aria-label="主操作">
+                    <button id="btnPrimary" class="btn btn-primary btn-lg homePrimary" data-view-target="view-form" disabled>
+                    <span class="homePrimaryText">
+                        <span class="homePrimaryTitle">読み込み中…</span>
+                    </span>
+                    <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
-                    <button id="btnSchedules" class="btn btn-outline btn-lg" data-view-target="view-schedules">
-                    今後の予定
-                    </button>
-                    <button id="btnEditNames" class="btn btn-outline btn-lg" data-view-target="view-register" style="display:none;">
-                    登録氏名編集
+                    <button id="btnSchedules" class="btn btn-outline btn-lg homeSecondary" data-view-target="view-schedules">
+                    <span class="homeSecondaryInner">
+                        <span class="homeIcon" aria-hidden="true">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <rect x="4" y="5" width="16" height="15" rx="2.5" stroke="currentColor" stroke-width="1.8"></rect>
+                                <path d="M8 3.5v3M16 3.5v3M4.5 9h15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+                            </svg>
+                        </span>
+                        <span class="homeSecondaryText">
+                            <span class="homeSecondaryTitle">予定表</span>
+                        </span>
+                    </span>
+                    <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
                 </div>
 
@@ -2394,7 +3093,7 @@
             <!-- 回答受付中の公演（密リスト＋バッジ） -->
                 <div class="card" id="cardEventsActive">
                     <div class="row-space">
-                        <div class="sectionTitle">回答受付中の公演</div>
+                        <div class="sectionTitle homeCardTitle">回答受付中の公演</div>
                         <label id="homeOnlyNALabel" style="margin-left:auto;">
                             <input type="checkbox" id="homeOnlyNA" checked>
                             未定/未回答のみ表示
@@ -2406,6 +3105,12 @@
                         </div>
                     </div>
                 </div>
+                <div id="profileEditSlotNormal" class="homeProfileEditSlot">
+                    <button id="btnEditNames" class="btn btn-outline btn-lg homeEditLink" data-view-target="view-register" style="display:none;">
+                    <span class="homeEditLinkIcon" aria-hidden="true">✎</span>
+                    <span>登録氏名を変更する</span>
+                    </button>
+                </div>
 
             <!-- あなたの登録状況（トップでは非表示） -->
                 <div class="card" style="display:none;">
@@ -2415,10 +3120,10 @@
                     </div>
                 </div>
 
-            <!-- ★ 閲覧者用：今後の予定（直近5件） -->
+            <!-- ★ 閲覧者用：予定表（直近5件） -->
             <div class="card" id="cardViewerUpcoming" style="display:none;">
             <div class="row-space">
-                <div class="sectionTitle">今後の予定（直近5件）</div>
+                <div class="sectionTitle">予定表（直近5件）</div>
             </div>
             <div id="viewerEventsBox">
                 <div class="muted">
@@ -2426,6 +3131,7 @@
                 </div>
             </div>
             </div>
+            <div id="profileEditSlotViewer" class="homeProfileEditSlot is-viewer"></div>
 
             <div id="homeLog" class="muted" style="margin-top:8px;"></div>
         </section>
@@ -2489,17 +3195,14 @@
                 placeholder="例：山田 太郎"
                 />
 
-                <label
-                class="row"
-                style="gap:6px; align-items:center; margin-top:6px;"
-                >
+                <label class="notify-row" for="regNotify">
                     <input type="checkbox" id="regNotify" />
-                    <span class="small">
+                    <span class="notify-main-label">
                         このアカウント宛てに通知（配信・リマインド）を送る
                     </span>
                 </label>
 
-                <div class="small muted" style="margin:2px 0 8px 24px;">
+                <div class="notify-note">
                 ※通知をオフにすると、配信・リマインドは届きません（予定の閲覧は可能です）
                 </div>
 
@@ -2544,10 +3247,10 @@
             </div>
         </section>
 
-    <!-- ===== View: 今後の予定一覧 ===== -->
+    <!-- ===== View: 予定表 ===== -->
         <section id="view-schedules" data-view>
             <div class="row-space">
-                <div class="sectionTitle">今後の予定</div>
+                <div class="sectionTitle">予定表</div>
                 <button
                 id="btnBackFromSchedules"
                 class="btn btn-ghost btn-sm"
@@ -2620,7 +3323,7 @@
             <div class="card">
                 <div class="sectionTitle" style="margin:0 0 6px;">カレンダーに予定を自動で表示する（購読）</div>
                 <div class="small muted" style="margin-bottom:8px;">
-                    このURLを登録すると、今後の太鼓の予定があなたの Googleカレンダー / iPhone(Apple)カレンダー / Outlook に表示されます。
+                    このURLを登録すると、太鼓の予定があなたの Googleカレンダー / iPhone(Apple)カレンダー / Outlook に表示されます。
                     予定が追加・変更されたときも、カレンダー側が自動で更新します（反映まで少し時間がかかることがあります）。
                 </div>
                 <div class="small muted" style="margin-bottom:6px;">手順</div>
@@ -2977,6 +3680,47 @@
             >
                 公演を選択してください
             </div>
+        </section>
+    <!-- ===== View: 配車補助（管理者） ===== -->
+        <section id="view-admin-carpool" data-view>
+            <div class="row-space">
+                <div class="sectionTitle">配車補助（管理者）</div>
+                <button
+                id="btnCarpoolBack"
+                class="btn btn-ghost btn-sm"
+                data-view-target="view-home"
+                type="button"
+                >
+                トップに戻る
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="carpoolControls">
+                    <label for="carpoolEvent" class="repLabel">公演を選択</label>
+                    <select id="carpoolEvent" class="selectBtn schedSel short">
+                        <option value="">（選択してください）</option>
+                    </select>
+
+                    <label for="carpoolExtraCount" class="repLabel">追加同行者人数</label>
+                    <input
+                    id="carpoolExtraCount"
+                    class="selectBtn"
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    value="0"
+                    >
+                </div>
+                <div class="carpoolHint">
+                    車の定員ではなく、管理者が当日実際に運べると判断した人数を入力してください。保存はせず、この画面上で計算します。
+                </div>
+            </div>
+
+            <div id="carpoolSummary" class="carpoolSummary" aria-live="polite"></div>
+            <div id="carpoolDrumAlert" class="carpoolAlert" hidden>太鼓運搬車が未設定です。</div>
+            <div id="carpoolBox" class="muted" aria-live="polite">公演を選択してください</div>
         </section>
     <!-- ===== View: カスタム通知（管理者） ===== -->
         <section id="view-custom-push" data-view>
@@ -4085,6 +4829,49 @@
     ));
     }
     const $ = s => document.querySelector(s);
+
+    function setHomePrimaryButton(label, disabled){
+    const btn = $("#btnPrimary");
+    if (!btn) return;
+    const text = String(label || "").replace(/\s*\/\s*/g, "／");
+    btn.disabled = !!disabled;
+    btn.innerHTML = `
+        <span class="homePrimaryText">
+        <span class="homePrimaryTitle">${h(text)}</span>
+        </span>
+        <span class="homeArrow" aria-hidden="true">›</span>
+    `;
+    }
+
+    function updateHomeProfileEditPlacement({ hasMembers, viewer } = {}){
+    const edit = $("#btnEditNames");
+    const primary = $("#btnPrimary");
+    const normalSlot = $("#profileEditSlotNormal");
+    const viewerSlot = $("#profileEditSlotViewer");
+    const activeCard = $("#cardEventsActive");
+    if (!edit || !normalSlot || !viewerSlot) return;
+
+    const isViewOnly = (typeof viewer === "boolean") ? viewer : isViewer();
+    const hasRegisteredMembers = (typeof hasMembers === "boolean")
+        ? hasMembers
+        : state.members.length > 0;
+    const showEdit = hasRegisteredMembers || isViewOnly;
+
+    if (isViewOnly) {
+        viewerSlot.appendChild(edit);
+        viewerSlot.style.display = showEdit ? "" : "none";
+        normalSlot.style.display = "none";
+        if (primary) primary.style.display = "none";
+        if (activeCard) activeCard.style.display = "none";
+    } else {
+        normalSlot.appendChild(edit);
+        normalSlot.style.display = showEdit ? "" : "none";
+        viewerSlot.style.display = "none";
+        if (primary) primary.style.display = "";
+        if (activeCard) activeCard.style.display = "";
+    }
+    edit.style.display = showEdit ? "" : "none";
+    }
     
     /* ===== 区分(セグメント) 正規化 & 判定ヘルパー ===== */
     const INCLUDE_BOTH_FOR_ALL = true;
@@ -4588,7 +5375,9 @@
         const idt = liff.getDecodedIDToken();
         state.lineId = idt ? idt.sub : "";
         state.name   = idt && idt.name ? idt.name : "";
-        $("#hello").textContent = state.name ? `こんにちは、${state.name} さん` : "";
+        $("#hello").innerHTML = state.name
+            ? `こんにちは、<span class="helloName">${h(state.name)}</span> さん`
+            : "";
 
         /* ★ lineIdが確定したら、ドラフトを復元 */
         draftLoad();
@@ -4607,6 +5396,17 @@
 
 /* ===== クリックバインド（ボタンにひたすら処理を結びつける配線コマンドたち） ===== */
     function bindHandlers(){
+    const adminMenu = document.getElementById("adminMenu");
+    const adminSummary = adminMenu?.querySelector(".adminMenuSummary");
+    if (adminMenu && adminSummary && !adminMenu.__ariaBound) {
+        const syncAdminExpanded = () => {
+        adminSummary.setAttribute("aria-expanded", String(adminMenu.open));
+        };
+        adminMenu.addEventListener("toggle", syncAdminExpanded);
+        adminSummary.addEventListener("click", () => setTimeout(syncAdminExpanded, 0));
+        syncAdminExpanded();
+        adminMenu.__ariaBound = true;
+    }
     $("#btnReload").onclick      = async ()=>{ logHome("再読み込み中…"); await refreshData(); logHome(""); };
     $("#btnPrimary").onclick     = onPrimary;
     $("#btnEditNames").onclick   = onEditNames;
@@ -4651,6 +5451,12 @@
         show("#view-admin-report");
         reportReload();
     };
+    $("#btnAdminCarpool").onclick = ()=>{
+        if (!state.isAdmin){ alert("管理者のみアクセス可能です"); return; }
+        show("#view-admin-carpool");
+        window.initCarpoolPage?.();
+    };
+    $("#btnCarpoolBack").onclick = ()=> show("#view-home");
     
     // 管理メニュー：カスタム通知
     $("#btnAdminCustomPush").onclick = () => {
@@ -4690,7 +5496,7 @@
     $("#btnAdminSubmit").onclick = ()=> adminSubmit();
     $("#btnAdminReset").onclick = ()=> enterAdminCreateMode();
     $("#ad_type").addEventListener("change", adminTypeChangeAdapt);
-    
+
     // 管理アコーディオン（ヘッダーに直接：click/Enter/Space、キャプチャで確実に拾う）
     function setupAdminAccordion(){
         const acc  = document.getElementById('adminListAcc');
@@ -4916,9 +5722,10 @@
         // 1) まずスピナーを出す
         $("#eventsBox").innerHTML  = `読み込み中… <span class="spinner"></span>`;
         $("#answersBox").innerHTML = `会員情報照会中… <span class="spinner"></span>`;
-        $("#btnPrimary").textContent = "読み込み中…";
-        $("#btnPrimary").disabled = true;
+        setHomePrimaryButton("読み込み中…", true);
         $("#btnEditNames").style.display = "none";
+        $("#profileEditSlotNormal").style.display = "none";
+        $("#profileEditSlotViewer").style.display = "none";
 
         const lineId = state.lineId || "";
         if (!lineId) {
@@ -5201,13 +6008,10 @@
         // 6) ボタンの復帰
         const hasPerf = hasPerformers();
         const viewer  = isViewer();
-        $("#btnPrimary").textContent = viewer
+        setHomePrimaryButton(viewer
             ? "登録氏名の編集"
-            : (hasPerf ? "出欠を入力 / 変更する" : "初回登録に進む");
-        $("#btnPrimary").disabled = false;
-
-        const showEditSubBtn = hasPerf && !viewer;
-        $("#btnEditNames").style.display = showEditSubBtn ? "" : "none";
+            : (hasPerf ? "出欠を入力／変更する" : "初回登録に進む"), false);
+        updateHomeProfileEditPlacement({ hasMembers: state.members.length > 0, viewer });
 
         console.log("[perf] refreshData done", (performance.now() - t0).toFixed(0), "ms");
     }
@@ -5215,9 +6019,9 @@
 /* ===== HOME画面に戻ってきたときのボタン表示とメッセージ調整 ===== */
     function renderHome(){
     const hasMembers = state.members.length > 0;
-    $("#btnPrimary").textContent = hasMembers ? "出欠を入力 / 変更する" : "初回登録に進む";
-    $("#btnPrimary").disabled = false;
-    $("#btnEditNames").style.display = (hasMembers && !isViewer()) ? "" : "none";
+    const viewer = isViewer();
+    setHomePrimaryButton(hasMembers ? "出欠を入力／変更する" : "初回登録に進む", false);
+    updateHomeProfileEditPlacement({ hasMembers, viewer });
 
     if (!hasMembers){
         $("#answersBox").innerHTML = `
@@ -7863,6 +8667,51 @@
         return arr;
     }
 
+    // ▼ 出欠結果一覧と同じ基準で、payload から表示用 rows を作る
+    function buildReportRowsForPayload(payload, eventId, opt = {}){
+        const includeUnanswered = opt.includeUnanswered !== false;
+        const list = pickRows(payload);
+
+        // ★ 家族フィルタは一切しない（= 全員ベースで扱う）
+        const rows = list.map(mapRow);
+
+        const answeredCanon = new Set(
+        rows.map(r => canonName(r.name)).filter(Boolean)
+        );
+
+        const segIndex   = buildSegIndex(payload);
+        const candidates = buildCandidates(payload, segIndex);
+        const eventSegNorm = getEventSegmentNorm(payload, eventId);
+
+        rows.forEach(r => {
+        if (!r.seg) {
+            const nmKey = canonName(r.name);
+            const segFromIdx = segIndex[nmKey];
+            if (segFromIdx) r.seg = segFromIdx;
+        }
+        const baseName = canonName(r.name);
+        if (baseName) {
+            r.name = nameWithSegPrefix({ name: baseName, seg: r.seg });
+        }
+        });
+
+        let rowsFiltered = rows;
+        if (eventSegNorm && eventSegNorm !== "両方") {
+            rowsFiltered = rows.filter(r => {
+                const segNorm = normalizeSegmentLabel(r.seg);
+                if (!segNorm) return false;
+                if (segNorm === "両方") return true;
+                return segNorm === eventSegNorm;
+            });
+        }
+
+        const naRows = includeUnanswered
+            ? buildNaRows(candidates, answeredCanon, segIndex, eventSegNorm)
+            : [];
+
+        return sortRowsByPriority(rowsFiltered.concat(naRows), payload);
+    }
+
     // ▼ 出欠結果の描画（#repEvent の value を eventId とみなして取得→描画）
     async function renderReport(){
         const sel = document.getElementById("repEvent");
@@ -7983,60 +8832,7 @@
         }
 
         // ★ 家族フィルタは一切しない（= 全員ベースで扱う）
-        const rows = list.map(mapRow);
-
-        // --- 比較用：名前の正規化（全員ぶん） ---
-        // → 未回答生成のときには「大人だけど間違って子ども公演に回答した人」も
-        //   きちんと「回答済み」として扱いたいので、ここは *フィルタ前* の rows を見る
-        const answeredCanon = new Set(
-        rows.map(r => canonName(r.name)).filter(Boolean)
-        );
-
-        // members から「名前→区分」索引（未回答表示で接頭辞付与に使う）
-        const segIndex   = buildSegIndex(payload);
-        const candidates = buildCandidates(payload, segIndex);
-
-        // ▼ イベント自体の対象区分を取得（D1/GAS + フロントのマスターからも検索）
-        const eventSegNorm = getEventSegmentNorm(payload, id);
-
-        // ▼ 回答済み rows にも seg を補完しておく（members 情報から）
-        rows.forEach(r => {
-        if (!r.seg) {
-            const nmKey = canonName(r.name);
-            const segFromIdx = segIndex[nmKey];
-            if (segFromIdx) r.seg = segFromIdx;
-        }
-        const baseName = canonName(r.name);
-        if (baseName) {
-            r.name = nameWithSegPrefix({ name: baseName, seg: r.seg });
-        }
-        });
-
-        // ▼ イベントの対象区分で「回答済み rows」をフィルタ
-        let rowsFiltered = rows;
-        if (eventSegNorm && eventSegNorm !== "両方") {
-            rowsFiltered = rows.filter(r => {
-                const segNorm = normalizeSegmentLabel(r.seg);
-
-                // 区分が取れない場合 → このイベントでは対象外にする
-                if (!segNorm) return false;
-
-                // 両方 → どちらのイベントにも出て良い
-                if (segNorm === "両方") return true;
-
-                // それ以外はイベント区分と一致するかどうか
-                return segNorm === eventSegNorm;
-            });
-        }
-
-        // ▼ 未回答も同じくイベント区分でフィルタ
-        const naRows = buildNaRows(candidates, answeredCanon, segIndex, eventSegNorm);
-
-        // rows を未回答で拡張（ここから先は元の処理と同じ）
-        const rowsAll = rowsFiltered.concat(naRows);
-
-        // ★ 並び替え（sortGroup → birthYear → 名前）
-        const rowsAllSorted = sortRowsByPriority(rowsAll, payload);
+        const rowsAllSorted = buildReportRowsForPayload(payload, id, { includeUnanswered: true });
 
         // フィルタ
         const f = document.getElementById("repAttend")?.value || "";
@@ -8315,6 +9111,509 @@
 
     // 既存ハンドラとつながるように公開
     window.renderReport = renderReport;
+    window.buildAdminReportRowsForEvent = buildReportRowsForPayload;
+    })();
+
+/* ===== 配車補助（管理者） ===== */
+    (function(){
+    const carpoolState = {
+        mounted: false,
+        eventsLoaded: false,
+        events: [],
+        rows: [],
+        participantCount: 0,
+    };
+
+    function normalizeCarpoolName(s){
+        return String(s || "")
+        .replace(/\u3000/g, " ")
+        .replace(/^\s+|\s+$/g, "")
+        .replace(/\s+/g, " ")
+        .replace(/^【[^】]+】\s*/, "")
+        .replace(/\s*【[^】]+】$/, "");
+    }
+
+    function normalizeCarpoolSegment(raw){
+        const s = String(raw || "").trim().toLowerCase();
+        if (!s) return "";
+        if (s === "adult" || s.includes("大人")) return "adult";
+        if (s === "child" || s.includes("子ども") || s.includes("子供") || s.includes("子")) return "child";
+        if (s === "both" || s.includes("両")) return "both";
+        return "";
+    }
+
+    function carpoolEventMatchesSegment(rowSegRaw, eventSegRaw){
+        const ev = normalizeCarpoolSegment(eventSegRaw);
+        if (!ev || ev === "both") return true;
+        const row = normalizeCarpoolSegment(rowSegRaw);
+        if (!row) return false;
+        return row === ev || row === "both";
+    }
+
+    function carpoolPickRows(payload){
+        const cands = [
+        payload?.list,
+        payload?.rows,
+        payload?.answers,
+        payload?.members,
+        payload?.data,
+        ];
+        for (const c of cands) if (Array.isArray(c)) return c;
+        return [];
+    }
+
+    function isCarpoolParticipatingAttend(raw){
+        const s = String(raw || "").trim().toLowerCase();
+        return s === "参加" || s === "yes" || s === "y" || s === "true" || s === "1";
+    }
+
+    function carpoolMapRow(x){
+        const rawName =
+        x?.displayName ??
+        x?.performerName ??
+        x?.performer_name ??
+        x?.name ??
+        x?.member ??
+        "";
+        const rawAttend =
+        x?.attend ??
+        x?.answer ??
+        x?.status ??
+        "";
+        const comment =
+        x?.comment ??
+        x?.eventComment ??
+        x?.memo ??
+        x?.note ??
+        x?.remarks ??
+        x?.["コメント"] ??
+        "";
+
+        return {
+        lineId: x?.lineId || x?.line_id || "",
+        name: normalizeCarpoolName(rawName),
+        displayName: String(rawName || "").trim(),
+        attend: String(rawAttend || "").trim() || "未回答",
+        comment: String(comment || "").trim(),
+        segment: x?.segment || x?.seg || "",
+        };
+    }
+
+    function carpoolMapReportRow(x){
+        return {
+        lineId: x?.lineId || x?.line_id || "",
+        name: normalizeCarpoolName(x?.name || x?.displayName || x?.performerName || ""),
+        displayName: String(x?.name || x?.displayName || x?.performerName || "").trim(),
+        attend: String(x?.attend || "").trim() || "未回答",
+        comment: String(x?.comment || "").trim(),
+        segment: x?.seg || x?.segment || "",
+        };
+    }
+
+    function carpoolLineIdOf(x){
+        return String(x?.lineId || x?.line_id || x?.userId || x?.user_id || x?.uid || "").trim();
+    }
+
+    function carpoolPickRepresentativeName(x){
+        return String(
+        x?.inputName ||
+        x?.input_name ||
+        x?.ownerName ||
+        x?.owner_name ||
+        x?.parentName ||
+        x?.parent_name ||
+        x?.guardianName ||
+        x?.guardian_name ||
+        x?.accountName ||
+        x?.account_name ||
+        x?.representativeName ||
+        x?.representative_name ||
+        ""
+        ).trim();
+    }
+
+    function buildCarpoolMemberIndexes(payload){
+        const members = Array.isArray(payload?.members) ? payload.members : [];
+        const membersByLine = new Map();
+        const memberByName = new Map();
+
+        members.forEach(m => {
+        const lid = carpoolLineIdOf(m);
+        const inputName = carpoolPickRepresentativeName(m);
+        const performerName = String(m?.performerName || m?.performer_name || m?.displayName || m?.name || "").trim();
+        const segment = m?.segment || m?.seg || "";
+
+        let mem = lid ? membersByLine.get(lid) : null;
+        if (lid && !mem) {
+            mem = {
+            lineId: lid,
+            inputName: "",
+            primaryPerformer: "",
+            segment: "",
+            };
+        }
+
+        if (mem) {
+            if (!mem.inputName && inputName) mem.inputName = inputName;
+            if (!mem.primaryPerformer && performerName) mem.primaryPerformer = performerName;
+            if (!mem.segment && segment) mem.segment = segment;
+            membersByLine.set(lid, mem);
+        }
+
+        [performerName, m?.displayName, m?.name].forEach(n => {
+            const key = normalizeCarpoolName(n);
+            if (key && !memberByName.has(key)) {
+            memberByName.set(key, {
+                lineId: lid,
+                inputName,
+                primaryPerformer: performerName,
+                segment,
+            });
+            }
+        });
+        });
+
+        return { membersByLine, memberByName };
+    }
+
+    function buildUniqueCarpoolCandidates(payload, eventKey){
+        const eventSeg =
+        payload?.segment ||
+        payload?.targetGroup ||
+        payload?.target_group ||
+        payload?.event?.targetGroup ||
+        payload?.event?.target_group ||
+        "";
+        const { membersByLine, memberByName } = buildCarpoolMemberIndexes(payload);
+
+        const participantRows = carpoolPickRows(payload)
+        .map((raw, idx) => {
+            const row = carpoolMapRow(raw);
+            const byName = memberByName.get(normalizeCarpoolName(row.name || row.displayName));
+            if (!row.lineId) row.lineId = carpoolLineIdOf(raw) || byName?.lineId || "";
+            if (!row.segment) row.segment = byName?.segment || membersByLine.get(row.lineId)?.segment || "";
+            row._sourceIndex = idx;
+            return row;
+        })
+        .filter(r => isCarpoolParticipatingAttend(r.attend))
+        .filter(r => carpoolEventMatchesSegment(r.segment, eventSeg));
+
+        const candidateMap = new Map();
+
+        participantRows.forEach(row => {
+        const lineId = String(row.lineId || "").trim();
+        const key = lineId ? `line:${lineId}` : `no-line-id:${row._sourceIndex}:${row.name || row.displayName || "unknown"}`;
+        const mem = lineId ? membersByLine.get(lineId) : null;
+        const representativeName = mem?.inputName || mem?.primaryPerformer || "";
+        const participantName = row.displayName || row.name || "(名前未設定)";
+
+        let cand = candidateMap.get(key);
+        if (!cand) {
+            cand = {
+            lineId,
+            name: normalizeCarpoolName(representativeName || participantName),
+            displayName: representativeName || participantName,
+            attend: "参加",
+            comment: "",
+            segment: row.segment,
+            participantNames: [],
+            _comments: [],
+            };
+            candidateMap.set(key, cand);
+        }
+
+        if (participantName && !cand.participantNames.includes(participantName)) {
+            cand.participantNames.push(participantName);
+        }
+        if (row.comment) {
+            if (!cand._comments.includes(row.comment)) cand._comments.push(row.comment);
+        }
+        });
+
+        const candidates = Array.from(candidateMap.values()).map(cand => {
+        cand.comment = cand._comments.length ? cand._comments.join("\n") : "";
+        delete cand._comments;
+        return cand;
+        }).sort((a, b) => String(a.displayName || a.name).localeCompare(String(b.displayName || b.name), "ja"));
+
+        return {
+        participantCount: participantRows.length,
+        candidates,
+        };
+    }
+
+    function analyzeCarpoolComment(comment){
+        const s = String(comment || "").trim();
+        if (!s) return null;
+
+        const negative = [
+        /車\s*出せ\s*ません/,
+        /車出し\s*(不可|無理|できません|出来ません)/,
+        /車は\s*出せ\s*ません/,
+        /乗せて\s*もら/,
+        /乗せてもら/,
+        /.+さんの車/,
+        /現地で/,
+        /自車で行きます/,
+        ];
+        if (negative.some(re => re.test(s))) {
+        return { level: "weak", label: "車出し候補は要確認" };
+        }
+
+        const strong = [
+        /車\s*出せ\s*ます/,
+        /車出し\s*(可能|できます|出来ます|可)/,
+        /車出しも\s*可能/,
+        /必要なら\s*車/,
+        /同乗可能/,
+        /\d+\s*人乗り/,
+        /[０-９]\s*人乗り/,
+        /軽自動車/,
+        /太鼓車/,
+        /太鼓.*車/,
+        ];
+        if (strong.some(re => re.test(s))) {
+        return { level: "strong", label: "車出し候補かも" };
+        }
+        return null;
+    }
+
+    function renderCarpoolSummary(){
+        const root = document.getElementById("carpoolSummary");
+        if (!root) return;
+
+        const participantCount = Number.isFinite(carpoolState.participantCount)
+        ? carpoolState.participantCount
+        : carpoolState.rows.length;
+        const extra = Math.max(0, Number(document.getElementById("carpoolExtraCount")?.value || 0) || 0);
+        const target = participantCount + extra;
+        let capacity = 0;
+        let drumCount = 0;
+
+        document.querySelectorAll("#view-admin-carpool .carpoolRow").forEach(row => {
+        const checked = row.querySelector(".carpoolCandidate")?.checked;
+        if (!checked) return;
+        capacity += Math.max(0, Number(row.querySelector(".carpoolCap")?.value || 0) || 0);
+        if (row.querySelector(".carpoolDrum")?.checked) drumCount += 1;
+        });
+
+        const diff = capacity - target;
+        const diffCls = diff >= 0 ? "ok" : "warn";
+        const drumOk = drumCount > 0;
+        const alert = document.getElementById("carpoolDrumAlert");
+        if (alert) alert.hidden = !carpoolState.rows.length || drumOk;
+
+        root.innerHTML = [
+        ["参加演奏者数", `${participantCount}名`, ""],
+        ["追加同行者人数", `${extra}名`, ""],
+        ["総輸送対象人数", `${target}名`, ""],
+        ["合計運搬可能人数", `${capacity}名`, ""],
+        ["差分", `${diff >= 0 ? "+" : ""}${diff}名`, diffCls],
+        ["太鼓運搬車", drumOk ? "設定あり" : "未設定", drumOk ? "ok" : "warn"],
+        ].map(([label, value, cls]) => `
+        <div class="carpoolKpi">
+            <div class="carpoolKpiLabel">${h(label)}</div>
+            <div class="carpoolKpiValue ${cls}">${h(value)}</div>
+        </div>
+        `).join("");
+    }
+
+    function setCarpoolCandidateEnabled(row, enabled){
+        row.classList.toggle("is-open", !!enabled);
+        row.querySelectorAll(".carpoolCap, .carpoolDrum, .carpoolMemo").forEach(el => {
+        el.disabled = !enabled;
+        if (!enabled) {
+            if (el.type === "checkbox") el.checked = false;
+            else if (el.classList.contains("carpoolCap")) el.value = "";
+        }
+        });
+    }
+
+    function renderCarpoolRows(){
+        const box = document.getElementById("carpoolBox");
+        if (!box) return;
+
+        if (!carpoolState.rows.length) {
+        box.innerHTML = `<div class="repCard"><div class="repNA">参加表明者がいません</div></div>`;
+        renderCarpoolSummary();
+        return;
+        }
+
+        const body = carpoolState.rows.map((p, idx) => {
+        const assist = analyzeCarpoolComment(p.comment);
+        const assistHtml = assist
+            ? `<span class="carpoolAssist ${assist.level === "weak" ? "weak" : ""}">${h(assist.label)}</span>`
+            : "";
+        return `
+        <div class="carpoolRow" data-index="${idx}">
+            <div class="carpoolCompact">
+                <div class="carpoolTopLine">
+                    <div class="carpoolCellName">
+                        <div class="carpoolName">${h(p.displayName || p.name || "(名前未設定)")}</div>
+                        ${Array.isArray(p.participantNames) && p.participantNames.length
+                            ? `<div class="carpoolParticipants">参加者: ${h(p.participantNames.join("、"))}</div>`
+                            : ""}
+                        ${assistHtml}
+                    </div>
+                    <div class="carpoolCellAttend"><span class="badge-att yes">${h(p.attend || "参加")}</span></div>
+                    <label class="carpoolCellCandidate">
+                        <input type="checkbox" class="carpoolCandidate"> 候補
+                    </label>
+                </div>
+                ${p.comment ? `<div class="carpoolCellComment"><div class="carpoolComment">${h(p.comment)}</div></div>` : ""}
+            </div>
+            <div class="carpoolDetails">
+                <div class="carpoolCellCapacity">
+                    <label class="carpoolDetailLabel">当日この車で運べる人数</label>
+                    <input type="number" min="0" step="1" inputmode="numeric" class="carpoolCap" disabled>
+                </div>
+                <label class="carpoolCellDrum">
+                    <input type="checkbox" class="carpoolDrum" disabled> 太鼓
+                </label>
+                <div class="carpoolCellMemo">
+                    <label class="carpoolDetailLabel">メモ</label>
+                    <input type="text" class="carpoolMemo" placeholder="メモ" disabled>
+                </div>
+            </div>
+        </div>
+        `;
+        }).join("");
+
+        box.innerHTML = `
+        <div class="carpoolTable">
+            <div class="carpoolHead">
+                <div>氏名</div>
+                <div>参加状況</div>
+                <div>コメント / 備考</div>
+                <div>車出し候補</div>
+                <div>当日この車で運べる人数</div>
+                <div>太鼓運搬車</div>
+                <div>メモ</div>
+            </div>
+            ${body}
+        </div>
+        `;
+        renderCarpoolSummary();
+    }
+
+    async function loadCarpoolEvents(){
+        const sel = document.getElementById("carpoolEvent");
+        const box = document.getElementById("carpoolBox");
+        if (!sel) return;
+
+        const current = sel.value;
+        sel.disabled = true;
+        sel.innerHTML = `<option value="">（読み込み中…）</option>`;
+
+        try {
+        const url = new URL("/line/schedules", D1_ORIGIN);
+        url.searchParams.set("days", "365");
+        const res = await fetch(url.toString());
+        const json = await res.json();
+        const raw = Array.isArray(json?.schedules) ? json.schedules : [];
+        const events = raw
+            .map(ev => ({
+            id: String(ev.id || ev.eventKey || ev.event_key || ev.eventId || "").trim(),
+            ymd: ev.ymd || ev.date || "",
+            time: ev.time || ev.hm || "",
+            title: ev.title || ev.name || "",
+            place: ev.place || "",
+            segment: ev.segment || ev.targetSegment || ev.target_group || ev.targetGroup || "",
+            needAttendance: ev.need_attendance ?? ev.needAttendance ?? "",
+            }))
+            .filter(ev => {
+            if (!ev.id) return false;
+            const flag = String(ev.needAttendance || "").trim().toUpperCase();
+            return flag === "Y" || flag === "1" || flag === "TRUE";
+            });
+
+        carpoolState.events = events;
+        carpoolState.eventsLoaded = true;
+        sel.innerHTML = `<option value="">（選択してください）</option>` + events.map(ev => {
+            const label = [
+            fmtYmd(ev.ymd) + (fmtTime(ev.time) ? ` ${fmtTime(ev.time)}` : ""),
+            ev.place ? `@ ${ev.place}` : "",
+            ev.title || "（無題）",
+            ].filter(Boolean).join(" ");
+            return `<option value="${h(ev.id)}">${h(label)}</option>`;
+        }).join("");
+        if (current && events.some(ev => ev.id === current)) sel.value = current;
+        if (box && !sel.value) box.textContent = "公演を選択してください";
+        } catch (e) {
+        console.error("loadCarpoolEvents error:", e);
+        sel.innerHTML = `<option value="">取得エラー</option>`;
+        if (box) box.innerHTML = `<span class="err">公演一覧の取得に失敗しました: ${h(e.message || String(e))}</span>`;
+        } finally {
+        sel.disabled = false;
+        }
+    }
+
+    async function loadCarpoolDetail(){
+        const sel = document.getElementById("carpoolEvent");
+        const box = document.getElementById("carpoolBox");
+        const eventKey = sel?.value || "";
+
+        carpoolState.rows = [];
+        carpoolState.participantCount = 0;
+        if (!eventKey) {
+        if (box) box.textContent = "公演を選択してください";
+        renderCarpoolSummary();
+        return;
+        }
+
+        const lid = await getLineId();
+        if (!lid) {
+        if (box) box.textContent = "管理者の LINE ID を取得できませんでした。LINE から開き直して再度お試しください。";
+        renderCarpoolSummary();
+        return;
+        }
+
+        if (box) box.innerHTML = `参加者を取得中… <span class="spinner"></span>`;
+
+        try {
+        const url = new URL("/line/attendance/report", D1_ORIGIN);
+        url.searchParams.set("eventKey", eventKey);
+        url.searchParams.set("lineId", lid);
+        const res = await fetch(url.toString());
+        const payload = await res.json();
+        if (!res.ok || payload?.status !== "ok") {
+            throw new Error(payload?.message || `HTTP ${res.status}`);
+        }
+
+        const built = buildUniqueCarpoolCandidates(payload, eventKey);
+        carpoolState.rows = built.candidates;
+        carpoolState.participantCount = built.participantCount;
+        renderCarpoolRows();
+        } catch (e) {
+        console.error("loadCarpoolDetail error:", e);
+        if (box) box.innerHTML = `<span class="err">参加者一覧の取得に失敗しました: ${h(e.message || String(e))}</span>`;
+        renderCarpoolSummary();
+        }
+    }
+
+    function mountCarpoolPage(){
+        if (carpoolState.mounted) return;
+        carpoolState.mounted = true;
+
+        document.getElementById("carpoolEvent")?.addEventListener("change", loadCarpoolDetail);
+        document.getElementById("carpoolExtraCount")?.addEventListener("input", renderCarpoolSummary);
+        document.getElementById("carpoolBox")?.addEventListener("input", renderCarpoolSummary);
+        document.getElementById("carpoolBox")?.addEventListener("change", e => {
+        const row = e.target?.closest?.(".carpoolRow");
+        if (row && e.target?.classList?.contains("carpoolCandidate")) {
+            setCarpoolCandidateEnabled(row, e.target.checked);
+        }
+        renderCarpoolSummary();
+        });
+    }
+
+    window.initCarpoolPage = async function(){
+        mountCarpoolPage();
+        renderCarpoolSummary();
+        if (!carpoolState.eventsLoaded) {
+        await loadCarpoolEvents();
+        }
+    };
     })();
 
 /* ===== 共通：lineId の取得／キャッシュ ===== */
