@@ -11,7 +11,9 @@
             const FRONT_VERSION = "Front v6.4.5";  // stable ver→v6.3.1, PROD v1.2.8 反映済み
             const LIFF_ID = "2008020568-2jVl00Rn";         // ←差し替え
             const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzaeqchlDJmkQGMKEYm9pQEOmp-GWgt0jhxRsO3Uq_G9GxaaE3n9p-fYcO6eprlLO5QLQ/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
-            const D1_API_BASE_URL = "https://taiko-worker-plain.fujizukadaiko.workers.dev";
+            const D1_API_BASE_URL = "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
+            // stagingは現在、LINE本人認証の疎通確認だけを行う。
+            const STAGING_AUTH_CHECK_ONLY = true;
             /*
              * ICS配信デプロイ手順:
              * 1) Apps Script をウェブアプリとしてデプロイ
@@ -3013,6 +3015,7 @@
   
     <!-- LIFF SDK -->
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="./auth-session.js"></script>
 </head>
 
 <body>
@@ -3046,6 +3049,10 @@
     <!-- ===== View: ホーム（メンバー用トップ画面） ===== -->
         <section id="view-home" data-view class="show">
             <div id="hello" class="muted"></div>
+            <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite">
+                <div id="authSessionTitle" class="sectionTitle">LINE本人認証を確認しています…</div>
+                <div id="authSessionMessage" class="muted" style="margin-top:8px;"></div>
+            </div>
             <!-- 管理メニュー（管理者のみ表示） -->
                 <details id="adminMenu" class="card adminMenuCard" style="display:none;">
                 <summary class="adminMenuSummary" aria-expanded="false">
@@ -4705,6 +4712,7 @@
     notify: true,        // ★ 追加：既定は ON
     reportMeta: [],          // 管理レポート用：軽量メタ一覧（meta=1）
     reportDetailMap: {},     // { [eventId]: 詳細レスポンス } のキャッシュ
+    authSessionStatus: "loading", // staging認証確認専用。Tokenは保持しない。
     };
 
     let registerMode = "create"; // "create" | "edit"
@@ -5371,9 +5379,62 @@
     }
     }
 /* ===== 初期化 ===== */
+    function renderStagingAuthState_(snapshot){
+        const status = String(snapshot && snapshot.status || "loading");
+        state.authSessionStatus = status;
+
+        const card = document.getElementById("authSessionCard");
+        const title = document.getElementById("authSessionTitle");
+        const message = document.getElementById("authSessionMessage");
+        const copy = window.LineAuthSession.getAuthUiCopy(
+            status,
+            snapshot && snapshot.reason,
+        );
+
+        if (card) card.style.display = "";
+        if (title) title.textContent = copy.title;
+        if (message) {
+            message.textContent = copy.message;
+            message.style.display = copy.message ? "" : "none";
+        }
+
+        // 認証確認中は認証カード以外の既存画面へ進ませない。
+        const homeView = document.getElementById("view-home");
+        if (homeView) {
+            Array.from(homeView.children).forEach(function(element){
+                element.hidden = element !== card;
+            });
+        }
+        document.querySelectorAll("[data-view]").forEach(function(view){
+            if (view.id !== "view-home") {
+                view.classList.remove("show");
+                view.hidden = true;
+            }
+        });
+        document.getElementById("feedbackFab")?.setAttribute("hidden", "");
+        setHomePrimaryButton("認証確認専用モード", true);
+    }
+
+    async function initStagingAuthCheck_(){
+        if (!window.LineAuthSession) {
+            renderStagingAuthState_({ status: "network_error" });
+            return;
+        }
+        await window.LineAuthSession.startStagingLineAuthCheck({
+            liff: window.liff,
+            liffId: LIFF_ID,
+            onState: renderStagingAuthState_,
+        });
+    }
+
     async function init(){
     try{
         $("#ver").textContent = FRONT_VERSION;
+
+        if (STAGING_AUTH_CHECK_ONLY) {
+            await initStagingAuthCheck_();
+            return;
+        }
 
         try {
     await liff.init({ liffId: LIFF_ID });
@@ -7259,6 +7320,7 @@
 
     // === DOM ロード後のイベントバインド ================================
     document.addEventListener('DOMContentLoaded', () => {
+        if (STAGING_AUTH_CHECK_ONLY) return;
         setIcsFeedUrl_();
         document.getElementById('selDays')
         ?.addEventListener('change', () => { renderSchedulesLocal(); saveFilters(); });
@@ -9727,6 +9789,7 @@
       document.addEventListener('DOMContentLoaded', init);
     
       async function init(){
+        if (STAGING_AUTH_CHECK_ONLY) return;
         // ====== 要素参照 ======
         const sec          = document.getElementById('view-custom-push');
         if (!sec) return;
@@ -10026,6 +10089,7 @@
         }
 
     document.addEventListener('DOMContentLoaded', () => {
+        if (STAGING_AUTH_CHECK_ONLY) return;
         fillEventChoices();
         applyModeUI();
 
