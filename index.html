@@ -1023,6 +1023,87 @@
             .scTitleBtn{ gap:6px; }
         }
 
+        /* staging本人認証済み・読み取り専用予定一覧 */
+        #authSessionCard{
+            max-width:100%;
+            overflow-wrap:anywhere;
+        }
+        .readOnlyScheduleSection{
+            margin-top:18px;
+        }
+        .readOnlyScheduleList{
+            display:grid;
+            gap:12px;
+            margin-top:10px;
+        }
+        .readOnlyScheduleCard{
+            min-width:0;
+            padding:14px;
+            border:1px solid var(--c-border);
+            border-radius:12px;
+            background:#fff;
+        }
+        .readOnlyScheduleTitle{
+            margin:0;
+            font-size:18px;
+            line-height:1.45;
+        }
+        .readOnlyScheduleDate{
+            margin:6px 0 0;
+            font-weight:700;
+        }
+        .readOnlyScheduleMeta{
+            display:grid;
+            gap:5px;
+            margin-top:10px;
+            font-size:14px;
+        }
+        .readOnlyScheduleMetaRow{
+            display:grid;
+            grid-template-columns:5.5em minmax(0,1fr);
+            gap:8px;
+            min-width:0;
+        }
+        .readOnlyScheduleMetaLabel{
+            font-weight:700;
+            color:var(--c-muted);
+        }
+        .readOnlyAttendanceTitle{
+            margin:14px 0 6px;
+            font-size:15px;
+        }
+        .readOnlyAttendanceList{
+            display:grid;
+            gap:6px;
+            margin:0;
+            padding:0;
+            list-style:none;
+        }
+        .readOnlyAttendanceList li{
+            display:flex;
+            justify-content:space-between;
+            gap:12px;
+            min-width:0;
+            padding-top:6px;
+            border-top:1px solid var(--c-border);
+        }
+        .readOnlyPerformerName{
+            min-width:0;
+            overflow-wrap:anywhere;
+        }
+        .readOnlyAttendanceStatus{
+            flex:0 0 auto;
+            font-weight:700;
+        }
+        .readOnlyScheduleEmpty{
+            margin:10px 0 0;
+            color:var(--c-muted);
+        }
+        @media (max-width:420px){
+            .readOnlyScheduleCard{ padding:12px; }
+            .readOnlyScheduleMetaRow{ grid-template-columns:4.8em minmax(0,1fr); }
+        }
+
     /* ===== Admin（管理画面） ===== */adminListFetch
         /* 管理アコーディオン：ラベル｜プルダウンの2列グリッド */
         .adminControls{
@@ -3051,8 +3132,12 @@
         <section id="view-home" data-view class="show">
             <div id="hello" class="muted"></div>
             <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite">
-                <div id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</div>
+                <h1 id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</h1>
                 <div id="authSessionMessage" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
+                <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
+                    <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
+                    <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
+                </section>
             </div>
             <!-- 管理メニュー（管理者のみ表示） -->
                 <details id="adminMenu" class="card adminMenuCard" style="display:none;">
@@ -5387,6 +5472,8 @@
         const card = document.getElementById("authSessionCard");
         const title = document.getElementById("authSessionTitle");
         const message = document.getElementById("authSessionMessage");
+        const scheduleSection = document.getElementById("readOnlyScheduleSection");
+        const scheduleList = document.getElementById("readOnlyScheduleList");
         const copy = window.LineAuthSession.getReadOnlyUiCopy(
             status,
             snapshot && snapshot.summary,
@@ -5397,6 +5484,27 @@
         if (message) {
             message.textContent = copy.message;
             message.style.display = copy.message ? "" : "none";
+        }
+        if (scheduleSection && scheduleList) {
+            scheduleSection.hidden = true;
+            scheduleList.textContent = "";
+            if (status === "registered_read_only" && snapshot && snapshot.viewModel) {
+                try {
+                    window.LineAuthSession.renderReadOnlySchedules_(
+                        scheduleList,
+                        snapshot.viewModel,
+                        document,
+                    );
+                    scheduleSection.hidden = false;
+                } catch (_) {
+                    const errorCopy = window.LineAuthSession.getReadOnlyUiCopy("response_error");
+                    if (title) title.textContent = errorCopy.title;
+                    if (message) {
+                        message.textContent = errorCopy.message;
+                        message.style.display = errorCopy.message ? "" : "none";
+                    }
+                }
+            }
         }
 
         // 読み取り専用モードでは、結果カード以外の既存画面へ進ませない。
