@@ -195,6 +195,7 @@
     return { ok: true, authenticated: true };
   }
 
+  function formatYmdJapanese(value, code) {
   function extractHomeSummary(body) {
     if (body.ok !== true || typeof body.registered !== "boolean") {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
