@@ -12,8 +12,9 @@
             const LIFF_ID = "2008020568-2jVl00Rn";         // ←差し替え
             const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzaeqchlDJmkQGMKEYm9pQEOmp-GWgt0jhxRsO3Uq_G9GxaaE3n9p-fYcO6eprlLO5QLQ/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
             const D1_API_BASE_URL = "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
-            // stagingは現在、LINE本人認証の疎通確認だけを行う。
-            const STAGING_AUTH_CHECK_ONLY = true;
+            // stagingは現在、本人認証済みデータの読み取り確認だけを行う。
+            // 書き込みAPI・GAS・従来画面は、このモードでは起動しない。
+            const STAGING_AUTHENTICATED_READ_ONLY = true;
             /*
              * ICS配信デプロイ手順:
              * 1) Apps Script をウェブアプリとしてデプロイ
@@ -3050,8 +3051,8 @@
         <section id="view-home" data-view class="show">
             <div id="hello" class="muted"></div>
             <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite">
-                <div id="authSessionTitle" class="sectionTitle">LINE本人認証を確認しています…</div>
-                <div id="authSessionMessage" class="muted" style="margin-top:8px;"></div>
+                <div id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</div>
+                <div id="authSessionMessage" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
             </div>
             <!-- 管理メニュー（管理者のみ表示） -->
                 <details id="adminMenu" class="card adminMenuCard" style="display:none;">
@@ -4712,7 +4713,7 @@
     notify: true,        // ★ 追加：既定は ON
     reportMeta: [],          // 管理レポート用：軽量メタ一覧（meta=1）
     reportDetailMap: {},     // { [eventId]: 詳細レスポンス } のキャッシュ
-    authSessionStatus: "loading", // staging認証確認専用。Tokenは保持しない。
+    authenticatedReadOnlyStatus: "loading", // staging読み取り専用。Tokenは保持しない。
     };
 
     let registerMode = "create"; // "create" | "edit"
@@ -5379,16 +5380,16 @@
     }
     }
 /* ===== 初期化 ===== */
-    function renderStagingAuthState_(snapshot){
+    function renderStagingReadOnlyState_(snapshot){
         const status = String(snapshot && snapshot.status || "loading");
-        state.authSessionStatus = status;
+        state.authenticatedReadOnlyStatus = status;
 
         const card = document.getElementById("authSessionCard");
         const title = document.getElementById("authSessionTitle");
         const message = document.getElementById("authSessionMessage");
-        const copy = window.LineAuthSession.getAuthUiCopy(
+        const copy = window.LineAuthSession.getReadOnlyUiCopy(
             status,
-            snapshot && snapshot.reason,
+            snapshot && snapshot.summary,
         );
 
         if (card) card.style.display = "";
@@ -5398,7 +5399,7 @@
             message.style.display = copy.message ? "" : "none";
         }
 
-        // 認証確認中は認証カード以外の既存画面へ進ませない。
+        // 読み取り専用モードでは、結果カード以外の既存画面へ進ませない。
         const homeView = document.getElementById("view-home");
         if (homeView) {
             Array.from(homeView.children).forEach(function(element){
@@ -5412,18 +5413,18 @@
             }
         });
         document.getElementById("feedbackFab")?.setAttribute("hidden", "");
-        setHomePrimaryButton("認証確認専用モード", true);
+        setHomePrimaryButton("本人認証済み・読み取り専用", true);
     }
 
-    async function initStagingAuthCheck_(){
+    async function initStagingAuthenticatedReadOnly_(){
         if (!window.LineAuthSession) {
-            renderStagingAuthState_({ status: "network_error" });
+            renderStagingReadOnlyState_({ status: "network_error" });
             return;
         }
-        await window.LineAuthSession.startStagingLineAuthCheck({
+        await window.LineAuthSession.startStagingAuthenticatedReadOnly({
             liff: window.liff,
             liffId: LIFF_ID,
-            onState: renderStagingAuthState_,
+            onState: renderStagingReadOnlyState_,
         });
     }
 
@@ -5431,8 +5432,8 @@
     try{
         $("#ver").textContent = FRONT_VERSION;
 
-        if (STAGING_AUTH_CHECK_ONLY) {
-            await initStagingAuthCheck_();
+        if (STAGING_AUTHENTICATED_READ_ONLY) {
+            await initStagingAuthenticatedReadOnly_();
             return;
         }
 
@@ -7320,7 +7321,7 @@
 
     // === DOM ロード後のイベントバインド ================================
     document.addEventListener('DOMContentLoaded', () => {
-        if (STAGING_AUTH_CHECK_ONLY) return;
+        if (STAGING_AUTHENTICATED_READ_ONLY) return;
         setIcsFeedUrl_();
         document.getElementById('selDays')
         ?.addEventListener('change', () => { renderSchedulesLocal(); saveFilters(); });
@@ -7628,9 +7629,11 @@
         }
     }
 
-        // ★ どっちでも拾えるように
-        bindAdminAutoDeadlineOnce();
-        document.addEventListener("DOMContentLoaded", bindAdminAutoDeadlineOnce);
+        // ★ どっちでも拾えるように（読み取り専用中は管理UIを初期化しない）
+        if (!STAGING_AUTHENTICATED_READ_ONLY) {
+            bindAdminAutoDeadlineOnce();
+            document.addEventListener("DOMContentLoaded", bindAdminAutoDeadlineOnce);
+        }
 
     function toDateInputFromAnyYmd(s){
     const str = String(s || "").trim();
@@ -9789,7 +9792,7 @@
       document.addEventListener('DOMContentLoaded', init);
     
       async function init(){
-        if (STAGING_AUTH_CHECK_ONLY) return;
+        if (STAGING_AUTHENTICATED_READ_ONLY) return;
         // ====== 要素参照 ======
         const sec          = document.getElementById('view-custom-push');
         if (!sec) return;
@@ -10089,7 +10092,7 @@
         }
 
     document.addEventListener('DOMContentLoaded', () => {
-        if (STAGING_AUTH_CHECK_ONLY) return;
+        if (STAGING_AUTHENTICATED_READ_ONLY) return;
         fillEventChoices();
         applyModeUI();
 
@@ -10102,6 +10105,7 @@
     /* ===== カスタム通知：テンプレート適用 & 文字数カウント ===== */
     (function(){
     function boot(){
+        if (STAGING_AUTHENTICATED_READ_ONLY) return;
         const selTpl  = document.getElementById('cp_tpl');
         const selMode = document.getElementById('cp_event');
         const bodyEl  = document.getElementById('cp_body');
@@ -10746,6 +10750,7 @@
 <script>
 /* ===== フィードバック FAB ＆送信モーダル ===== */
     document.addEventListener('DOMContentLoaded', () => {
+    if (STAGING_AUTHENTICATED_READ_ONLY) return;
     (function(){
         const ENDPOINT      = window.GAS_ENDPOINT || window.API_BASE || '';
         const LIMIT         = 300;

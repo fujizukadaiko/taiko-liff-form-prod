@@ -10,40 +10,63 @@ const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const authSource = fs.readFileSync(path.join(root, "auth-session.js"), "utf8");
 
 test("staging Workerだけを接続先にする", () => {
-  assert.match(html, /https:\/\/taiko-worker-plain-staging\.fujizukadaiko\.workers\.dev/);
-  assert.match(authSource, /https:\/\/taiko-worker-plain-staging\.fujizukadaiko\.workers\.dev/);
-  assert.doesNotMatch(html, /https:\/\/taiko-worker-plain\.fujizukadaiko\.workers\.dev/);
-  assert.doesNotMatch(authSource, /https:\/\/taiko-worker-plain\.fujizukadaiko\.workers\.dev/);
+  const staging = /https:\/\/taiko-worker-plain-staging\.fujizukadaiko\.workers\.dev/;
+  const production = /https:\/\/taiko-worker-plain\.fujizukadaiko\.workers\.dev/;
+  assert.match(html, staging);
+  assert.match(authSource, staging);
+  assert.doesNotMatch(html, production);
+  assert.doesNotMatch(authSource, production);
 });
 
-test("認証確認専用モードは既存初期化へ進まない", () => {
-  assert.match(html, /const STAGING_AUTH_CHECK_ONLY = true;/);
-  assert.match(html, /if \(STAGING_AUTH_CHECK_ONLY\) \{\s*await initStagingAuthCheck_\(\);\s*return;\s*\}/);
-  const mainInit = html.indexOf("async function init(){", html.indexOf("function initStagingAuthCheck_"));
-  const guard = html.indexOf("if (STAGING_AUTH_CHECK_ONLY)", mainInit);
+test("本人認証済み読み取り専用モードは従来初期化へ進まない", () => {
+  assert.match(html, /const STAGING_AUTHENTICATED_READ_ONLY = true;/);
+  assert.doesNotMatch(html, /STAGING_AUTH_CHECK_ONLY/);
+  assert.match(html, /if \(STAGING_AUTHENTICATED_READ_ONLY\) \{\s*await initStagingAuthenticatedReadOnly_\(\);\s*return;\s*\}/);
+  const mainInit = html.indexOf("async function init(){", html.indexOf("function initStagingAuthenticatedReadOnly_"));
+  const guard = html.indexOf("if (STAGING_AUTHENTICATED_READ_ONLY)", mainInit);
   const legacyRefresh = html.indexOf("await refreshData();", guard);
   assert.ok(mainInit >= 0 && guard > mainInit && legacyRefresh > guard);
-  assert.equal(
-    (html.match(/if \(STAGING_AUTH_CHECK_ONLY\) return;/g) || []).length,
-    3,
-    "独立した自動取得処理にも認証専用ガードが必要",
+  assert.ok(
+    (html.match(/if \(STAGING_AUTHENTICATED_READ_ONLY\) return;/g) || []).length >= 5,
+    "独立した予定・通知・feedback初期化にもread-onlyガードが必要",
   );
+  assert.match(html, /if \(!STAGING_AUTHENTICATED_READ_ONLY\) \{\s*bindAdminAutoDeadlineOnce\(\)/);
 });
 
-test("認証モジュールはTokenを永続化・記録せずno-corsを使わない", () => {
+test("通常起動はhome-summaryから始まり/auth/sessionを重複しない", () => {
+  const start = authSource.indexOf("async function startStagingAuthenticatedReadOnly");
+  const end = authSource.indexOf("\n  return {", start);
+  const readOnlyFlow = authSource.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(readOnlyFlow, /fetchHomeSummary_/);
+  assert.match(readOnlyFlow, /fetchAttendanceSummary_/);
+  assert.doesNotMatch(readOnlyFlow, /verifyLineSession_|\/auth\/session/);
+
+  assert.match(authSource, /"\/line\/home-summary"/);
+  assert.match(authSource, /"\/line\/attendance\/all"/);
+  assert.match(authSource, /body: "\{\}"/);
+  assert.doesNotMatch(authSource, /lineId|line_id|lineUserId|memberId|memberIds/);
+});
+
+test("新しい認証通信はTokenを永続化・記録せずno-corsを使わない", () => {
   assert.doesNotMatch(authSource, /localStorage|sessionStorage|document\.cookie/);
   assert.doesNotMatch(authSource, /console\.(?:log|info|warn|error)|no-cors/);
-  assert.doesNotMatch(authSource, /getDecodedIDToken|lineId\s*[=:]/);
+  assert.doesNotMatch(authSource, /getDecodedIDToken/);
   assert.match(authSource, /liff\.getIDToken\(\)/);
+  assert.match(authSource, /mode: "cors"/);
+  assert.match(authSource, /cache: "no-store"/);
+  assert.match(authSource, /credentials: "omit"/);
 });
 
-test("認証UIと専用スクリプトが配置されている", () => {
+test("読み取り専用UIは従来画面とfeedbackを隠す", () => {
   assert.match(html, /<script src="\.\/auth-session\.js"><\/script>/);
   assert.match(html, /id="authSessionCard"/);
   assert.match(html, /id="authSessionTitle"/);
   assert.match(html, /id="authSessionMessage"/);
+  assert.match(html, /getReadOnlyUiCopy/);
   assert.match(html, /element\.hidden = element !== card/);
   assert.match(html, /getElementById\("feedbackFab"\).*setAttribute\("hidden"/);
+  assert.match(html, /本人認証済み・読み取り専用/);
 });
 
 test("index.htmlのインラインJavaScriptが構文上有効", () => {
