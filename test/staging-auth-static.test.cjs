@@ -63,10 +63,33 @@ test("読み取り専用UIは従来画面とfeedbackを隠す", () => {
   assert.match(html, /id="authSessionCard"/);
   assert.match(html, /id="authSessionTitle"/);
   assert.match(html, /id="authSessionMessage"/);
+  assert.match(html, /id="readOnlyScheduleSection"/);
+  assert.match(html, /id="readOnlyScheduleList"/);
   assert.match(html, /getReadOnlyUiCopy/);
+  assert.match(html, /renderReadOnlySchedules_/);
   assert.match(html, /element\.hidden = element !== card/);
   assert.match(html, /getElementById\("feedbackFab"\).*setAttribute\("hidden"/);
   assert.match(html, /本人認証済み・読み取り専用/);
+});
+
+test("読み取り専用カード描画は操作要素・submit・未エスケープinnerHTMLを使わない", () => {
+  const start = authSource.indexOf("function renderReadOnlySchedules_");
+  const end = authSource.indexOf("\n  function getAuthUiCopy", start);
+  assert.ok(start >= 0 && end > start);
+  const renderer = authSource.slice(start, end);
+  assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|outerHTML/);
+  assert.doesNotMatch(renderer, /createElement\(["'](?:input|select|textarea|button|form)["']\)/i);
+  assert.doesNotMatch(renderer, /addEventListener\(["']submit["']/i);
+  assert.match(renderer, /textContent/);
+});
+
+test("通常読み取りフローは許可された2 APIだけを使用し書き込みへ進まない", () => {
+  const start = authSource.indexOf("async function startStagingAuthenticatedReadOnly");
+  const end = authSource.indexOf("\n  return {", start);
+  const flow = authSource.slice(start, end);
+  assert.doesNotMatch(flow, /attendance\/submit|\/line\/schedules|events\/by-date/);
+  assert.doesNotMatch(flow, /admin|feedback|API_ENDPOINT/);
+  assert.doesNotMatch(flow, /localStorage|sessionStorage|indexedDB|document\.cookie/);
 });
 
 test("index.htmlのインラインJavaScriptが構文上有効", () => {

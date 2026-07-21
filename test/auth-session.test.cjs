@@ -44,17 +44,76 @@ function fetchDependencies(fetchImpl, extra = {}) {
   };
 }
 
+class FakeElement {
+  constructor(tagName) {
+    this.tagName = String(tagName).toUpperCase();
+    this.className = "";
+    this.attributes = {};
+    this.childNodes = [];
+    this._text = "";
+  }
+
+  set textContent(value) {
+    this._text = String(value ?? "");
+    this.childNodes = [];
+  }
+
+  get textContent() {
+    return this._text + this.childNodes.map((child) => child.textContent).join("");
+  }
+
+  appendChild(child) {
+    this.childNodes.push(child);
+    return child;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[String(name)] = String(value);
+  }
+}
+
+function fakeDocument() {
+  return { createElement(tagName) { return new FakeElement(tagName); } };
+}
+
+function collectTags(root) {
+  return [root.tagName, ...root.childNodes.flatMap(collectTags)];
+}
+
 function registeredHome() {
   return {
     ok: true,
     registered: true,
     member: {
       performers: [
-        { performerName: "本人1" },
-        { performerName: "本人2" },
+        { performerName: "本人1", segment: "大人の部" },
+        { performerName: "本人2", segment: "子どもの部" },
       ],
     },
-    events: [{ eventKey: "event-1" }, { eventKey: "event-2" }],
+    events: [
+      {
+        eventKey: "event-1",
+        date: "20260726",
+        title: "予定1",
+        targetGroup: "both",
+        time: "17:15",
+        place: "会場1",
+        deadlineDate: "20260725",
+        status: "active",
+        note: "",
+      },
+      {
+        eventKey: "event-2",
+        date: "20260727",
+        title: "予定2",
+        targetGroup: "adult",
+        time: "",
+        place: "",
+        deadlineDate: null,
+        status: "active",
+        note: "",
+      },
+    ],
   };
 }
 
@@ -197,6 +256,200 @@ test("登録済み本人の読み取りはstaging Workerへ安全な正式reques
   }
 });
 
+test("本人向け予定を全件保持し、日付・時刻順の読み取り専用モデルへ変換する", async () => {
+  const home = registeredHome();
+  home.events = [
+    { ...home.events[0], eventKey: "event-5", date: "20260730", title: "予定5", time: "09:00" },
+    { ...home.events[0], eventKey: "event-3", date: "20260727", title: "予定3", time: "18:00" },
+    { ...home.events[0], eventKey: "event-1", date: "20260726", title: "予定1", time: "17:15" },
+    { ...home.events[0], eventKey: "event-4", date: "20260727", title: "予定4", time: "10:00" },
+    { ...home.events[0], eventKey: "event-2", date: "20260726", title: "予定2", time: "19:00" },
+  ];
+  let requestCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? jsonResponse(home)
+        : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+    }),
+  });
+
+  assert.equal(result.status, auth.AUTH_STATES.REGISTERED_READ_ONLY);
+  assert.equal(result.viewModel.events.length, 5);
+  assert.deepEqual(
+    result.viewModel.events.map((event) => event.title),
+    ["予定1", "予定2", "予定4", "予定3", "予定5"],
+  );
+  assert.equal(result.viewModel.events[0].dateLabel, "2026年7月26日（日）");
+  assert.equal(result.viewModel.events[0].timeLabel, "17:15");
+  assert.equal(result.viewModel.events[0].place, "会場1");
+  assert.equal(result.viewModel.events[0].targetGroupLabel, "両方");
+  for (const event of result.viewModel.events) {
+    assert.deepEqual(
+      event.performers.map((performer) => performer.attendanceLabel),
+      ["未回答", "未回答"],
+    );
+  }
+  const container = new FakeElement("div");
+  assert.equal(auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument()), 5);
+  assert.equal(collectTags(container).filter((tag) => tag === "ARTICLE").length, 5);
+});
+
+test("出欠statusを正式な日本語表示へ変換し、本人メンバーだけを保持する", async () => {
+  let requestCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? jsonResponse(registeredHome())
+        : jsonResponse(registeredAttendance());
+    }),
+  });
+  assert.deepEqual(
+    result.viewModel.events[0].performers,
+    [
+      { performerName: "本人1", attendanceLabel: "出席" },
+      { performerName: "本人2", attendanceLabel: "未回答" },
+    ],
+  );
+  assert.deepEqual(
+    result.viewModel.events[1].performers,
+    [
+      { performerName: "本人1", attendanceLabel: "欠席" },
+      { performerName: "本人2", attendanceLabel: "出席" },
+    ],
+  );
+  assert.equal(JSON.stringify(result.viewModel).includes("lineId"), false);
+  assert.equal(JSON.stringify(result.viewModel).includes("memberId"), false);
+});
+
+test("予定0件は正常な読み取り専用空状態として扱う", async () => {
+  const home = registeredHome();
+  home.events = [];
+  let requestCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? jsonResponse(home)
+        : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+    }),
+  });
+  assert.equal(result.status, auth.AUTH_STATES.REGISTERED_READ_ONLY);
+  assert.equal(result.summary.eventCount, 0);
+  assert.deepEqual(result.viewModel.events, []);
+});
+
+test("重複・不正予定と未知の出欠statusをresponse_errorにする", async (t) => {
+  const homeCases = [
+    function duplicateEvent() {
+      const home = registeredHome();
+      home.events.push({ ...home.events[0] });
+      return home;
+    },
+    function invalidDate() {
+      const home = registeredHome();
+      home.events[0].date = "20260230";
+      return home;
+    },
+    function invalidTime() {
+      const home = registeredHome();
+      home.events[0].time = "25:00";
+      return home;
+    },
+    function invalidSegment() {
+      const home = registeredHome();
+      home.events[0].targetGroup = "unknown";
+      return home;
+    },
+  ];
+  for (const makeHome of homeCases) {
+    await t.test(makeHome.name, async () => {
+      let fetchCount = 0;
+      const result = await auth.startStagingAuthenticatedReadOnly({
+        liff: makeLiff(),
+        liffId: "test-liff-id",
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return jsonResponse(makeHome());
+        }),
+      });
+      assert.equal(result.status, auth.AUTH_STATES.RESPONSE_ERROR);
+      assert.equal(fetchCount, 1);
+    });
+  }
+
+  for (const row of [
+    { performerName: "本人1", attend: "不明" },
+    { performerName: "他人", attend: "参加" },
+  ]) {
+    await t.test(`attendance:${row.attend}:${row.performerName}`, async () => {
+      let fetchCount = 0;
+      const result = await auth.startStagingAuthenticatedReadOnly({
+        liff: makeLiff(),
+        liffId: "test-liff-id",
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return fetchCount === 1
+            ? jsonResponse(registeredHome())
+            : jsonResponse({
+                status: "ok",
+                ok: true,
+                registered: true,
+                map: { "event-1": [row] },
+              });
+        }),
+      });
+      assert.equal(result.status, auth.AUTH_STATES.RESPONSE_ERROR);
+    });
+  }
+});
+
+test("予定カードはtextContentだけで安全に描画し、操作要素を生成しない", () => {
+  const documentImpl = fakeDocument();
+  const container = new FakeElement("div");
+  const htmlLikeTitle = '<img src=x onerror="throw new Error(1)">';
+  const htmlLikePlace = "<script>throw new Error(2)</script>";
+  const htmlLikeName = "<b>本人</b>";
+  const count = auth.renderReadOnlySchedules_(container, {
+    events: [{
+      title: htmlLikeTitle,
+      dateLabel: "2026年7月26日（日）",
+      timeLabel: "17:15",
+      place: htmlLikePlace,
+      targetGroupLabel: "両方",
+      deadlineLabel: "2026年7月25日（土）",
+      status: "active",
+      note: "",
+      performers: [{ performerName: htmlLikeName, attendanceLabel: "未回答" }],
+    }],
+  }, documentImpl);
+
+  assert.equal(count, 1);
+  assert.match(container.textContent, /<img src=x/);
+  assert.match(container.textContent, /<script>/);
+  assert.match(container.textContent, /<b>本人<\/b>/);
+  const tags = collectTags(container);
+  for (const forbidden of ["IMG", "SCRIPT", "B", "INPUT", "SELECT", "TEXTAREA", "BUTTON", "FORM"]) {
+    assert.equal(tags.includes(forbidden), false, forbidden);
+  }
+  assert.equal(container.attributes.role, "list");
+});
+
+test("予定0件のDOMは正常な空状態だけを表示する", () => {
+  const container = new FakeElement("div");
+  const count = auth.renderReadOnlySchedules_(container, { events: [] }, fakeDocument());
+  assert.equal(count, 0);
+  assert.equal(container.textContent, "現在、回答対象の予定はありません。");
+});
+
 test("未登録は正常状態で、attendance/allを呼ばない", async () => {
   let fetchCount = 0;
   const states = [];
@@ -323,7 +576,8 @@ test("UIは全状態を区別し、非機密な件数だけを表示する", () 
 
   assert.match(copies.loading.title, /安全に確認/);
   assert.match(copies.unregistered.message, /まだあなたのメンバー情報が登録されていません/);
-  assert.match(copies.registered.message, /読み取り専用/);
+  assert.match(copies.registered.title, /読み取り専用/);
+  assert.match(copies.registered.message, /表示確認のみ/);
   assert.match(copies.registered.message, /メンバー件数: 2/);
   assert.match(copies.unauthenticated.title, /本人認証に失敗/);
   assert.match(copies.database.title, /データベース/);
