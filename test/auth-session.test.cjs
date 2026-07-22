@@ -51,6 +51,13 @@ class FakeElement {
     this.attributes = {};
     this.childNodes = [];
     this._text = "";
+    this.listeners = {};
+    this.hidden = false;
+    this.checked = false;
+    this.type = "";
+    this.id = "";
+    this.name = "";
+    this.value = "";
   }
 
   set textContent(value) {
@@ -70,6 +77,18 @@ class FakeElement {
   setAttribute(name, value) {
     this.attributes[String(name)] = String(value);
   }
+
+  addEventListener(type, listener) {
+    const name = String(type);
+    if (!this.listeners[name]) this.listeners[name] = [];
+    this.listeners[name].push(listener);
+  }
+
+  dispatch(type) {
+    for (const listener of this.listeners[String(type)] || []) {
+      listener({ type: String(type), target: this });
+    }
+  }
 }
 
 function fakeDocument() {
@@ -78,6 +97,10 @@ function fakeDocument() {
 
 function collectTags(root) {
   return [root.tagName, ...root.childNodes.flatMap(collectTags)];
+}
+
+function collectElements(root) {
+  return [root, ...root.childNodes.flatMap(collectElements)];
 }
 
 function registeredHome() {
@@ -150,6 +173,18 @@ function registeredAttendance() {
       ],
     },
   };
+}
+
+async function registeredReadOnlyResult(home = registeredHome(), attendance = registeredAttendance()) {
+  let requestCount = 0;
+  return auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      requestCount += 1;
+      return requestCount === 1 ? jsonResponse(home) : jsonResponse(attendance);
+    }),
+  });
 }
 
 test("LIFF init完了後にだけIDトークンと本人データを取得する", async () => {
@@ -316,7 +351,9 @@ test("本人向け予定を全件保持し、日付・時刻順の読み取り�
     );
   }
   const container = new FakeElement("div");
-  assert.equal(auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument()), 5);
+  assert.equal(auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+  }), 5);
   assert.equal(collectTags(container).filter((tag) => tag === "ARTICLE").length, 5);
 });
 
@@ -338,13 +375,17 @@ test("出欠statusを正式な日本語表示へ変換し、本人メンバー�
       {
         performerName: "本人1",
         attendanceLabel: "出席",
+        initialAttend: "参加",
         attendanceWriteAllowed: true,
+        attendanceWriteReason: "open",
         attendanceWriteLabel: "回答可能",
       },
       {
         performerName: "本人2",
         attendanceLabel: "未回答",
+        initialAttend: "未回答",
         attendanceWriteAllowed: true,
+        attendanceWriteReason: "open",
         attendanceWriteLabel: "回答可能",
       },
     ],
@@ -355,13 +396,17 @@ test("出欠statusを正式な日本語表示へ変換し、本人メンバー�
       {
         performerName: "本人1",
         attendanceLabel: "欠席",
+        initialAttend: "欠席",
         attendanceWriteAllowed: true,
+        attendanceWriteReason: "open",
         attendanceWriteLabel: "回答可能",
       },
       {
         performerName: "本人2",
         attendanceLabel: "出席",
+        initialAttend: "参加",
         attendanceWriteAllowed: false,
+        attendanceWriteReason: "target_group_mismatch",
         attendanceWriteLabel: "この予定の対象外",
       },
     ],
@@ -621,6 +666,293 @@ test("すべての回答可否理由を安全な日本語へ変換する", async
   }
 });
 
+test("回答可能な本人演奏者だけにradio draft UIを生成する", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  const summaries = [];
+  assert.equal(auth.renderReadOnlySchedules_(
+    container,
+    result.viewModel,
+    fakeDocument(),
+    {
+      enableDraftPreview: true,
+      onDraftSummary(summary) { summaries.push(summary); },
+    },
+  ), 2);
+
+  const elements = collectElements(container);
+  const radios = elements.filter((element) => element.tagName === "INPUT");
+  const fieldsets = elements.filter((element) => element.tagName === "FIELDSET");
+  const legends = elements.filter((element) => element.tagName === "LEGEND");
+  const labels = elements.filter((element) => element.tagName === "LABEL");
+  const resets = elements.filter((element) => element.tagName === "BUTTON");
+
+  // event-1は2人、event-2は対象区分が合う1人だけが各3選択肢を持つ。
+  assert.equal(fieldsets.length, 3);
+  assert.equal(radios.length, 9);
+  assert.equal(labels.length, 9);
+  assert.equal(resets.length, 3);
+  assert.ok(legends.every((legend) => /の出欠$/.test(legend.textContent)));
+  assert.ok(radios.every((radio) => radio.type === "radio"));
+  assert.ok(resets.every((button) => button.type === "button"));
+  assert.deepEqual(summaries[0], { changedEventCount: 0, changedPerformerCount: 0 });
+
+  // 参加と欠席は初期選択、未回答の本人2は未選択。
+  assert.equal(radios.filter((radio) => radio.checked).length, 2);
+  assert.ok(radios.some((radio) => radio.checked && radio.value === "参加"));
+  assert.ok(radios.some((radio) => radio.checked && radio.value === "欠席"));
+  assert.deepEqual(new Set(radios.map((radio) => radio.value)), new Set(["参加", "欠席", "未定"]));
+
+  for (const radio of radios) {
+    assert.doesNotMatch(`${radio.id}\n${radio.name}`, /event-[12]|本人[12]/);
+  }
+  for (const label of labels) {
+    assert.ok(radios.some((radio) => radio.id === label.attributes.for));
+  }
+  for (const element of elements) {
+    assert.equal(Object.keys(element.attributes).some((name) => name.startsWith("data-")), false);
+  }
+  assert.match(container.textContent, /この予定の対象外/);
+  assert.match(container.textContent, /出席/);
+  assert.match(container.textContent, /欠席/);
+});
+
+test("回答不可理由ごとに入力DOMを生成せず現在の出欠を維持する", async () => {
+  const reasons = ["viewer_only", "segment_missing", "target_group_mismatch"];
+  for (const reason of reasons) {
+    const result = await registeredReadOnlyResult();
+    const model = JSON.parse(JSON.stringify(result.viewModel));
+    model.events[0].performers[0].attendanceWriteAllowed = false;
+    model.events[0].performers[0].attendanceWriteReason = reason;
+    model.events[0].performers[0].attendanceWriteLabel = reason;
+    const container = new FakeElement("div");
+    auth.renderReadOnlySchedules_(container, model, fakeDocument(), {
+      enableDraftPreview: true,
+    });
+    const elements = collectElements(container);
+    // 元の3回答可能演奏者から1人を除外するため、2組×3 radio。
+    assert.equal(elements.filter((element) => element.tagName === "INPUT").length, 6, reason);
+    assert.match(container.textContent, /出席/);
+  }
+
+  const result = await registeredReadOnlyResult();
+  const model = JSON.parse(JSON.stringify(result.viewModel));
+  model.events[0].eventAllowed = false;
+  model.events[0].eventWriteReason = "deadline_passed";
+  model.events[0].eventWriteLabel = "回答期限終了";
+  model.events[0].performers.forEach((performer) => {
+    performer.attendanceWriteAllowed = false;
+    performer.attendanceWriteReason = "deadline_passed";
+    performer.attendanceWriteLabel = "回答期限終了";
+  });
+  const container = new FakeElement("div");
+  auth.renderReadOnlySchedules_(container, model, fakeDocument(), {
+    enableDraftPreview: true,
+  });
+  assert.equal(
+    collectElements(container).filter((element) => element.tagName === "INPUT").length,
+    3,
+  );
+  assert.match(container.textContent, /回答期限終了/);
+  assert.match(container.textContent, /出席/);
+});
+
+test("現在値を初期選択へ反映し未回答・データなしは未選択にする", async () => {
+  const result = await registeredReadOnlyResult();
+  const basePerformer = result.viewModel.events[0].performers[0];
+  for (const [initialAttend, expected] of [
+    ["参加", "参加"],
+    ["欠席", "欠席"],
+    ["未定", "未定"],
+    ["未回答", ""],
+    ["データなし", ""],
+  ]) {
+    const model = {
+      events: [{
+        ...result.viewModel.events[0],
+        performers: [{
+          ...basePerformer,
+          initialAttend,
+          attendanceLabel: initialAttend === "参加" ? "出席" : initialAttend,
+        }],
+      }],
+    };
+    const container = new FakeElement("div");
+    auth.renderReadOnlySchedules_(container, model, fakeDocument(), {
+      enableDraftPreview: true,
+    });
+    const checked = collectElements(container).filter(
+      (element) => element.tagName === "INPUT" && element.checked,
+    );
+    assert.equal(checked.length, expected ? 1 : 0, initialAttend);
+    if (expected) assert.equal(checked[0].value, expected);
+  }
+});
+
+test("draft変更・元回答への復帰・取り消しをメモリ内だけで管理する", async () => {
+  const result = await registeredReadOnlyResult();
+  const state = auth.createAttendanceDraftState_(result.viewModel.events);
+  assert.equal(state.size, 3);
+  assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
+    changedEventCount: 0,
+    changedPerformerCount: 0,
+  });
+
+  let changed = auth.setAttendanceDraftSelection_(state, "0:0", "欠席");
+  assert.equal(changed.initialAttend, "参加");
+  assert.equal(changed.selectedAttend, "欠席");
+  assert.equal(changed.changed, true);
+  assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
+    changedEventCount: 1,
+    changedPerformerCount: 1,
+  });
+
+  changed = auth.setAttendanceDraftSelection_(state, "0:0", "参加");
+  assert.equal(changed.changed, false);
+  auth.setAttendanceDraftSelection_(state, "0:1", "未定");
+  assert.equal(state.get("0:1").initialAttend, "未回答");
+  assert.equal(state.get("0:1").changed, true);
+  const restored = auth.resetAttendanceDraftSelection_(state, "0:1");
+  assert.equal(restored.selectedAttend, "未回答");
+  assert.equal(restored.changed, false);
+});
+
+test("radio操作と変更取り消しが集計と初期選択を更新する", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  const summaries = [];
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+    onDraftSummary(summary) { summaries.push(summary); },
+  });
+  const elements = collectElements(container);
+  const firstGroup = elements.find((element) => element.tagName === "FIELDSET");
+  const groupElements = collectElements(firstGroup);
+  const radios = groupElements.filter((element) => element.tagName === "INPUT");
+  const reset = groupElements.find((element) => element.tagName === "BUTTON");
+  const absence = radios.find((radio) => radio.value === "欠席");
+
+  radios.forEach((radio) => { radio.checked = false; });
+  absence.checked = true;
+  absence.dispatch("change");
+  assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
+  assert.equal(reset.hidden, false);
+
+  reset.dispatch("click");
+  assert.deepEqual(summaries.at(-1), { changedEventCount: 0, changedPerformerCount: 0 });
+  assert.equal(reset.hidden, true);
+  assert.equal(radios.find((radio) => radio.value === "参加").checked, true);
+});
+
+test("draft再描画でDOM・listenerを重複させずHTML風の本人名もtextContentで扱う", async () => {
+  const result = await registeredReadOnlyResult();
+  const model = JSON.parse(JSON.stringify(result.viewModel));
+  const htmlLikeName = '<img src=x onerror="throw new Error(1)">';
+  model.events.forEach((event) => {
+    event.performers = event.performers.filter((_, index) => index === 0);
+    event.performers[0].performerName = htmlLikeName;
+  });
+  const container = new FakeElement("div");
+  const documentImpl = fakeDocument();
+  const options = { enableDraftPreview: true };
+  auth.renderReadOnlySchedules_(container, model, documentImpl, options);
+  auth.renderReadOnlySchedules_(container, model, documentImpl, options);
+
+  const elements = collectElements(container);
+  assert.equal(elements.filter((element) => element.tagName === "ARTICLE").length, 2);
+  assert.equal(elements.filter((element) => element.tagName === "INPUT").length, 6);
+  assert.equal(elements.filter((element) => element.tagName === "IMG").length, 0);
+  assert.match(container.textContent, /<img src=x/);
+  for (const input of elements.filter((element) => element.tagName === "INPUT")) {
+    assert.equal((input.listeners.change || []).length, 1);
+    assert.doesNotMatch(`${input.id}\n${input.name}`, /<img|onerror/);
+  }
+});
+
+test("変更された本人演奏者だけをevent別merge payloadへ変換する", async () => {
+  const result = await registeredReadOnlyResult();
+  const state = auth.createAttendanceDraftState_(result.viewModel.events);
+  auth.setAttendanceDraftSelection_(state, "0:0", "欠席");
+  auth.setAttendanceDraftSelection_(state, "0:1", "参加");
+  auth.setAttendanceDraftSelection_(state, "1:0", "未定");
+
+  const payloads = auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state);
+  assert.deepEqual(payloads, [
+    {
+      eventKey: "event-1",
+      mode: "merge",
+      items: [
+        { performerName: "本人1", attend: "欠席" },
+        { performerName: "本人2", attend: "参加" },
+      ],
+    },
+    {
+      eventKey: "event-2",
+      mode: "merge",
+      items: [{ performerName: "本人1", attend: "未定" }],
+    },
+  ]);
+  assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
+    changedEventCount: 2,
+    changedPerformerCount: 3,
+  });
+  const serialized = JSON.stringify(payloads);
+  assert.doesNotMatch(serialized, /lineId|line_id|lineUserId|userId|memberId|token|comment/);
+  assert.deepEqual(
+    new Set(payloads.flatMap((payload) => payload.items.map((item) => item.attend))),
+    new Set(["参加", "欠席", "未定"]),
+  );
+
+  auth.resetAttendanceDraftSelection_(state, "0:1");
+  const afterReset = auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state);
+  assert.deepEqual(afterReset[0].items, [{ performerName: "本人1", attend: "欠席" }]);
+});
+
+test("draft payloadは不正値・不整合・1予定11件を安全に拒否する", async () => {
+  const result = await registeredReadOnlyResult();
+  const state = auth.createAttendanceDraftState_(result.viewModel.events);
+  assert.throws(
+    () => auth.setAttendanceDraftSelection_(state, "0:0", "未回答"),
+    /invalid_draft_selection/,
+  );
+  state.get("0:0").changed = true;
+  assert.throws(
+    () => auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state),
+    /invalid_draft_state/,
+  );
+
+  const performers = Array.from({ length: 11 }, (_, index) => ({
+    performerName: `演奏者${index}`,
+    initialAttend: "未回答",
+    attendanceLabel: "未回答",
+    attendanceWriteAllowed: true,
+    attendanceWriteReason: "open",
+    attendanceWriteLabel: "回答可能",
+  }));
+  const events = [{
+    eventKey: "validated-event",
+    eventAllowed: true,
+    eventWriteReason: "open",
+    performers,
+  }];
+  const oversized = auth.createAttendanceDraftState_(events);
+  for (let index = 0; index < performers.length; index += 1) {
+    auth.setAttendanceDraftSelection_(oversized, `0:${index}`, "参加");
+  }
+  assert.throws(
+    () => auth.buildAuthenticatedAttendanceDraftPayloads_(events, oversized),
+    /draft_items_limit_exceeded/,
+  );
+
+  const duplicateEvents = JSON.parse(JSON.stringify(result.viewModel.events));
+  duplicateEvents[0].performers[1].performerName =
+    duplicateEvents[0].performers[0].performerName;
+  assert.throws(
+    () => auth.createAttendanceDraftState_(duplicateEvents),
+    /invalid_draft_source/,
+  );
+});
+
 test("予定カードはtextContentだけで安全に描画し、操作要素を生成しない", () => {
   const documentImpl = fakeDocument();
   const container = new FakeElement("div");
@@ -638,11 +970,14 @@ test("予定カードはtextContentだけで安全に描画し、操作要素を
       status: "active",
       note: "",
       eventAllowed: false,
+      eventWriteReason: "deadline_passed",
       eventWriteLabel: '<b onclick="throw new Error(3)">回答不可</b>',
       performers: [{
         performerName: htmlLikeName,
         attendanceLabel: "未回答",
+        initialAttend: "未回答",
         attendanceWriteAllowed: false,
+        attendanceWriteReason: "deadline_passed",
         attendanceWriteLabel: '<img src=x onerror="throw new Error(4)">',
       }],
     }],

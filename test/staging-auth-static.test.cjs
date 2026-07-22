@@ -20,6 +20,7 @@ test("staging Workerだけを接続先にする", () => {
 
 test("本人認証済み読み取り専用モードは従来初期化へ進まない", () => {
   assert.match(html, /const STAGING_AUTHENTICATED_READ_ONLY = true;/);
+  assert.match(html, /const STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY = true;/);
   assert.doesNotMatch(html, /STAGING_AUTH_CHECK_ONLY/);
   assert.match(html, /if \(STAGING_AUTHENTICATED_READ_ONLY\) \{\s*await initStagingAuthenticatedReadOnly_\(\);\s*return;\s*\}/);
   const mainInit = html.indexOf("async function init(){", html.indexOf("function initStagingAuthenticatedReadOnly_"));
@@ -72,14 +73,17 @@ test("読み取り専用UIは従来画面とfeedbackを隠す", () => {
   assert.match(html, /本人認証済み・読み取り専用/);
 });
 
-test("読み取り専用カード描画は操作要素・submit・未エスケープinnerHTMLを使わない", () => {
+test("draft preview以外の書き込みUI・submit・未エスケープinnerHTMLを使わない", () => {
   const start = authSource.indexOf("function renderReadOnlySchedules_");
   const end = authSource.indexOf("\n  function getAuthUiCopy", start);
   assert.ok(start >= 0 && end > start);
   const renderer = authSource.slice(start, end);
   assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|outerHTML/);
-  assert.doesNotMatch(renderer, /createElement\(["'](?:input|select|textarea|button|form)["']\)/i);
+  assert.doesNotMatch(renderer, /createElement\(["'](?:select|textarea|form)["']\)/i);
   assert.doesNotMatch(renderer, /addEventListener\(["']submit["']/i);
+  assert.match(renderer, /radio\.type = "radio"/);
+  assert.match(renderer, /reset\.type = "button"/);
+  assert.match(renderer, /enableDraftPreview/);
   assert.match(renderer, /textContent/);
 });
 
@@ -99,8 +103,33 @@ test("attendanceWriteは読み取り専用表示にだけ使用する", () => {
   assert.match(authSource, /performerAllowedEventCount/);
   assert.match(authSource, /予定の回答可否/);
   assert.match(authSource, /回答可否:/);
-  assert.doesNotMatch(authSource, /createElement\(["'](?:input|select|textarea|button|form)["']\)/i);
+  assert.doesNotMatch(authSource, /createElement\(["'](?:select|textarea|form)["']\)/i);
   assert.doesNotMatch(authSource, /addEventListener\(["']submit["']/i);
+});
+
+test("draft previewはローカル操作だけで送信経路を持たない", () => {
+  assert.match(authSource, /buildAuthenticatedAttendanceDraftPayloads_/);
+  assert.match(authSource, /createAttendanceDraftState_/);
+  assert.match(authSource, /変更を取り消す/);
+  assert.match(html, /選択内容はサーバーへ送信されません/);
+  assert.match(html, /再読み込みすると、選択内容は消えます/);
+  assert.doesNotMatch(authSource, /submit-authenticated|attendance\/submit/);
+  assert.doesNotMatch(authSource, /XMLHttpRequest|sendBeacon/);
+  assert.doesNotMatch(authSource, /localStorage|sessionStorage|indexedDB|document\.cookie/);
+  assert.doesNotMatch(authSource, /beforeunload|visibilitychange|pagehide/);
+  assert.doesNotMatch(authSource, /console\.(?:log|info|warn|error)/);
+});
+
+test("draft DOMは安全な連番を使いidentityをdata属性へ保存しない", () => {
+  const start = authSource.indexOf("function renderReadOnlySchedules_");
+  const end = authSource.indexOf("\n  function getAuthUiCopy", start);
+  const renderer = authSource.slice(start, end);
+  assert.match(renderer, /attendance-draft-\$\{eventIndex\}-\$\{performerIndex\}/);
+  assert.doesNotMatch(renderer, /dataset|setAttribute\(["']data-/);
+  assert.doesNotMatch(renderer, /radio\.(?:id|name)\s*=.*eventKey|radio\.(?:id|name)\s*=.*performerName/);
+  assert.match(renderer, /createElement\("fieldset"\)/);
+  assert.match(renderer, /createElement\("legend"\)/);
+  assert.match(renderer, /label\.setAttribute\("for", radioId\)/);
 });
 
 test("index.htmlのインラインJavaScriptが構文上有効", () => {

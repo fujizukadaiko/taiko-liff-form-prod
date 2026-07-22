@@ -206,7 +206,17 @@
     ["欠席", "欠席"],
     ["未定", "未定"],
     ["未回答", "未回答"],
+    ["データなし", "未回答"],
   ]);
+  const ATTENDANCE_DRAFT_OPTIONS = Object.freeze([
+    Object.freeze({ label: "出席", attend: "参加" }),
+    Object.freeze({ label: "欠席", attend: "欠席" }),
+    Object.freeze({ label: "未定", attend: "未定" }),
+  ]);
+  const ATTENDANCE_DRAFT_VALUES = new Set(
+    ATTENDANCE_DRAFT_OPTIONS.map((option) => option.attend),
+  );
+  const MAX_DRAFT_ITEMS_PER_EVENT = 10;
   const EVENT_WRITE_REASONS = new Set([
     "open",
     "inactive",
@@ -584,6 +594,7 @@
         return [performer.performerName, performer];
       }));
       return {
+        eventKey: event.eventKey,
         title: event.title,
         dateLabel: formatYmdJapanese(event.date, "invalid_event_date"),
         timeLabel: event.time,
@@ -595,6 +606,7 @@
         status: event.status,
         note: event.note,
         eventAllowed: event.attendanceWrite.eventAllowed,
+        eventWriteReason: event.attendanceWrite.eventReason,
         eventWriteLabel: EVENT_WRITE_LABELS.get(event.attendanceWrite.eventReason),
         performers: home.members.map(function (member) {
           const attend = attendanceByPerformer.get(member.performerName) || "未回答";
@@ -606,8 +618,10 @@
           }
           return {
             performerName: member.performerName,
+            initialAttend: attend,
             attendanceLabel: label,
             attendanceWriteAllowed: writeCapability.allowed,
+            attendanceWriteReason: writeCapability.reason,
             attendanceWriteLabel: writeLabel,
           };
         }),
@@ -625,6 +639,157 @@
     };
   }
 
+  function draftKey_(eventIndex, performerIndex) {
+    return `${eventIndex}:${performerIndex}`;
+  }
+
+  function createAttendanceDraftState_(validatedEvents) {
+    if (!Array.isArray(validatedEvents)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+    }
+    const draftState = new Map();
+    validatedEvents.forEach(function (event, eventIndex) {
+      if (!isPlainObject(event) || typeof event.eventKey !== "string" || !event.eventKey) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+      }
+      if (!Array.isArray(event.performers)) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+      }
+      const seenPerformers = new Set();
+      event.performers.forEach(function (performer, performerIndex) {
+        if (
+          typeof performer.performerName !== "string" ||
+          !performer.performerName ||
+          seenPerformers.has(performer.performerName)
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+        }
+        seenPerformers.add(performer.performerName);
+        if (!performer.attendanceWriteAllowed) return;
+        if (
+          !event.eventAllowed ||
+          event.eventWriteReason !== "open" ||
+          performer.attendanceWriteReason !== "open" ||
+          !ATTENDANCE_LABELS.has(performer.initialAttend)
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+        }
+        draftState.set(draftKey_(eventIndex, performerIndex), {
+          eventKey: event.eventKey,
+          performerName: performer.performerName,
+          initialAttend: performer.initialAttend,
+          selectedAttend: performer.initialAttend,
+          changed: false,
+        });
+      });
+    });
+    return draftState;
+  }
+
+  function setAttendanceDraftSelection_(draftState, key, selectedAttend) {
+    if (!(draftState instanceof Map) || !draftState.has(key)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+    }
+    if (!ATTENDANCE_DRAFT_VALUES.has(selectedAttend)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_selection", 0);
+    }
+    const current = draftState.get(key);
+    const next = {
+      ...current,
+      selectedAttend,
+      changed: selectedAttend !== current.initialAttend,
+    };
+    draftState.set(key, next);
+    return { ...next };
+  }
+
+  function resetAttendanceDraftSelection_(draftState, key) {
+    if (!(draftState instanceof Map) || !draftState.has(key)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+    }
+    const current = draftState.get(key);
+    const next = {
+      ...current,
+      selectedAttend: current.initialAttend,
+      changed: false,
+    };
+    draftState.set(key, next);
+    return { ...next };
+  }
+
+  function buildAuthenticatedAttendanceDraftPayloads_(validatedEvents, draftState) {
+    if (!Array.isArray(validatedEvents) || !(draftState instanceof Map)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+    }
+    const payloads = [];
+    validatedEvents.forEach(function (event, eventIndex) {
+      if (
+        !isPlainObject(event) ||
+        typeof event.eventKey !== "string" ||
+        !event.eventKey ||
+        !Array.isArray(event.performers)
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+      }
+      const items = [];
+      const seenPerformers = new Set();
+      event.performers.forEach(function (performer, performerIndex) {
+        if (
+          typeof performer.performerName !== "string" ||
+          !performer.performerName ||
+          seenPerformers.has(performer.performerName)
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+        }
+        seenPerformers.add(performer.performerName);
+        if (!performer.attendanceWriteAllowed) return;
+        if (
+          !event.eventAllowed ||
+          event.eventWriteReason !== "open" ||
+          performer.attendanceWriteReason !== "open"
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+        }
+        const key = draftKey_(eventIndex, performerIndex);
+        const draft = draftState.get(key);
+        if (
+          !draft ||
+          draft.eventKey !== event.eventKey ||
+          draft.performerName !== performer.performerName ||
+          draft.initialAttend !== performer.initialAttend ||
+          draft.changed !== (draft.selectedAttend !== draft.initialAttend)
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+        }
+        if (!draft.changed) return;
+        if (
+          !ATTENDANCE_DRAFT_VALUES.has(draft.selectedAttend)
+        ) {
+          throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+        }
+        items.push({
+          performerName: performer.performerName,
+          attend: draft.selectedAttend,
+        });
+      });
+      if (items.length > MAX_DRAFT_ITEMS_PER_EVENT) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "draft_items_limit_exceeded", 0);
+      }
+      if (items.length > 0) {
+        payloads.push({ eventKey: event.eventKey, mode: "merge", items });
+      }
+    });
+    return payloads;
+  }
+
+  function summarizeAttendanceDraft_(validatedEvents, draftState) {
+    const payloads = buildAuthenticatedAttendanceDraftPayloads_(validatedEvents, draftState);
+    return {
+      changedEventCount: payloads.length,
+      changedPerformerCount: payloads.reduce((count, payload) => count + payload.items.length, 0),
+    };
+  }
+
   function appendReadOnlyMeta_(documentImpl, parent, label, value) {
     if (!value) return;
     const row = documentImpl.createElement("div");
@@ -639,16 +804,29 @@
     parent.appendChild(row);
   }
 
-  function renderReadOnlySchedules_(container, viewModel, documentImpl) {
+  function renderReadOnlySchedules_(container, viewModel, documentImpl, options) {
     if (!container || !documentImpl || typeof documentImpl.createElement !== "function") {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "read_only_ui_unavailable", 0);
     }
     const model = viewModel || {};
+    const opts = options || {};
+    const draftPreviewEnabled = opts.enableDraftPreview === true;
+    const onDraftSummary = typeof opts.onDraftSummary === "function"
+      ? opts.onDraftSummary
+      : function () {};
     if (!Array.isArray(model.events)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_read_only_view", 0);
     }
     container.textContent = "";
     container.setAttribute("role", "list");
+    const draftState = draftPreviewEnabled
+      ? createAttendanceDraftState_(model.events)
+      : null;
+    const notifyDraftSummary = function () {
+      if (!draftPreviewEnabled) return;
+      onDraftSummary(summarizeAttendanceDraft_(model.events, draftState));
+    };
+    notifyDraftSummary();
     if (model.events.length === 0) {
       const empty = documentImpl.createElement("p");
       empty.className = "readOnlyScheduleEmpty";
@@ -657,7 +835,7 @@
       return 0;
     }
 
-    model.events.forEach(function (event) {
+    model.events.forEach(function (event, eventIndex) {
       const card = documentImpl.createElement("article");
       card.className = "readOnlyScheduleCard";
       card.setAttribute("role", "listitem");
@@ -696,7 +874,7 @@
 
       const performers = documentImpl.createElement("ul");
       performers.className = "readOnlyAttendanceList";
-      for (const performer of event.performers) {
+      event.performers.forEach(function (performer, performerIndex) {
         const item = documentImpl.createElement("li");
         const name = documentImpl.createElement("span");
         name.className = "readOnlyPerformerName";
@@ -712,8 +890,72 @@
         item.appendChild(name);
         item.appendChild(attendance);
         item.appendChild(capability);
+
+        if (
+          draftPreviewEnabled &&
+          event.eventAllowed &&
+          event.eventWriteReason === "open" &&
+          performer.attendanceWriteAllowed &&
+          performer.attendanceWriteReason === "open"
+        ) {
+          const key = draftKey_(eventIndex, performerIndex);
+          const groupId = `attendance-draft-${eventIndex}-${performerIndex}`;
+          const fieldset = documentImpl.createElement("fieldset");
+          fieldset.className = "attendanceDraftFieldset";
+          const legend = documentImpl.createElement("legend");
+          legend.textContent = `${performer.performerName}の出欠`;
+          fieldset.appendChild(legend);
+
+          const choices = documentImpl.createElement("div");
+          choices.className = "attendanceDraftChoices";
+          const radios = [];
+          ATTENDANCE_DRAFT_OPTIONS.forEach(function (option, optionIndex) {
+            const choice = documentImpl.createElement("span");
+            choice.className = "attendanceDraftChoice";
+            const radio = documentImpl.createElement("input");
+            const radioId = `${groupId}-${optionIndex}`;
+            radio.type = "radio";
+            radio.id = radioId;
+            radio.name = groupId;
+            radio.value = option.attend;
+            radio.checked = performer.initialAttend === option.attend;
+            radio.addEventListener("change", function () {
+              if (!radio.checked) return;
+              setAttendanceDraftSelection_(draftState, key, option.attend);
+              reset.hidden = false;
+              const current = draftState.get(key);
+              reset.hidden = !current.changed;
+              notifyDraftSummary();
+            });
+            const label = documentImpl.createElement("label");
+            label.setAttribute("for", radioId);
+            label.textContent = option.label;
+            choice.appendChild(radio);
+            choice.appendChild(label);
+            choices.appendChild(choice);
+            radios.push(radio);
+          });
+          fieldset.appendChild(choices);
+
+          const reset = documentImpl.createElement("button");
+          reset.type = "button";
+          reset.className = "attendanceDraftReset";
+          reset.textContent = "変更を取り消す";
+          reset.hidden = true;
+          reset.addEventListener("click", function () {
+            const restored = resetAttendanceDraftSelection_(draftState, key);
+            radios.forEach(function (radio) {
+              radio.checked = ATTENDANCE_DRAFT_VALUES.has(restored.initialAttend)
+                && radio.value === restored.initialAttend;
+            });
+            reset.hidden = true;
+            notifyDraftSummary();
+          });
+          fieldset.appendChild(reset);
+          item.appendChild(fieldset);
+        }
         performers.appendChild(item);
-      }
+      });
       card.appendChild(performers);
       container.appendChild(card);
     });
@@ -932,13 +1174,18 @@
     STAGING_WORKER_BASE_URL,
     AuthSessionError,
     authenticatedFetch_,
+    buildAuthenticatedAttendanceDraftPayloads_,
     buildReadOnlyScheduleViewModel_,
+    createAttendanceDraftState_,
     fetchAttendanceSummary_,
     fetchHomeSummary_,
     formatYmdJapanese,
     getAuthUiCopy,
     getReadOnlyUiCopy,
     renderReadOnlySchedules_,
+    resetAttendanceDraftSelection_,
+    setAttendanceDraftSelection_,
+    summarizeAttendanceDraft_,
     startStagingAuthenticatedReadOnly,
     startStagingLineAuthCheck,
     verifyLineSession_,
