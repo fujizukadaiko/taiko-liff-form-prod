@@ -12,11 +12,13 @@
             const LIFF_ID = "2008020568-2jVl00Rn";         // ←差し替え
             const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzaeqchlDJmkQGMKEYm9pQEOmp-GWgt0jhxRsO3Uq_G9GxaaE3n9p-fYcO6eprlLO5QLQ/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
             const D1_API_BASE_URL = "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
-            // stagingは現在、本人認証済みデータの読み取り確認だけを行う。
-            // 書き込みAPI・GAS・従来画面は、このモードでは起動しない。
+            // stagingは本人認証済みデータを読み取り、隔離された認証済み保存UIだけを使う。
+            // GAS・管理・従来画面などのlegacy経路は、このモードでは起動しない。
             const STAGING_AUTHENTICATED_READ_ONLY = true;
-            // サーバーへ送信せず、回答可能な本人演奏者のローカル入力だけを確認する。
+            // 回答可能な本人演奏者だけに、隔離されたstaging draft UIを表示する。
             const STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY = true;
+            // 認証済みstaging routeだけを使う予定単位の保存UI。権限制御はWorker側で行う。
+            const STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI = true;
             /*
              * ICS配信デプロイ手順:
              * 1) Apps Script をウェブアプリとしてデプロイ
@@ -1199,6 +1201,31 @@
             background:#fff;
             color:var(--c-text);
             font-weight:700;
+        }
+        .attendanceSubmitStatus{
+            min-height:1.5em;
+            margin:12px 0 0;
+            font-size:14px;
+            font-weight:700;
+            line-height:1.5;
+            overflow-wrap:anywhere;
+        }
+        .attendanceSubmitButton{
+            width:100%;
+            min-height:44px;
+            margin-top:8px;
+            padding:10px 14px;
+            border:1px solid #17643a;
+            border-radius:10px;
+            background:#17643a;
+            color:#fff;
+            font-weight:700;
+        }
+        .attendanceSubmitButton:disabled,
+        .attendanceDraftReset:disabled,
+        .attendanceDraftChoice input:disabled + label{
+            cursor:not-allowed;
+            opacity:.6;
         }
         .readOnlyScheduleEmpty{
             margin:10px 0 0;
@@ -3242,8 +3269,9 @@
                 <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
                     <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
                     <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
-                        <div>現在は入力UIの確認段階です。選択内容はサーバーへ送信されません。</div>
-                        <div>画面を閉じるか再読み込みすると、選択内容は消えます。</div>
+                        <div>テスト環境です。回答可能な予定は保存操作を試せます。</div>
+                        <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
+                        <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
                         <div class="attendanceDraftSummary">
                             <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
                             <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
@@ -5613,6 +5641,8 @@
                         document,
                         {
                             enableDraftPreview: STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY,
+                            enableSubmitUi: STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI,
+                            liff: window.liff,
                             onDraftSummary: function(summary){
                                 if (draftEventCount) {
                                     draftEventCount.textContent =
@@ -5620,8 +5650,11 @@
                                 }
                                 if (draftPerformerCount) {
                                     draftPerformerCount.textContent =
-                                        `選択を変更した演奏者：${summary.changedPerformerCount}人`;
+                                    `選択を変更した演奏者：${summary.changedPerformerCount}人`;
                                 }
+                            },
+                            onFatalError: function(){
+                                renderStagingReadOnlyState_({ status: "response_error" });
                             },
                         },
                     );

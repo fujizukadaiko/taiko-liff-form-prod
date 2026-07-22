@@ -7,6 +7,8 @@
 
   const STAGING_WORKER_BASE_URL =
     "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
+  const AUTHENTICATED_ATTENDANCE_SUBMIT_PATH =
+    "/line/attendance/submit-authenticated";
   const DEFAULT_TIMEOUT_MS = 10000;
 
   const AUTH_STATES = Object.freeze({
@@ -164,6 +166,13 @@
           ? safeWorkerErrorCode(body.error)
           : "";
         throw classifyHttpError(response.status, workerCode);
+      }
+      if (Number.isInteger(opts.expectedStatus) && response.status !== opts.expectedStatus) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "unexpected_success_status",
+          response.status,
+        );
       }
       if (!body || typeof body !== "object" || Array.isArray(body)) {
         throw makeError(
@@ -629,6 +638,7 @@
     });
     return {
       events,
+      members: home.members.map((member) => ({ performerName: member.performerName })),
       memberCount: home.memberCount,
       eventCount: events.length,
       attendanceCount: attendance.attendanceCount,
@@ -756,7 +766,7 @@
           !draft ||
           draft.eventKey !== event.eventKey ||
           draft.performerName !== performer.performerName ||
-          draft.initialAttend !== performer.initialAttend ||
+          !ATTENDANCE_LABELS.has(draft.initialAttend) ||
           draft.changed !== (draft.selectedAttend !== draft.initialAttend)
         ) {
           throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
@@ -790,6 +800,222 @@
     };
   }
 
+  function buildAuthenticatedAttendanceEventPayload_(validatedEvents, draftState, eventIndex) {
+    if (!Number.isInteger(eventIndex) || eventIndex < 0 || eventIndex >= validatedEvents.length) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_event", 0);
+    }
+    const event = validatedEvents[eventIndex];
+    const payloads = buildAuthenticatedAttendanceDraftPayloads_(validatedEvents, draftState);
+    const matching = payloads.filter((payload) => payload.eventKey === event.eventKey);
+    if (matching.length > 1) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+    }
+    return matching[0] || null;
+  }
+
+  function applyConfirmedAttendanceDraft_(validatedEvents, draftState, eventIndex, items) {
+    if (
+      !Number.isInteger(eventIndex) ||
+      eventIndex < 0 ||
+      eventIndex >= validatedEvents.length ||
+      !Array.isArray(items) ||
+      items.length === 0
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+    }
+    const event = validatedEvents[eventIndex];
+    const confirmed = new Map();
+    for (const item of items) {
+      if (
+        !isPlainObject(item) ||
+        typeof item.performerName !== "string" ||
+        !ATTENDANCE_DRAFT_VALUES.has(item.attend) ||
+        confirmed.has(item.performerName)
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+      }
+      confirmed.set(item.performerName, item.attend);
+    }
+
+    const updates = [];
+    event.performers.forEach(function (performer, performerIndex) {
+      if (!confirmed.has(performer.performerName)) return;
+      const key = draftKey_(eventIndex, performerIndex);
+      const current = draftState.get(key);
+      const attend = confirmed.get(performer.performerName);
+      if (!current || current.eventKey !== event.eventKey) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+      }
+      draftState.set(key, {
+        ...current,
+        initialAttend: attend,
+        selectedAttend: attend,
+        changed: false,
+      });
+      updates.push({ key, attend, attendanceLabel: ATTENDANCE_LABELS.get(attend) });
+      confirmed.delete(performer.performerName);
+    });
+    if (confirmed.size > 0 || updates.length !== items.length) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+    }
+    return updates;
+  }
+
+  function validateAuthenticatedAttendancePayload_(payload) {
+    if (!isPlainObject(payload)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
+    }
+    const topLevelKeys = Object.keys(payload);
+    if (
+      topLevelKeys.length !== 3 ||
+      !topLevelKeys.every((key) => ["eventKey", "mode", "items"].includes(key)) ||
+      typeof payload.eventKey !== "string" ||
+      !payload.eventKey ||
+      payload.eventKey.length > 128 ||
+      payload.mode !== "merge" ||
+      !Array.isArray(payload.items) ||
+      payload.items.length < 1 ||
+      payload.items.length > MAX_DRAFT_ITEMS_PER_EVENT
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
+    }
+    const seenPerformers = new Set();
+    const items = payload.items.map(function (item) {
+      if (!isPlainObject(item)) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
+      }
+      const keys = Object.keys(item);
+      if (
+        keys.length !== 2 ||
+        !keys.every((key) => ["performerName", "attend"].includes(key)) ||
+        typeof item.performerName !== "string" ||
+        !item.performerName ||
+        item.performerName.length > 200 ||
+        !ATTENDANCE_DRAFT_VALUES.has(item.attend) ||
+        seenPerformers.has(item.performerName)
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
+      }
+      seenPerformers.add(item.performerName);
+      return { performerName: item.performerName, attend: item.attend };
+    });
+    return { eventKey: payload.eventKey, mode: "merge", items };
+  }
+
+  function getCurrentLiffIdToken_(liff) {
+    if (!liff || typeof liff.getIDToken !== "function") {
+      throw makeError(AUTH_STATES.UNAUTHENTICATED, "id_token_unavailable", 0);
+    }
+    let idToken = "";
+    try {
+      idToken = liff.getIDToken();
+    } catch (_) {
+      idToken = "";
+    }
+    return validateIdToken(idToken);
+  }
+
+  function validateAttendanceSubmitSuccess_(body, expectedCount) {
+    if (
+      !isPlainObject(body) ||
+      body.ok !== true ||
+      body.status !== "ok" ||
+      !Number.isInteger(body.updatedCount) ||
+      body.updatedCount !== expectedCount
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_response", 200);
+    }
+    return body.updatedCount;
+  }
+
+  function confirmSubmittedAttendance_(attendance, payload) {
+    if (!attendance || attendance.registered !== true || !isPlainObject(attendance.map)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
+    }
+    const rows = attendance.map[payload.eventKey];
+    if (!Array.isArray(rows)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
+    }
+    const confirmed = new Map(rows.map((row) => [row.performerName, row.attend]));
+    if (payload.items.some((item) => confirmed.get(item.performerName) !== item.attend)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
+    }
+    return payload.items.map((item) => ({ ...item }));
+  }
+
+  async function submitAuthenticatedAttendancePayload_(payload, options) {
+    const opts = options || {};
+    const validatedPayload = validateAuthenticatedAttendancePayload_(payload);
+    const home = { members: Array.isArray(opts.members) ? opts.members : [] };
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      const submitBody = await authenticatedFetch_(
+        AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validatedPayload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      const updatedCount = validateAttendanceSubmitSuccess_(
+        submitBody,
+        validatedPayload.items.length,
+      );
+      const attendance = await fetchAttendanceSummary_(idToken, home, opts.dependencies);
+      const confirmedItems = confirmSubmittedAttendance_(attendance, validatedPayload);
+      return { updatedCount, confirmedItems };
+    } finally {
+      idToken = "";
+    }
+  }
+
+  function classifyAttendanceSubmitError_(error) {
+    const status = error instanceof AuthSessionError ? error.status : 0;
+    const code = error instanceof AuthSessionError ? error.code : "";
+    if (
+      error instanceof AuthSessionError &&
+      error.type === AUTH_STATES.UNAUTHENTICATED
+    ) return "unauthenticated";
+    if (
+      ["authentication_not_configured", "authentication_temporarily_unavailable",
+        "authentication_upstream_error"].includes(code)
+    ) return "authentication_unavailable";
+    if (status === 403 && code === "staging_attendance_write_disabled") {
+      return "write_disabled";
+    }
+    if (status === 403) return "not_allowed";
+    if (status === 404) return "event_not_found";
+    if (status === 409) return "event_not_available";
+    if ([400, 413, 415].includes(status)) return "response_error";
+    if (status === 503 && code === "attendance_write_failed") return "save_unavailable";
+    if (
+      error instanceof AuthSessionError &&
+      error.type === AUTH_STATES.NETWORK_ERROR
+    ) return "network_uncertain";
+    return "response_error";
+  }
+
+  function getAttendanceSubmitMessage_(state) {
+    const messages = {
+      saving: "保存しています…",
+      saved: "変更を保存しました。",
+      write_disabled: "現在、テスト環境の保存機能は停止しています。選択内容は保存されていません。",
+      unauthenticated: "LINE本人認証を確認できませんでした。画面を開き直してください。",
+      authentication_unavailable: "本人認証サービスを一時的に利用できません。",
+      not_allowed: "現在の状態では、この回答を保存できません。画面を再読み込みしてください。",
+      event_not_found: "予定を確認できません。画面を再読み込みしてください。",
+      event_not_available: "受付状態が変更されたため保存できません。画面を再読み込みしてください。",
+      save_unavailable: "一時的に保存できませんでした。時間をおいてもう一度お試しください。",
+      network_uncertain: "保存結果を確認できませんでした。自動再送信は行っていません。画面を開き直して現在の回答をご確認ください。",
+      response_error: "サーバーから予期しない応答がありました。",
+    };
+    return messages[state] || "";
+  }
+
   function appendReadOnlyMeta_(documentImpl, parent, label, value) {
     if (!value) return;
     const row = documentImpl.createElement("div");
@@ -811,20 +1037,60 @@
     const model = viewModel || {};
     const opts = options || {};
     const draftPreviewEnabled = opts.enableDraftPreview === true;
+    const submitUiEnabled = draftPreviewEnabled && opts.enableSubmitUi === true;
     const onDraftSummary = typeof opts.onDraftSummary === "function"
       ? opts.onDraftSummary
       : function () {};
+    const onFatalError = typeof opts.onFatalError === "function"
+      ? opts.onFatalError
+      : function () {};
     if (!Array.isArray(model.events)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_read_only_view", 0);
+    }
+    if (submitUiEnabled && !Array.isArray(model.members)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_members", 0);
     }
     container.textContent = "";
     container.setAttribute("role", "list");
     const draftState = draftPreviewEnabled
       ? createAttendanceDraftState_(model.events)
       : null;
+    const draftControls = new Map();
+    const submitControls = new Map();
+    let submitInFlight = false;
+    let activeSubmitEventIndex = -1;
     const notifyDraftSummary = function () {
       if (!draftPreviewEnabled) return;
       onDraftSummary(summarizeAttendanceDraft_(model.events, draftState));
+    };
+    const refreshDraftControls = function () {
+      if (!draftPreviewEnabled) return;
+      draftControls.forEach(function (control, key) {
+        const current = draftState.get(key);
+        control.radios.forEach((radio) => { radio.disabled = submitInFlight; });
+        control.reset.disabled = submitInFlight;
+        control.reset.hidden = !current || !current.changed;
+      });
+      submitControls.forEach(function (control, eventIndex) {
+        let payload = null;
+        try {
+          payload = buildAuthenticatedAttendanceEventPayload_(
+            model.events,
+            draftState,
+            eventIndex,
+          );
+        } catch (_) {
+          control.button.hidden = true;
+          onFatalError();
+          return;
+        }
+        control.button.hidden = !submitUiEnabled || !payload;
+        control.button.disabled = submitInFlight;
+        control.button.textContent = submitInFlight && activeSubmitEventIndex === eventIndex
+          ? "保存しています…"
+          : "この予定の変更を保存";
+      });
+      notifyDraftSummary();
     };
     notifyDraftSummary();
     if (model.events.length === 0) {
@@ -921,11 +1187,14 @@
             radio.checked = performer.initialAttend === option.attend;
             radio.addEventListener("change", function () {
               if (!radio.checked) return;
-              setAttendanceDraftSelection_(draftState, key, option.attend);
-              reset.hidden = false;
-              const current = draftState.get(key);
-              reset.hidden = !current.changed;
-              notifyDraftSummary();
+              try {
+                setAttendanceDraftSelection_(draftState, key, option.attend);
+                const submitControl = submitControls.get(eventIndex);
+                if (submitControl) submitControl.status.textContent = "";
+                refreshDraftControls();
+              } catch (_) {
+                onFatalError();
+              }
             });
             const label = documentImpl.createElement("label");
             label.setAttribute("for", radioId);
@@ -943,22 +1212,105 @@
           reset.textContent = "変更を取り消す";
           reset.hidden = true;
           reset.addEventListener("click", function () {
-            const restored = resetAttendanceDraftSelection_(draftState, key);
-            radios.forEach(function (radio) {
-              radio.checked = ATTENDANCE_DRAFT_VALUES.has(restored.initialAttend)
-                && radio.value === restored.initialAttend;
-            });
-            reset.hidden = true;
-            notifyDraftSummary();
+            try {
+              const restored = resetAttendanceDraftSelection_(draftState, key);
+              radios.forEach(function (radio) {
+                radio.checked = ATTENDANCE_DRAFT_VALUES.has(restored.initialAttend)
+                  && radio.value === restored.initialAttend;
+              });
+              const submitControl = submitControls.get(eventIndex);
+              if (submitControl) submitControl.status.textContent = "";
+              refreshDraftControls();
+            } catch (_) {
+              onFatalError();
+            }
           });
           fieldset.appendChild(reset);
           item.appendChild(fieldset);
+          draftControls.set(key, { radios, reset, attendance });
         }
         performers.appendChild(item);
       });
       card.appendChild(performers);
+
+      if (
+        submitUiEnabled &&
+        event.eventAllowed &&
+        event.eventWriteReason === "open" &&
+        event.performers.some((performer) =>
+          performer.attendanceWriteAllowed && performer.attendanceWriteReason === "open"
+        )
+      ) {
+        const submitStatus = documentImpl.createElement("p");
+        submitStatus.className = "attendanceSubmitStatus";
+        submitStatus.setAttribute("role", "status");
+        submitStatus.setAttribute("aria-live", "polite");
+        submitStatus.tabIndex = -1;
+        card.appendChild(submitStatus);
+
+        const submitButton = documentImpl.createElement("button");
+        submitButton.type = "button";
+        submitButton.id = `attendance-submit-${eventIndex}`;
+        submitButton.className = "attendanceSubmitButton";
+        submitButton.textContent = "この予定の変更を保存";
+        submitButton.hidden = true;
+        submitButton.addEventListener("click", async function () {
+          if (submitInFlight) return;
+          let payload;
+          try {
+            payload = buildAuthenticatedAttendanceEventPayload_(
+              model.events,
+              draftState,
+              eventIndex,
+            );
+            if (!payload) return;
+            payload = validateAuthenticatedAttendancePayload_(payload);
+          } catch (_) {
+            submitStatus.textContent = getAttendanceSubmitMessage_("response_error");
+            onFatalError();
+            return;
+          }
+
+          submitInFlight = true;
+          activeSubmitEventIndex = eventIndex;
+          submitStatus.textContent = getAttendanceSubmitMessage_("saving");
+          refreshDraftControls();
+          try {
+            const result = await submitAuthenticatedAttendancePayload_(payload, {
+              liff: opts.liff,
+              members: model.members,
+              dependencies: opts.submitDependencies,
+            });
+            const updates = applyConfirmedAttendanceDraft_(
+              model.events,
+              draftState,
+              eventIndex,
+              result.confirmedItems,
+            );
+            updates.forEach(function (update) {
+              const control = draftControls.get(update.key);
+              if (!control) {
+                throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+              }
+              control.attendance.textContent = update.attendanceLabel;
+            });
+            submitStatus.textContent = getAttendanceSubmitMessage_("saved");
+          } catch (error) {
+            submitStatus.textContent = getAttendanceSubmitMessage_(
+              classifyAttendanceSubmitError_(error),
+            );
+          } finally {
+            submitInFlight = false;
+            activeSubmitEventIndex = -1;
+            refreshDraftControls();
+          }
+        });
+        card.appendChild(submitButton);
+        submitControls.set(eventIndex, { button: submitButton, status: submitStatus });
+      }
       container.appendChild(card);
     });
+    refreshDraftControls();
     return model.events.length;
   }
 
@@ -1171,21 +1523,27 @@
 
   return {
     AUTH_STATES,
+    AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
     STAGING_WORKER_BASE_URL,
     AuthSessionError,
+    applyConfirmedAttendanceDraft_,
     authenticatedFetch_,
+    buildAuthenticatedAttendanceEventPayload_,
     buildAuthenticatedAttendanceDraftPayloads_,
     buildReadOnlyScheduleViewModel_,
+    classifyAttendanceSubmitError_,
     createAttendanceDraftState_,
     fetchAttendanceSummary_,
     fetchHomeSummary_,
     formatYmdJapanese,
     getAuthUiCopy,
+    getAttendanceSubmitMessage_,
     getReadOnlyUiCopy,
     renderReadOnlySchedules_,
     resetAttendanceDraftSelection_,
     setAttendanceDraftSelection_,
     summarizeAttendanceDraft_,
+    submitAuthenticatedAttendancePayload_,
     startStagingAuthenticatedReadOnly,
     startStagingLineAuthCheck,
     verifyLineSession_,
