@@ -207,6 +207,39 @@
     ["未定", "未定"],
     ["未回答", "未回答"],
   ]);
+  const EVENT_WRITE_REASONS = new Set([
+    "open",
+    "inactive",
+    "attendance_not_required",
+    "not_published",
+    "deadline_passed",
+    "invalid_event_configuration",
+  ]);
+  const PERFORMER_WRITE_REASONS = new Set([
+    ...EVENT_WRITE_REASONS,
+    "viewer_only",
+    "segment_missing",
+    "target_group_mismatch",
+  ]);
+  const EVENT_WRITE_LABELS = new Map([
+    ["open", "回答受付中"],
+    ["inactive", "受付対象外"],
+    ["attendance_not_required", "回答不要"],
+    ["not_published", "現在は回答を受け付けていません（回答受付外）"],
+    ["deadline_passed", "回答期限終了"],
+    ["invalid_event_configuration", "受付状態を確認できません"],
+  ]);
+  const PERFORMER_WRITE_LABELS = new Map([
+    ["open", "回答可能"],
+    ["inactive", "受付対象外"],
+    ["attendance_not_required", "回答不要"],
+    ["not_published", "回答受付外"],
+    ["deadline_passed", "回答期限終了"],
+    ["invalid_event_configuration", "回答可否を確認できません"],
+    ["viewer_only", "閲覧のみ"],
+    ["segment_missing", "メンバー区分未設定"],
+    ["target_group_mismatch", "この予定の対象外"],
+  ]);
   const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
   function isPlainObject(value) {
@@ -271,6 +304,70 @@
     const label = EVENT_SEGMENTS.get(value);
     if (!label) throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_event_target_group", 200);
     return label;
+  }
+
+  function validateAttendanceWrite_(value, memberNames) {
+    if (!isPlainObject(value) || typeof value.eventAllowed !== "boolean") {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+    }
+    if (
+      typeof value.eventReason !== "string" ||
+      !EVENT_WRITE_REASONS.has(value.eventReason) ||
+      !Array.isArray(value.performers)
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+    }
+    if (
+      (value.eventAllowed && value.eventReason !== "open") ||
+      (!value.eventAllowed && value.eventReason === "open")
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+    }
+
+    const expectedNames = new Set(memberNames);
+    const seenNames = new Set();
+    const performers = value.performers.map(function (performer) {
+      if (!isPlainObject(performer) || typeof performer.allowed !== "boolean") {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+      }
+      const performerName = readResponseString(performer, "performerName", {
+        required: true,
+        maxLength: 200,
+        code: "invalid_attendance_write",
+      });
+      if (
+        seenNames.has(performerName) ||
+        !expectedNames.has(performerName) ||
+        typeof performer.reason !== "string" ||
+        !PERFORMER_WRITE_REASONS.has(performer.reason) ||
+        (performer.allowed && performer.reason !== "open") ||
+        (!performer.allowed && performer.reason === "open") ||
+        (!value.eventAllowed && (
+          performer.allowed || performer.reason !== value.eventReason
+        ))
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+      }
+      seenNames.add(performerName);
+      return {
+        performerName,
+        allowed: performer.allowed,
+        reason: performer.reason,
+      };
+    });
+
+    if (
+      seenNames.size !== expectedNames.size ||
+      [...expectedNames].some((performerName) => !seenNames.has(performerName))
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_write", 200);
+    }
+
+    return {
+      eventAllowed: value.eventAllowed,
+      eventReason: value.eventReason,
+      performers,
+    };
   }
 
   function extractHomeSummary(body) {
@@ -353,6 +450,9 @@
         maxLength: 40,
         code: "invalid_event_target_group",
       });
+      const attendanceWrite = body.registered
+        ? validateAttendanceWrite_(event.attendanceWrite, performerNames)
+        : null;
       return {
         eventKey,
         title: readResponseString(event, "title", {
@@ -380,6 +480,7 @@
           maxLength: 2000,
           code: "invalid_event_note",
         }),
+        attendanceWrite,
       };
     });
 
@@ -479,6 +580,9 @@
       const attendanceByPerformer = new Map(attendanceRows.map(function (row) {
         return [row.performerName, row.attend];
       }));
+      const writeByPerformer = new Map(event.attendanceWrite.performers.map(function (performer) {
+        return [performer.performerName, performer];
+      }));
       return {
         title: event.title,
         dateLabel: formatYmdJapanese(event.date, "invalid_event_date"),
@@ -490,13 +594,22 @@
           : "",
         status: event.status,
         note: event.note,
+        eventAllowed: event.attendanceWrite.eventAllowed,
+        eventWriteLabel: EVENT_WRITE_LABELS.get(event.attendanceWrite.eventReason),
         performers: home.members.map(function (member) {
           const attend = attendanceByPerformer.get(member.performerName) || "未回答";
           const label = ATTENDANCE_LABELS.get(attend);
-          if (!label) {
+          const writeCapability = writeByPerformer.get(member.performerName);
+          const writeLabel = writeCapability && PERFORMER_WRITE_LABELS.get(writeCapability.reason);
+          if (!label || !writeCapability || !writeLabel) {
             throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_status", 200);
           }
-          return { performerName: member.performerName, attendanceLabel: label };
+          return {
+            performerName: member.performerName,
+            attendanceLabel: label,
+            attendanceWriteAllowed: writeCapability.allowed,
+            attendanceWriteLabel: writeLabel,
+          };
         }),
       };
     });
@@ -505,6 +618,10 @@
       memberCount: home.memberCount,
       eventCount: events.length,
       attendanceCount: attendance.attendanceCount,
+      eventAllowedCount: events.filter((event) => event.eventAllowed).length,
+      performerAllowedEventCount: events.filter((event) =>
+        event.performers.some((performer) => performer.attendanceWriteAllowed)
+      ).length,
     };
   }
 
@@ -550,6 +667,13 @@
       title.textContent = event.title;
       card.appendChild(title);
 
+      const eventCapability = documentImpl.createElement("p");
+      eventCapability.className = event.eventAllowed
+        ? "readOnlyCapability readOnlyCapabilityOpen"
+        : "readOnlyCapability readOnlyCapabilityClosed";
+      eventCapability.textContent = `予定の回答可否: ${event.eventWriteLabel}`;
+      card.appendChild(eventCapability);
+
       const date = documentImpl.createElement("p");
       date.className = "readOnlyScheduleDate";
       date.textContent = event.dateLabel;
@@ -580,8 +704,14 @@
         const attendance = documentImpl.createElement("span");
         attendance.className = "readOnlyAttendanceStatus";
         attendance.textContent = performer.attendanceLabel;
+        const capability = documentImpl.createElement("span");
+        capability.className = performer.attendanceWriteAllowed
+          ? "readOnlyPerformerCapability readOnlyCapabilityOpen"
+          : "readOnlyPerformerCapability readOnlyCapabilityClosed";
+        capability.textContent = `回答可否: ${performer.attendanceWriteLabel}`;
         item.appendChild(name);
         item.appendChild(attendance);
+        item.appendChild(capability);
         performers.appendChild(item);
       }
       card.appendChild(performers);
@@ -640,6 +770,8 @@
             `本人に紐づくメンバー件数: ${Number(counts.memberCount) || 0}`,
             `表示予定件数: ${Number(counts.eventCount) || 0}`,
             `出欠データ件数: ${Number(counts.attendanceCount) || 0}`,
+            `回答受付中の予定: ${Number(counts.eventAllowedCount) || 0}件`,
+            `あなたが回答可能な予定: ${Number(counts.performerAllowedEventCount) || 0}件`,
           ].join("\n"),
         };
       case AUTH_STATES.UNAUTHENTICATED:
@@ -776,6 +908,8 @@
           memberCount: viewModel.memberCount,
           eventCount: viewModel.eventCount,
           attendanceCount: viewModel.attendanceCount,
+          eventAllowedCount: viewModel.eventAllowedCount,
+          performerAllowedEventCount: viewModel.performerAllowedEventCount,
         },
         viewModel,
       };

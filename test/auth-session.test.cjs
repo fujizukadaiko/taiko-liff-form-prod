@@ -101,6 +101,14 @@ function registeredHome() {
         deadlineDate: "20260725",
         status: "active",
         note: "",
+        attendanceWrite: {
+          eventAllowed: true,
+          eventReason: "open",
+          performers: [
+            { performerName: "本人1", allowed: true, reason: "open" },
+            { performerName: "本人2", allowed: true, reason: "open" },
+          ],
+        },
       },
       {
         eventKey: "event-2",
@@ -112,6 +120,18 @@ function registeredHome() {
         deadlineDate: null,
         status: "active",
         note: "",
+        attendanceWrite: {
+          eventAllowed: true,
+          eventReason: "open",
+          performers: [
+            { performerName: "本人1", allowed: true, reason: "open" },
+            {
+              performerName: "本人2",
+              allowed: false,
+              reason: "target_group_mismatch",
+            },
+          ],
+        },
       },
     ],
   };
@@ -231,6 +251,8 @@ test("登録済み本人の読み取りはstaging Workerへ安全な正式reques
     memberCount: 2,
     eventCount: 2,
     attendanceCount: 3,
+    eventAllowedCount: 2,
+    performerAllowedEventCount: 2,
   });
   assert.equal(requests.length, 2);
 
@@ -313,15 +335,35 @@ test("出欠statusを正式な日本語表示へ変換し、本人メンバー�
   assert.deepEqual(
     result.viewModel.events[0].performers,
     [
-      { performerName: "本人1", attendanceLabel: "出席" },
-      { performerName: "本人2", attendanceLabel: "未回答" },
+      {
+        performerName: "本人1",
+        attendanceLabel: "出席",
+        attendanceWriteAllowed: true,
+        attendanceWriteLabel: "回答可能",
+      },
+      {
+        performerName: "本人2",
+        attendanceLabel: "未回答",
+        attendanceWriteAllowed: true,
+        attendanceWriteLabel: "回答可能",
+      },
     ],
   );
   assert.deepEqual(
     result.viewModel.events[1].performers,
     [
-      { performerName: "本人1", attendanceLabel: "欠席" },
-      { performerName: "本人2", attendanceLabel: "出席" },
+      {
+        performerName: "本人1",
+        attendanceLabel: "欠席",
+        attendanceWriteAllowed: true,
+        attendanceWriteLabel: "回答可能",
+      },
+      {
+        performerName: "本人2",
+        attendanceLabel: "出席",
+        attendanceWriteAllowed: false,
+        attendanceWriteLabel: "この予定の対象外",
+      },
     ],
   );
   assert.equal(JSON.stringify(result.viewModel).includes("lineId"), false);
@@ -412,6 +454,173 @@ test("重複・不正予定と未知の出欠statusをresponse_errorにする", 
   }
 });
 
+test("attendanceWriteを本人演奏者集合と整合性まで厳密に検証する", async (t) => {
+  const cases = [
+    ["欠落", (home) => { delete home.events[0].attendanceWrite; }],
+    ["eventAllowed型不正", (home) => { home.events[0].attendanceWrite.eventAllowed = "true"; }],
+    ["未知eventReason", (home) => { home.events[0].attendanceWrite.eventReason = "unknown"; }],
+    ["performers非配列", (home) => { home.events[0].attendanceWrite.performers = {}; }],
+    ["performer allowed型不正", (home) => {
+      home.events[0].attendanceWrite.performers[0].allowed = 1;
+    }],
+    ["未知performer reason", (home) => {
+      home.events[0].attendanceWrite.performers[0].reason = "unknown";
+    }],
+    ["performer重複", (home) => {
+      home.events[0].attendanceWrite.performers[1].performerName = "本人1";
+    }],
+    ["本人以外", (home) => {
+      home.events[0].attendanceWrite.performers[1].performerName = "他人";
+    }],
+    ["本人欠落", (home) => { home.events[0].attendanceWrite.performers.pop(); }],
+    ["event可否矛盾", (home) => {
+      home.events[0].attendanceWrite.eventAllowed = false;
+    }],
+    ["performer可否矛盾", (home) => {
+      home.events[0].attendanceWrite.performers[0].allowed = false;
+    }],
+    ["event不可時のperformer理由不一致", (home) => {
+      home.events[0].attendanceWrite.eventAllowed = false;
+      home.events[0].attendanceWrite.eventReason = "deadline_passed";
+      home.events[0].attendanceWrite.performers.forEach((performer) => {
+        performer.allowed = false;
+        performer.reason = "not_published";
+      });
+    }],
+  ];
+
+  for (const [name, mutate] of cases) {
+    await t.test(name, async () => {
+      const home = registeredHome();
+      mutate(home);
+      let fetchCount = 0;
+      const result = await auth.startStagingAuthenticatedReadOnly({
+        liff: makeLiff(),
+        liffId: "test-liff-id",
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return jsonResponse(home);
+        }),
+      });
+      assert.equal(result.status, auth.AUTH_STATES.RESPONSE_ERROR);
+      assert.equal(fetchCount, 1);
+    });
+  }
+});
+
+test("予定・演奏者の回答可否ラベルを表示し、受付件数を区別する", async () => {
+  const home = registeredHome();
+  home.events[0].attendanceWrite = {
+    eventAllowed: false,
+    eventReason: "deadline_passed",
+    performers: [
+      { performerName: "本人1", allowed: false, reason: "deadline_passed" },
+      { performerName: "本人2", allowed: false, reason: "deadline_passed" },
+    ],
+  };
+  home.events[1].attendanceWrite.performers = [
+    { performerName: "本人1", allowed: false, reason: "viewer_only" },
+    { performerName: "本人2", allowed: false, reason: "target_group_mismatch" },
+  ];
+  let fetchCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      fetchCount += 1;
+      return fetchCount === 1
+        ? jsonResponse(home)
+        : jsonResponse(registeredAttendance());
+    }),
+  });
+
+  assert.equal(result.status, auth.AUTH_STATES.REGISTERED_READ_ONLY);
+  assert.equal(result.summary.eventAllowedCount, 1);
+  assert.equal(result.summary.performerAllowedEventCount, 0);
+  assert.equal(result.viewModel.events.length, 2);
+  const container = new FakeElement("div");
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument());
+  assert.match(container.textContent, /回答期限終了/);
+  assert.match(container.textContent, /閲覧のみ/);
+  assert.match(container.textContent, /この予定の対象外/);
+  assert.match(container.textContent, /出席/);
+  assert.match(container.textContent, /欠席/);
+
+  const copy = auth.getReadOnlyUiCopy(auth.AUTH_STATES.REGISTERED_READ_ONLY, result.summary);
+  assert.match(copy.message, /回答受付中の予定: 1件/);
+  assert.match(copy.message, /あなたが回答可能な予定: 0件/);
+});
+
+test("すべての回答可否理由を安全な日本語へ変換する", async (t) => {
+  const eventLabels = new Map([
+    ["open", "回答受付中"],
+    ["inactive", "受付対象外"],
+    ["attendance_not_required", "回答不要"],
+    ["not_published", "回答受付外"],
+    ["deadline_passed", "回答期限終了"],
+    ["invalid_event_configuration", "受付状態を確認できません"],
+  ]);
+  for (const [reason, label] of eventLabels) {
+    await t.test(`event:${reason}`, async () => {
+      const home = registeredHome();
+      const allowed = reason === "open";
+      home.events[0].attendanceWrite = {
+        eventAllowed: allowed,
+        eventReason: reason,
+        performers: home.member.performers.map((member) => ({
+          performerName: member.performerName,
+          allowed,
+          reason,
+        })),
+      };
+      let fetchCount = 0;
+      const result = await auth.startStagingAuthenticatedReadOnly({
+        liff: makeLiff(),
+        liffId: "test-liff-id",
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return fetchCount === 1
+            ? jsonResponse(home)
+            : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+        }),
+      });
+      const container = new FakeElement("div");
+      auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument());
+      assert.match(container.textContent, new RegExp(label));
+    });
+  }
+
+  const performerLabels = new Map([
+    ["viewer_only", "閲覧のみ"],
+    ["segment_missing", "メンバー区分未設定"],
+    ["target_group_mismatch", "この予定の対象外"],
+  ]);
+  for (const [reason, label] of performerLabels) {
+    await t.test(`performer:${reason}`, async () => {
+      const home = registeredHome();
+      home.events[0].attendanceWrite.performers[0] = {
+        performerName: "本人1",
+        allowed: false,
+        reason,
+      };
+      let fetchCount = 0;
+      const result = await auth.startStagingAuthenticatedReadOnly({
+        liff: makeLiff(),
+        liffId: "test-liff-id",
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return fetchCount === 1
+            ? jsonResponse(home)
+            : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+        }),
+      });
+      const container = new FakeElement("div");
+      auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument());
+      assert.match(container.textContent, new RegExp(label));
+    });
+  }
+});
+
 test("予定カードはtextContentだけで安全に描画し、操作要素を生成しない", () => {
   const documentImpl = fakeDocument();
   const container = new FakeElement("div");
@@ -428,7 +637,14 @@ test("予定カードはtextContentだけで安全に描画し、操作要素を
       deadlineLabel: "2026年7月25日（土）",
       status: "active",
       note: "",
-      performers: [{ performerName: htmlLikeName, attendanceLabel: "未回答" }],
+      eventAllowed: false,
+      eventWriteLabel: '<b onclick="throw new Error(3)">回答不可</b>',
+      performers: [{
+        performerName: htmlLikeName,
+        attendanceLabel: "未回答",
+        attendanceWriteAllowed: false,
+        attendanceWriteLabel: '<img src=x onerror="throw new Error(4)">',
+      }],
     }],
   }, documentImpl);
 
@@ -436,6 +652,8 @@ test("予定カードはtextContentだけで安全に描画し、操作要素を
   assert.match(container.textContent, /<img src=x/);
   assert.match(container.textContent, /<script>/);
   assert.match(container.textContent, /<b>本人<\/b>/);
+  assert.match(container.textContent, /回答不可<\/b>/);
+  assert.match(container.textContent, /<img src=x onerror/);
   const tags = collectTags(container);
   for (const forbidden of ["IMG", "SCRIPT", "B", "INPUT", "SELECT", "TEXTAREA", "BUTTON", "FORM"]) {
     assert.equal(tags.includes(forbidden), false, forbidden);
@@ -566,6 +784,8 @@ test("UIは全状態を区別し、非機密な件数だけを表示する", () 
       memberCount: 2,
       eventCount: 3,
       attendanceCount: 4,
+      eventAllowedCount: 2,
+      performerAllowedEventCount: 1,
     }),
     unauthenticated: auth.getReadOnlyUiCopy(auth.AUTH_STATES.UNAUTHENTICATED),
     database: auth.getReadOnlyUiCopy(auth.AUTH_STATES.DATABASE_ERROR),
@@ -579,6 +799,8 @@ test("UIは全状態を区別し、非機密な件数だけを表示する", () 
   assert.match(copies.registered.title, /読み取り専用/);
   assert.match(copies.registered.message, /表示確認のみ/);
   assert.match(copies.registered.message, /メンバー件数: 2/);
+  assert.match(copies.registered.message, /回答受付中の予定: 2件/);
+  assert.match(copies.registered.message, /あなたが回答可能な予定: 1件/);
   assert.match(copies.unauthenticated.title, /本人認証に失敗/);
   assert.match(copies.database.title, /データベース/);
   assert.match(copies.temporary.title, /一時的/);
