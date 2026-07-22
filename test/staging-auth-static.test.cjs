@@ -94,7 +94,8 @@ test("通常読み取りフローは許可された2 APIだけを使用し書き
   assert.doesNotMatch(flow, /attendance\/submit|\/line\/schedules|events\/by-date/);
   assert.doesNotMatch(flow, /admin|feedback|API_ENDPOINT/);
   assert.doesNotMatch(flow, /localStorage|sessionStorage|indexedDB|document\.cookie/);
-  assert.doesNotMatch(authSource, /submit-authenticated/);
+  assert.doesNotMatch(flow, /submit-authenticated/);
+  assert.match(authSource, /"\/line\/attendance\/submit-authenticated"/);
 });
 
 test("attendanceWriteは読み取り専用表示にだけ使用する", () => {
@@ -107,13 +108,15 @@ test("attendanceWriteは読み取り専用表示にだけ使用する", () => {
   assert.doesNotMatch(authSource, /addEventListener\(["']submit["']/i);
 });
 
-test("draft previewはローカル操作だけで送信経路を持たない", () => {
+test("draft previewは認証済み予定単位保存だけを追加しlegacy経路を持たない", () => {
   assert.match(authSource, /buildAuthenticatedAttendanceDraftPayloads_/);
   assert.match(authSource, /createAttendanceDraftState_/);
   assert.match(authSource, /変更を取り消す/);
-  assert.match(html, /選択内容はサーバーへ送信されません/);
-  assert.match(html, /再読み込みすると、選択内容は消えます/);
-  assert.doesNotMatch(authSource, /submit-authenticated|attendance\/submit/);
+  assert.match(html, /const STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI = true;/);
+  assert.match(html, /回答可能な予定は保存操作を試せます/);
+  assert.match(html, /「変更を保存しました。」と表示された回答だけがサーバーへ反映されています/);
+  assert.match(authSource, /submit-authenticated/);
+  assert.doesNotMatch(authSource, /"\/line\/attendance\/submit"/);
   assert.doesNotMatch(authSource, /XMLHttpRequest|sendBeacon/);
   assert.doesNotMatch(authSource, /localStorage|sessionStorage|indexedDB|document\.cookie/);
   assert.doesNotMatch(authSource, /beforeunload|visibilitychange|pagehide/);

@@ -53,6 +53,7 @@ class FakeElement {
     this._text = "";
     this.listeners = {};
     this.hidden = false;
+    this.disabled = false;
     this.checked = false;
     this.type = "";
     this.id = "";
@@ -88,6 +89,12 @@ class FakeElement {
     for (const listener of this.listeners[String(type)] || []) {
       listener({ type: String(type), target: this });
     }
+  }
+
+  async dispatchAsync(type) {
+    await Promise.all((this.listeners[String(type)] || []).map(
+      (listener) => listener({ type: String(type), target: this }),
+    ));
   }
 }
 
@@ -951,6 +958,414 @@ test("draft payloadは不正値・不整合・1予定11件を安全に拒否す�
     () => auth.createAttendanceDraftState_(duplicateEvents),
     /invalid_draft_source/,
   );
+});
+
+test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだけへ送る", async () => {
+  const requests = [];
+  let tokenCalls = 0;
+  const payload = {
+    eventKey: "event-1",
+    mode: "merge",
+    items: [{ performerName: "本人1", attend: "欠席" }],
+  };
+  const result = await auth.submitAuthenticatedAttendancePayload_(payload, {
+    liff: makeLiff({
+      getIDToken() {
+        tokenCalls += 1;
+        return "fresh.token.value";
+      },
+    }),
+    members: [{ performerName: "本人1" }, { performerName: "本人2" }],
+    dependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      return requests.length === 1
+        ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
+        : jsonResponse({
+            ok: true,
+            status: "ok",
+            registered: true,
+            map: { "event-1": [{ performerName: "本人1", attend: "欠席" }] },
+          });
+    }),
+  });
+
+  assert.equal(tokenCalls, 1);
+  assert.deepEqual(result, {
+    updatedCount: 1,
+    confirmedItems: [{ performerName: "本人1", attend: "欠席" }],
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests[0].url,
+    `${auth.STAGING_WORKER_BASE_URL}/line/attendance/submit-authenticated`,
+  );
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers.Authorization, "Bearer fresh.token.value");
+  assert.equal(requests[0].options.headers["Content-Type"], "application/json");
+  assert.equal(requests[0].options.mode, "cors");
+  assert.equal(requests[0].options.cache, "no-store");
+  assert.equal(requests[0].options.credentials, "omit");
+  assert.equal(Object.hasOwn(requests[0].options.headers, "Origin"), false);
+  assert.deepEqual(JSON.parse(requests[0].options.body), payload);
+  assert.equal(requests[1].url, `${auth.STAGING_WORKER_BASE_URL}/line/attendance/all`);
+  assert.equal(requests[1].options.method, "POST");
+  assert.equal(requests[1].options.body, "{}");
+  assert.equal(requests[1].options.headers.Authorization, "Bearer fresh.token.value");
+});
+
+test("保存Token・payload・成功応答が不正なら安全側に停止する", async (t) => {
+  const payload = {
+    eventKey: "event-1",
+    mode: "merge",
+    items: [{ performerName: "本人1", attend: "欠席" }],
+  };
+  await t.test("Tokenなし", async () => {
+    let fetchCount = 0;
+    await assert.rejects(
+      auth.submitAuthenticatedAttendancePayload_(payload, {
+        liff: makeLiff({ getIDToken() { return null; } }),
+        members: [{ performerName: "本人1" }],
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return jsonResponse({});
+        }),
+      }),
+      (error) => error.type === auth.AUTH_STATES.UNAUTHENTICATED,
+    );
+    assert.equal(fetchCount, 0);
+  });
+
+  await t.test("payload不正", async () => {
+    let tokenCount = 0;
+    let fetchCount = 0;
+    await assert.rejects(
+      auth.submitAuthenticatedAttendancePayload_({ ...payload, lineId: "forbidden" }, {
+        liff: makeLiff({ getIDToken() { tokenCount += 1; return TOKEN; } }),
+        dependencies: fetchDependencies(async () => { fetchCount += 1; }),
+      }),
+      /invalid_submit_payload/,
+    );
+    assert.equal(tokenCount, 0);
+    assert.equal(fetchCount, 0);
+  });
+
+  for (const [name, response] of [
+    ["ok不正", { ok: false, status: "ok", updatedCount: 1 }],
+    ["status不正", { ok: true, status: "success", updatedCount: 1 }],
+    ["updatedCount型不正", { ok: true, status: "ok", updatedCount: "1" }],
+    ["updatedCount不一致", { ok: true, status: "ok", updatedCount: 2 }],
+  ]) {
+    await t.test(name, async () => {
+      let fetchCount = 0;
+      await assert.rejects(
+        auth.submitAuthenticatedAttendancePayload_(payload, {
+          liff: makeLiff(),
+          members: [{ performerName: "本人1" }],
+          dependencies: fetchDependencies(async () => {
+            fetchCount += 1;
+            return jsonResponse(response);
+          }),
+        }),
+        /invalid_submit_response/,
+      );
+      assert.equal(fetchCount, 1, "不正成功応答後にattendanceを再取得しない");
+    });
+  }
+
+  await t.test("HTTP 200以外の成功status", async () => {
+    let fetchCount = 0;
+    await assert.rejects(
+      auth.submitAuthenticatedAttendancePayload_(payload, {
+        liff: makeLiff(),
+        members: [{ performerName: "本人1" }],
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+          return jsonResponse({ ok: true, status: "ok", updatedCount: 1 }, 201);
+        }),
+      }),
+      /unexpected_success_status/,
+    );
+    assert.equal(fetchCount, 1);
+  });
+});
+
+test("保存後のattendance再取得が一致しなければdraft確定材料にしない", async (t) => {
+  const payload = {
+    eventKey: "event-1",
+    mode: "merge",
+    items: [{ performerName: "本人1", attend: "欠席" }],
+  };
+  for (const [name, attendanceResponse] of [
+    ["値不一致", jsonResponse({
+      ok: true,
+      status: "ok",
+      registered: true,
+      map: { "event-1": [{ performerName: "本人1", attend: "参加" }] },
+    })],
+    ["不正JSON", jsonResponse(new SyntaxError("invalid"))],
+    ["不正構造", jsonResponse({ ok: true, status: "ok", registered: true })],
+  ]) {
+    await t.test(name, async () => {
+      let fetchCount = 0;
+      await assert.rejects(
+        auth.submitAuthenticatedAttendancePayload_(payload, {
+          liff: makeLiff(),
+          members: [{ performerName: "本人1" }],
+          dependencies: fetchDependencies(async () => {
+            fetchCount += 1;
+            return fetchCount === 1
+              ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
+              : attendanceResponse;
+          }),
+        }),
+      );
+      assert.equal(fetchCount, 2);
+    });
+  }
+});
+
+test("保存エラーを安全な画面状態へ分類する", () => {
+  const cases = [
+    [new auth.AuthSessionError(auth.AUTH_STATES.UNAUTHENTICATED, "invalid_line_token", 401), "unauthenticated"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.TEMPORARY_ERROR, "authentication_not_configured", 503), "authentication_unavailable"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.TEMPORARY_ERROR, "authentication_upstream_error", 502), "authentication_unavailable"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "staging_attendance_write_disabled", 403), "write_disabled"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "performer_not_allowed", 403), "not_allowed"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "event_not_found", 404), "event_not_found"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "attendance_deadline_passed", 409), "event_not_available"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "invalid_request", 400), "response_error"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "payload_too_large", 413), "response_error"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "unsupported_media_type", 415), "response_error"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.TEMPORARY_ERROR, "attendance_write_failed", 503), "save_unavailable"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.NETWORK_ERROR, "timeout", 0), "network_uncertain"],
+  ];
+  for (const [error, expected] of cases) {
+    const state = auth.classifyAttendanceSubmitError_(error);
+    assert.equal(state, expected);
+    const message = auth.getAttendanceSubmitMessage_(state);
+    assert.ok(message.length > 0);
+    assert.doesNotMatch(message, /invalid_line_token|event_not_found|attendance_write_failed/);
+  }
+});
+
+test("予定単位の保存ボタンは変更がある回答可能予定だけに現れる", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  let fetchCount = 0;
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+    enableSubmitUi: true,
+    liff: makeLiff(),
+    submitDependencies: fetchDependencies(async () => {
+      fetchCount += 1;
+      return jsonResponse({});
+    }),
+  });
+  const cards = collectElements(container).filter((element) => element.tagName === "ARTICLE");
+  const submitButtons = collectElements(container).filter(
+    (element) => element.className === "attendanceSubmitButton",
+  );
+  assert.equal(submitButtons.length, 2);
+  assert.ok(submitButtons.every((button) => button.type === "button" && button.hidden));
+  assert.ok(submitButtons.every((button) => !/event-|本人/.test(button.id)));
+
+  const firstCardRadios = collectElements(cards[0]).filter((element) => element.tagName === "INPUT");
+  const absence = firstCardRadios.find((radio) => radio.value === "欠席" && !radio.checked);
+  absence.checked = true;
+  absence.dispatch("change");
+  assert.equal(submitButtons[0].hidden, false);
+  assert.equal(submitButtons[1].hidden, true);
+  assert.equal(fetchCount, 0, "表示・radio変更だけでは通信しない");
+  assert.equal(
+    collectElements(container).some((element) => /一括保存/.test(element.textContent)),
+    false,
+  );
+});
+
+test("書き込みゲート停止時はdraftを保持しlegacyへfallbackしない", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  const requests = [];
+  const summaries = [];
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+    enableSubmitUi: true,
+    liff: makeLiff(),
+    onDraftSummary(summary) { summaries.push(summary); },
+    submitDependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      return jsonResponse({ ok: false, error: "staging_attendance_write_disabled" }, 403);
+    }),
+  });
+  const firstCard = collectElements(container).find((element) => element.tagName === "ARTICLE");
+  const absence = collectElements(firstCard).find(
+    (element) => element.tagName === "INPUT" && element.value === "欠席" && !element.checked,
+  );
+  absence.checked = true;
+  absence.dispatch("change");
+  const button = collectElements(firstCard).find(
+    (element) => element.className === "attendanceSubmitButton",
+  );
+  await button.dispatchAsync("click");
+
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/line\/attendance\/submit-authenticated$/);
+  assert.equal(absence.checked, true);
+  assert.equal(button.hidden, false);
+  assert.equal(button.disabled, false);
+  assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
+  assert.match(firstCard.textContent, /保存機能は停止しています/);
+  assert.doesNotMatch(requests[0].url, /script\.google|\/line\/attendance\/submit$/);
+});
+
+test("保存成功後は再取得で確認した予定だけ確定し他予定draftを維持する", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  const requests = [];
+  const summaries = [];
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+    enableSubmitUi: true,
+    liff: makeLiff({ getIDToken() { return "click.token.value"; } }),
+    onDraftSummary(summary) { summaries.push(summary); },
+    submitDependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      return requests.length === 1
+        ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
+        : jsonResponse({
+            ok: true,
+            status: "ok",
+            registered: true,
+            map: {
+              "event-1": [{ performerName: "本人1", attend: "欠席" }],
+              "event-2": [
+                { performerName: "本人1", attend: "欠席" },
+                { performerName: "本人2", attend: "参加" },
+              ],
+            },
+          });
+    }),
+  });
+  const cards = collectElements(container).filter((element) => element.tagName === "ARTICLE");
+  const changeRadio = (card, value) => {
+    const radio = collectElements(card).find(
+      (element) => element.tagName === "INPUT" && element.value === value && !element.checked,
+    );
+    radio.checked = true;
+    radio.dispatch("change");
+    return radio;
+  };
+  changeRadio(cards[0], "欠席");
+  const otherDraft = changeRadio(cards[1], "未定");
+  const buttons = cards.map((card) => collectElements(card).find(
+    (element) => element.className === "attendanceSubmitButton",
+  ));
+  await buttons[0].dispatchAsync("click");
+
+  assert.equal(requests.length, 2);
+  const sent = JSON.parse(requests[0].options.body);
+  assert.deepEqual(sent, {
+    eventKey: "event-1",
+    mode: "merge",
+    items: [{ performerName: "本人1", attend: "欠席" }],
+  });
+  assert.equal(requests[1].options.body, "{}");
+  assert.match(cards[0].textContent, /変更を保存しました/);
+  assert.match(cards[0].textContent, /欠席/);
+  assert.equal(buttons[0].hidden, true);
+  assert.equal(buttons[1].hidden, false);
+  assert.equal(otherDraft.checked, true);
+  assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
+});
+
+test("保存中ロックは連打と別予定の同時POSTを防ぎ全draft操作を止める", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  let releaseSubmit;
+  const submitGate = new Promise((resolve) => { releaseSubmit = resolve; });
+  const requests = [];
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+    enableSubmitUi: true,
+    liff: makeLiff(),
+    submitDependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      if (requests.length === 1) {
+        await submitGate;
+        return jsonResponse({ ok: true, status: "ok", updatedCount: 1 });
+      }
+      return jsonResponse({
+        ok: true,
+        status: "ok",
+        registered: true,
+        map: { "event-1": [{ performerName: "本人1", attend: "欠席" }] },
+      });
+    }),
+  });
+  const cards = collectElements(container).filter((element) => element.tagName === "ARTICLE");
+  for (const [card, value] of [[cards[0], "欠席"], [cards[1], "未定"]]) {
+    const radio = collectElements(card).find(
+      (element) => element.tagName === "INPUT" && element.value === value && !element.checked,
+    );
+    radio.checked = true;
+    radio.dispatch("change");
+  }
+  const buttons = cards.map((card) => collectElements(card).find(
+    (element) => element.className === "attendanceSubmitButton",
+  ));
+  const first = buttons[0].dispatchAsync("click");
+  await Promise.resolve();
+  const second = buttons[1].dispatchAsync("click");
+  await buttons[0].dispatchAsync("click");
+  assert.equal(requests.length, 1);
+  const controls = collectElements(container).filter((element) =>
+    element.tagName === "INPUT" || element.tagName === "BUTTON"
+  );
+  assert.ok(controls.every((element) => element.disabled));
+  releaseSubmit();
+  await Promise.all([first, second]);
+  assert.equal(requests.filter((request) => /submit-authenticated$/.test(request.url)).length, 1);
+  assert.ok(controls.every((element) => !element.disabled));
+});
+
+test("通信失敗・timeoutは自動retryせず保存結果不明としてdraftを残す", async (t) => {
+  for (const [name, dependencies] of [
+    ["network", fetchDependencies(async () => { throw new TypeError("offline"); })],
+    ["timeout", fetchDependencies((_url, options) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("aborted")));
+    }), { timeoutMs: 5 })],
+  ]) {
+    await t.test(name, async () => {
+      const result = await registeredReadOnlyResult();
+      const container = new FakeElement("div");
+      let fetchCount = 0;
+      const originalFetch = dependencies.fetchImpl;
+      dependencies.fetchImpl = async (...args) => {
+        fetchCount += 1;
+        return originalFetch(...args);
+      };
+      auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+        enableDraftPreview: true,
+        enableSubmitUi: true,
+        liff: makeLiff(),
+        submitDependencies: dependencies,
+      });
+      const card = collectElements(container).find((element) => element.tagName === "ARTICLE");
+      const radio = collectElements(card).find(
+        (element) => element.tagName === "INPUT" && element.value === "欠席" && !element.checked,
+      );
+      radio.checked = true;
+      radio.dispatch("change");
+      const button = collectElements(card).find(
+        (element) => element.className === "attendanceSubmitButton",
+      );
+      await button.dispatchAsync("click");
+      assert.equal(fetchCount, 1);
+      assert.equal(radio.checked, true);
+      assert.equal(button.hidden, false);
+      assert.match(card.textContent, /保存結果を確認できませんでした/);
+    });
+  }
 });
 
 test("予定カードはtextContentだけで安全に描画し、操作要素を生成しない", () => {
