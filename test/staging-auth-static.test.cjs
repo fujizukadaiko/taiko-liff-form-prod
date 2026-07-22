@@ -90,6 +90,17 @@ test("通常読み取りフローは許可された2 APIだけを使用し書き
   assert.doesNotMatch(flow, /attendance\/submit|\/line\/schedules|events\/by-date/);
   assert.doesNotMatch(flow, /admin|feedback|API_ENDPOINT/);
   assert.doesNotMatch(flow, /localStorage|sessionStorage|indexedDB|document\.cookie/);
+  assert.doesNotMatch(authSource, /submit-authenticated/);
+});
+
+test("attendanceWriteは読み取り専用表示にだけ使用する", () => {
+  assert.match(authSource, /validateAttendanceWrite_/);
+  assert.match(authSource, /eventAllowedCount/);
+  assert.match(authSource, /performerAllowedEventCount/);
+  assert.match(authSource, /予定の回答可否/);
+  assert.match(authSource, /回答可否:/);
+  assert.doesNotMatch(authSource, /createElement\(["'](?:input|select|textarea|button|form)["']\)/i);
+  assert.doesNotMatch(authSource, /addEventListener\(["']submit["']/i);
 });
 
 test("index.htmlのインラインJavaScriptが構文上有効", () => {

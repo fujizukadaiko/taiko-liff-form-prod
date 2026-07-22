@@ -1052,6 +1052,26 @@
             margin:6px 0 0;
             font-weight:700;
         }
+        .readOnlyCapability{
+            display:inline-block;
+            max-width:100%;
+            margin:8px 0 0;
+            padding:4px 8px;
+            border:1px solid currentColor;
+            border-radius:999px;
+            font-size:13px;
+            font-weight:700;
+            line-height:1.4;
+            overflow-wrap:anywhere;
+        }
+        .readOnlyCapabilityOpen{
+            color:#17643a;
+            background:#edf8f1;
+        }
+        .readOnlyCapabilityClosed{
+            color:#6b4c2f;
+            background:#fff7ed;
+        }
         .readOnlyScheduleMeta{
             display:grid;
             gap:5px;
@@ -1080,8 +1100,8 @@
             list-style:none;
         }
         .readOnlyAttendanceList li{
-            display:flex;
-            justify-content:space-between;
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
             gap:12px;
             min-width:0;
             padding-top:6px;
@@ -1093,6 +1113,12 @@
         }
         .readOnlyAttendanceStatus{
             flex:0 0 auto;
+            font-weight:700;
+        }
+        .readOnlyPerformerCapability{
+            grid-column:1 / -1;
+            justify-self:start;
+            font-size:13px;
             font-weight:700;
         }
         .readOnlyScheduleEmpty{
