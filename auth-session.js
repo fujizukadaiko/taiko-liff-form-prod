@@ -11,6 +11,8 @@
     "/line/members/submit-authenticated";
   const AUTHENTICATED_ADMIN_SCHEDULES_PATH =
     "/line/admin/schedules-authenticated";
+  const AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH =
+    "/line/admin/schedules/submit-authenticated";
   const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -798,6 +800,307 @@
     } finally {
       idToken = "";
     }
+  }
+
+  const ADMIN_SCHEDULE_INPUT_FIELDS = new Set([
+    "kind",
+    "title",
+    "date",
+    "targetGroup",
+    "time",
+    "place",
+    "callTime",
+    "callPlace",
+    "needAttendance",
+    "pushFlag",
+    "deadlineDate",
+    "publishFlag",
+    "status",
+    "note",
+  ]);
+  const ADMIN_EVENT_KEY_PATTERN =
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+  function readAdminScheduleInputString_(schedule, key, maxLength, required) {
+    const value = schedule[key];
+    if (
+      typeof value !== "string"
+      || value.trim() !== value
+      || value.length > maxLength
+      || (required && !value)
+      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(value)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedule_input",
+        0,
+      );
+    }
+    return value;
+  }
+
+  function buildAuthenticatedAdminSchedulePayload_(input, dependencies) {
+    if (
+      !isPlainObject(input)
+      || !["create", "update"].includes(input.mode)
+      || !isPlainObject(input.schedule)
+      || Object.keys(input.schedule).length !== ADMIN_SCHEDULE_INPUT_FIELDS.size
+      || Object.keys(input.schedule).some(function (key) {
+        return !ADMIN_SCHEDULE_INPUT_FIELDS.has(key);
+      })
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedule_input",
+        0,
+      );
+    }
+    const schedule = {
+      kind: readAdminScheduleInputString_(input.schedule, "kind", 10, true),
+      title: readAdminScheduleInputString_(input.schedule, "title", 200, true),
+      date: readAdminScheduleInputString_(input.schedule, "date", 8, true),
+      targetGroup: readAdminScheduleInputString_(
+        input.schedule,
+        "targetGroup",
+        10,
+        true,
+      ),
+      time: readAdminScheduleInputString_(input.schedule, "time", 5, false),
+      place: readAdminScheduleInputString_(input.schedule, "place", 300, false),
+      callTime: readAdminScheduleInputString_(
+        input.schedule,
+        "callTime",
+        5,
+        false,
+      ),
+      callPlace: readAdminScheduleInputString_(
+        input.schedule,
+        "callPlace",
+        300,
+        false,
+      ),
+      needAttendance: readAdminScheduleInputString_(
+        input.schedule,
+        "needAttendance",
+        1,
+        true,
+      ),
+      pushFlag: readAdminScheduleInputString_(
+        input.schedule,
+        "pushFlag",
+        1,
+        true,
+      ),
+      deadlineDate: readAdminScheduleInputString_(
+        input.schedule,
+        "deadlineDate",
+        8,
+        false,
+      ),
+      publishFlag: readAdminScheduleInputString_(
+        input.schedule,
+        "publishFlag",
+        3,
+        true,
+      ),
+      status: readAdminScheduleInputString_(
+        input.schedule,
+        "status",
+        16,
+        true,
+      ),
+      note: readAdminScheduleInputString_(input.schedule, "note", 2000, false),
+    };
+    parseYmd(schedule.date, "invalid_admin_schedule_input");
+    if (schedule.deadlineDate) {
+      parseYmd(schedule.deadlineDate, "invalid_admin_schedule_input");
+    }
+    validateTime(schedule.time);
+    validateTime(schedule.callTime);
+    if (
+      !["発表", "練習", "その他"].includes(schedule.kind)
+      || !["子ども", "大人", "両方"].includes(schedule.targetGroup)
+      || !["Y", "N"].includes(schedule.needAttendance)
+      || !["Y", "S", "D", "N"].includes(schedule.pushFlag)
+      || !["Yes", "No"].includes(schedule.publishFlag)
+      || !["active", "archived"].includes(schedule.status)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedule_input",
+        0,
+      );
+    }
+
+    const requestId = createAuthenticatedRequestId_(dependencies);
+    if (input.mode === "create") {
+      if (
+        Object.keys(input).length !== 2
+        || schedule.status !== "active"
+        || !["Y", "N"].includes(schedule.pushFlag)
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_schedule_input",
+          0,
+        );
+      }
+      return { requestId, mode: "create", schedule };
+    }
+
+    if (
+      Object.keys(input).length !== 4
+      || typeof input.eventKey !== "string"
+      || !ADMIN_EVENT_KEY_PATTERN.test(input.eventKey)
+      || typeof input.expectedUpdatedAt !== "string"
+      || input.expectedUpdatedAt.length > 64
+      || input.expectedUpdatedAt.trim() !== input.expectedUpdatedAt
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedule_input",
+        0,
+      );
+    }
+    return {
+      requestId,
+      mode: "update",
+      eventKey: input.eventKey,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      schedule,
+    };
+  }
+
+  function validateAdminScheduleSubmitSuccess_(body, payload) {
+    if (
+      !isPlainObject(body)
+      || Object.keys(body).length !== 6
+      || body.ok !== true
+      || body.status !== "ok"
+      || body.requestId !== payload.requestId
+      || body.mode !== payload.mode
+      || typeof body.eventKey !== "string"
+      || !ADMIN_EVENT_KEY_PATTERN.test(body.eventKey)
+      || (payload.mode === "update" && body.eventKey !== payload.eventKey)
+      || typeof body.updatedAt !== "string"
+      || !body.updatedAt
+      || body.updatedAt.length > 64
+      || Number.isNaN(new Date(body.updatedAt).getTime())
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedule_submit_response",
+        200,
+      );
+    }
+    return { eventKey: body.eventKey, updatedAt: body.updatedAt };
+  }
+
+  function expectedAdminScheduleFromPayload_(payload) {
+    const expected = { ...payload.schedule };
+    if (expected.kind !== "発表" || expected.needAttendance !== "Y") {
+      expected.needAttendance = "N";
+      expected.pushFlag = "N";
+      expected.deadlineDate = "";
+    }
+    if (expected.kind === "練習") {
+      expected.callTime = "";
+      expected.callPlace = "";
+    }
+    return expected;
+  }
+
+  function confirmAdminSchedule_(schedule, payload, success) {
+    const expected = expectedAdminScheduleFromPayload_(payload);
+    const mappings = [
+      ["kind", "kind"],
+      ["title", "title"],
+      ["date", "date"],
+      ["targetGroup", "targetGroup"],
+      ["time", "time"],
+      ["place", "place"],
+      ["callTime", "callTime"],
+      ["callPlace", "callPlace"],
+      ["needAttendance", "needAttendance"],
+      ["pushFlag", "pushFlag"],
+      ["deadlineDate", "deadlineDate"],
+      ["publishFlag", "publishFlag"],
+      ["status", "status"],
+      ["note", "note"],
+    ];
+    return Boolean(
+      schedule
+      && schedule.eventKey === success.eventKey
+      && schedule.updatedAt === success.updatedAt
+      && mappings.every(function (mapping) {
+        return schedule[mapping[0]] === expected[mapping[1]];
+      }),
+    );
+  }
+
+  async function submitAuthenticatedAdminSchedule_(input, options) {
+    const opts = options || {};
+    const payload = buildAuthenticatedAdminSchedulePayload_(
+      input,
+      opts.dependencies,
+    );
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      const success = validateAdminScheduleSubmitSuccess_(body, payload);
+      const confirmed = await fetchAdminSchedules_(idToken, opts.dependencies);
+      const saved = confirmed.schedules.find(function (schedule) {
+        return confirmAdminSchedule_(schedule, payload, success);
+      });
+      if (!saved) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "admin_schedule_confirmation_failed",
+          200,
+        );
+      }
+      return { schedule: saved, schedules: confirmed };
+    } finally {
+      idToken = "";
+    }
+  }
+
+  function classifyAdminScheduleSubmitError_(error) {
+    const status = error instanceof AuthSessionError ? error.status : 0;
+    const code = error instanceof AuthSessionError ? error.code : "";
+    if (
+      error instanceof AuthSessionError
+      && error.type === AUTH_STATES.UNAUTHENTICATED
+    ) return "unauthenticated";
+    if (
+      status === 403
+      && code === "staging_admin_schedule_write_disabled"
+    ) return "write_disabled";
+    if (status === 403 && code === "admin_forbidden") return "forbidden";
+    if (status === 404 && code === "schedule_not_found") return "not_found";
+    if (status === 409 && code === "schedule_conflict") return "conflict";
+    if (status === 409 && code === "idempotency_conflict") {
+      return "idempotency_conflict";
+    }
+    if (
+      error instanceof AuthSessionError
+      && error.type === AUTH_STATES.NETWORK_ERROR
+    ) return "result_unknown";
+    if (code === "admin_schedule_confirmation_failed") {
+      return "confirmation_failed";
+    }
+    return "failed";
   }
 
   function extractAttendanceSummary(body, home) {
@@ -1720,7 +2023,7 @@
     return normalized;
   }
 
-  function createMemberRequestId_(dependencies) {
+  function createAuthenticatedRequestId_(dependencies) {
     const createRequestId = dependencies && dependencies.createRequestId;
     const requestId = typeof createRequestId === "function"
       ? createRequestId()
@@ -1784,7 +2087,7 @@
       return { performerName, segment: performer.segment };
     });
     return {
-      requestId: createMemberRequestId_(dependencies),
+      requestId: createAuthenticatedRequestId_(dependencies),
       mode: input.mode,
       inputName,
       notify: input.notify,
@@ -2586,6 +2889,7 @@
     AUTH_STATES,
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
     AUTHENTICATED_ADMIN_SCHEDULES_PATH,
+    AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH,
     AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
@@ -2593,10 +2897,12 @@
     authenticatedFetch_,
     buildAuthenticatedAttendanceEventPayload_,
     buildAuthenticatedAttendanceDraftPayloads_,
+    buildAuthenticatedAdminSchedulePayload_,
     buildAuthenticatedMemberPayload_,
     buildProductionHomeViewModel_,
     buildReadOnlyScheduleViewModel_,
     classifyAttendanceSubmitError_,
+    classifyAdminScheduleSubmitError_,
     classifyMemberSubmitError_,
     createAttendanceDraftState_,
     fetchAttendanceSummary_,
@@ -2614,6 +2920,7 @@
     setAttendanceDraftSelection_,
     summarizeAttendanceDraft_,
     submitAuthenticatedAttendancePayload_,
+    submitAuthenticatedAdminSchedule_,
     submitAuthenticatedMemberProfile_,
     startStagingAuthenticatedReadOnly,
     startAuthenticatedAdminSchedules,

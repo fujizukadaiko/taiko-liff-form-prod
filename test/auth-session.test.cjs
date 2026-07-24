@@ -226,6 +226,55 @@ function adminSchedulesResponse(overrides = {}) {
   };
 }
 
+function writableAdminSchedule(overrides = {}) {
+  return {
+    eventKey: "20990102AA",
+    date: "20990102",
+    title: "管理予定",
+    kind: "発表",
+    targetGroup: "両方",
+    time: "10:00",
+    place: "テスト会場",
+    callTime: "09:00",
+    callPlace: "入口",
+    needAttendance: "Y",
+    pushFlag: "N",
+    deadlineDate: "20981231",
+    firstPushAt: "",
+    lastRemindAt: "",
+    publishFlag: "Yes",
+    status: "active",
+    subject: "",
+    bodyTemplate: "",
+    note: "備考",
+    updatedAt: "2026-07-24T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function adminScheduleInput(overrides = {}) {
+  return {
+    mode: "create",
+    schedule: {
+      kind: "発表",
+      title: "管理予定",
+      date: "20990102",
+      targetGroup: "両方",
+      time: "10:00",
+      place: "テスト会場",
+      callTime: "09:00",
+      callPlace: "入口",
+      needAttendance: "Y",
+      pushFlag: "N",
+      deadlineDate: "20981231",
+      publishFlag: "Yes",
+      status: "active",
+      note: "備考",
+    },
+    ...overrides,
+  };
+}
+
 function attendanceSubmitPayload(overrides = {}) {
   return {
     requestId: REQUEST_ID,
@@ -2174,6 +2223,150 @@ test("管理予定一覧は不正契約・Token欠落・HTTP失敗を成功扱�
     );
     assert.equal(fetchCount, 0);
   });
+});
+
+test("管理予定保存は認証済みPOSTだけを使い再取得version一致後に成功する", async () => {
+  const requests = [];
+  const result = await auth.submitAuthenticatedAdminSchedule_(
+    adminScheduleInput(),
+    {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async (url, options) => {
+        requests.push({ url, options });
+        if (requests.length === 1) {
+          const sent = JSON.parse(options.body);
+          assert.deepEqual(sent, {
+            requestId: REQUEST_ID,
+            ...adminScheduleInput(),
+          });
+          assert.equal(JSON.stringify(sent).includes("lineId"), false);
+          assert.equal(JSON.stringify(sent).includes("memberId"), false);
+          return jsonResponse({
+            ok: true,
+            status: "ok",
+            requestId: REQUEST_ID,
+            mode: "create",
+            eventKey: "20990102AA",
+            updatedAt: "2026-07-24T00:00:00.000Z",
+          });
+        }
+        return jsonResponse({
+          ok: true,
+          status: "ok",
+          schedules: [writableAdminSchedule()],
+          hasMore: false,
+        });
+      }, {
+        createRequestId() { return REQUEST_ID; },
+      }),
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests[0].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH}`,
+  );
+  assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.equal(
+    requests[1].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_SCHEDULES_PATH}`,
+  );
+  assert.equal(result.schedule.eventKey, "20990102AA");
+  assert.equal(JSON.stringify(result).includes(TOKEN), false);
+});
+
+test("管理予定編集はeventKeyとversionだけを送りclient申告IDを許可しない", async () => {
+  const input = adminScheduleInput({
+    mode: "update",
+    eventKey: "20990102AA",
+    expectedUpdatedAt: "2026-07-23T00:00:00.000Z",
+  });
+  const payload = auth.buildAuthenticatedAdminSchedulePayload_(input, {
+    createRequestId() { return REQUEST_ID; },
+  });
+  assert.deepEqual(payload, { requestId: REQUEST_ID, ...input });
+  assert.equal(JSON.stringify(payload).includes("lineId"), false);
+
+  for (const invalid of [
+    { ...input, lineId: "client-identity" },
+    { ...input, expectedUpdatedAt: 123 },
+    adminScheduleInput({
+      schedule: { ...adminScheduleInput().schedule, extra: "x" },
+    }),
+    adminScheduleInput({
+      schedule: { ...adminScheduleInput().schedule, date: "20990231" },
+    }),
+  ]) {
+    assert.throws(
+      () => auth.buildAuthenticatedAdminSchedulePayload_(invalid, {
+        createRequestId() { return REQUEST_ID; },
+      }),
+      (error) => error instanceof auth.AuthSessionError,
+    );
+  }
+});
+
+test("管理予定保存は再取得不一致・通信結果不明を成功扱いせず自動retryしない", async () => {
+  let mismatchCount = 0;
+  await assert.rejects(
+    auth.submitAuthenticatedAdminSchedule_(
+      adminScheduleInput(),
+      {
+        liff: makeLiff(),
+        dependencies: fetchDependencies(async () => {
+          mismatchCount += 1;
+          return mismatchCount === 1
+            ? jsonResponse({
+                ok: true,
+                status: "ok",
+                requestId: REQUEST_ID,
+                mode: "create",
+                eventKey: "20990102AA",
+                updatedAt: "2026-07-24T00:00:00.000Z",
+              })
+            : jsonResponse({
+                ok: true,
+                status: "ok",
+                schedules: [writableAdminSchedule({
+                  updatedAt: "different-version",
+                })],
+                hasMore: false,
+              });
+        }, {
+          createRequestId() { return REQUEST_ID; },
+        }),
+      },
+    ),
+    (error) => error instanceof auth.AuthSessionError
+      && error.code === "admin_schedule_confirmation_failed",
+  );
+  assert.equal(mismatchCount, 2);
+
+  let networkCount = 0;
+  let networkError;
+  try {
+    await auth.submitAuthenticatedAdminSchedule_(
+      adminScheduleInput(),
+      {
+        liff: makeLiff(),
+        dependencies: fetchDependencies(async () => {
+          networkCount += 1;
+          throw new Error("network");
+        }, {
+          createRequestId() { return REQUEST_ID; },
+        }),
+      },
+    );
+  } catch (error) {
+    networkError = error;
+  }
+  assert.equal(networkCount, 1);
+  assert.equal(
+    auth.classifyAdminScheduleSubmitError_(networkError),
+    "result_unknown",
+  );
 });
 
 test("管理者権限の欠落・余分な属性・型不正をresponse errorにする", async (t) => {

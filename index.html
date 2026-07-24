@@ -3491,6 +3491,41 @@
             padding:10px 12px;
             font-size:13px;
         }
+        .adminSafeControls,
+        .adminSafeFormGrid{
+            display:grid;
+            grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
+            gap:12px;
+        }
+        .adminSafeControls{ align-items:end; margin-top:12px; }
+        .adminSafeField{ display:grid; gap:5px; min-width:0; }
+        .adminSafeFieldWide{ grid-column:1 / -1; }
+        .adminSafeField label{ font-size:12px; color:var(--c-muted); }
+        .adminSafeField input,
+        .adminSafeField select,
+        .adminSafeField textarea{ width:100%; min-width:0; }
+        .adminSafeFormActions{
+            display:flex;
+            gap:8px;
+            justify-content:flex-end;
+            flex-wrap:wrap;
+            margin-top:14px;
+        }
+        .adminSafeEditButton{ justify-self:end; }
+        .adminSafeSaveNotice{
+            margin-top:12px;
+            border:1px solid #2563eb;
+            background:#eff6ff;
+            color:#1e3a8a;
+            border-radius:10px;
+            padding:9px 11px;
+            font-size:12px;
+        }
+        @media (max-width:560px){
+            .adminSafeControls,
+            .adminSafeFormGrid{ grid-template-columns:minmax(0, 1fr); }
+            .adminSafeFieldWide{ grid-column:auto; }
+        }
         </style>
   
     <!-- LIFF SDK -->
@@ -3551,7 +3586,7 @@
                 <div class="adminMenuBody">
                 <div class="adminMenuGrid">
                     <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" type="button">
-                        予定登録/編集（閲覧のみ）
+                        予定登録/編集
                     </button>
                     <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
                         出欠結果一覧（準備中）
@@ -3947,7 +3982,26 @@
                     </button>
                 </div>
                 <div class="adminSafeReadOnlyNotice">
-                    現在は閲覧のみです。新規登録・編集・削除は安全な保存APIの準備後に有効化します。
+                    新規登録と編集を安全な認証済み経路で試験できます。削除はまだ利用できません。
+                </div>
+                <div class="adminSafeControls">
+                    <div class="adminSafeField">
+                        <label for="adminSafeDays">一覧の表示期間（日数）</label>
+                        <select id="adminSafeDays" class="selectBtn">
+                            <option value="30">30日</option>
+                            <option value="60" selected>60日</option>
+                            <option value="90">90日</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeSegmentFilter">対象区分フィルタ</label>
+                        <select id="adminSafeSegmentFilter" class="selectBtn">
+                            <option value="">すべて</option>
+                            <option value="大人">大人</option>
+                            <option value="子ども">子ども</option>
+                            <option value="両方">両方</option>
+                        </select>
+                    </div>
                 </div>
                 <div
                     id="adminSafeScheduleMessage"
@@ -3961,6 +4015,106 @@
                     class="adminSafeScheduleList"
                     style="margin-top:12px;"
                 ></div>
+            </div>
+            <div class="card">
+                <div class="row-space">
+                    <div id="adminSafeFormTitle" class="sectionTitle">新規登録</div>
+                    <span id="adminSafeEditingId" class="small muted"></span>
+                </div>
+                <div class="adminSafeFormGrid">
+                    <div class="adminSafeField">
+                        <label for="adminSafeType">種別</label>
+                        <select id="adminSafeType" class="selectBtn">
+                            <option value="">選択してください</option>
+                            <option value="発表">発表</option>
+                            <option value="練習">練習</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeTargetGroup">対象区分</label>
+                        <select id="adminSafeTargetGroup" class="selectBtn">
+                            <option value="子ども">子ども</option>
+                            <option value="大人">大人</option>
+                            <option value="両方">両方</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField adminSafeFieldWide">
+                        <label for="adminSafeTitle">タイトル</label>
+                        <input id="adminSafeTitle" type="text" maxlength="200" autocomplete="off">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeDate">公演日</label>
+                        <input id="adminSafeDate" type="date">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeTime">開始時間</label>
+                        <input id="adminSafeTime" type="time">
+                    </div>
+                    <div class="adminSafeField adminSafeFieldWide">
+                        <label for="adminSafePlace">場所</label>
+                        <input id="adminSafePlace" type="text" maxlength="300" autocomplete="off">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeCallTime">集合時間</label>
+                        <input id="adminSafeCallTime" type="time">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeCallPlace">集合場所</label>
+                        <input id="adminSafeCallPlace" type="text" maxlength="300" autocomplete="off">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeAttendance">出欠対象</label>
+                        <select id="adminSafeAttendance" class="selectBtn">
+                            <option value="Y">Y（回答を受け付ける）</option>
+                            <option value="N">N（回答不要）</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafePushFlag">配信フラグ</label>
+                        <select id="adminSafePushFlag" class="selectBtn"></select>
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeDeadline">回答期限</label>
+                        <input id="adminSafeDeadline" type="date">
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafePublish">公開</label>
+                        <select id="adminSafePublish" class="selectBtn">
+                            <option value="Yes">Yes</option>
+                            <option value="No">No</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField">
+                        <label for="adminSafeStatus">ステータス</label>
+                        <select id="adminSafeStatus" class="selectBtn">
+                            <option value="active">active</option>
+                            <option value="archived">archived</option>
+                        </select>
+                    </div>
+                    <div class="adminSafeField adminSafeFieldWide">
+                        <label for="adminSafeNote">備考</label>
+                        <textarea id="adminSafeNote" rows="4" maxlength="2000"></textarea>
+                    </div>
+                </div>
+                <div class="adminSafeSaveNotice">
+                    STAGING／テスト環境への保存です。通信結果が不明な場合は自動再送しません。
+                </div>
+                <div
+                    id="adminSafeFormMessage"
+                    class="small muted"
+                    role="status"
+                    aria-live="polite"
+                    style="margin-top:10px;"
+                ></div>
+                <div class="adminSafeFormActions">
+                    <button id="btnAdminSafeReset" class="btn btn-ghost btn-sm" type="button">
+                        新規入力へ戻す
+                    </button>
+                    <button id="btnAdminSafeSubmit" class="btn btn-primary btn-sm" type="button">
+                        新規登録
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -5267,6 +5421,9 @@
     reportDetailMap: {},     // { [eventId]: 詳細レスポンス } のキャッシュ
     authenticatedReadOnlyStatus: "loading", // staging読み取り専用。Tokenは保持しない。
     authenticatedMemberSnapshot: null, // Tokenや本人IDを含まない登録表示用snapshot。
+    authenticatedAdminSchedules: null, // Tokenや本人IDを含まない管理予定snapshot。
+    authenticatedAdminAuthorized: false,
+    authenticatedAdminEdit: null,
     };
 
     let registerMode = "create"; // "create" | "edit"
@@ -5981,9 +6138,195 @@
         const labels = {
             active: "有効",
             inactive: "無効",
+            archived: "アーカイブ",
         };
         const normalized = String(value || "").trim();
         return labels[normalized] || normalized;
+    }
+
+    function adminSafeCompactDate_(value){
+        const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return match ? `${match[1]}${match[2]}${match[3]}` : "";
+    }
+
+    function adminSafeDateInput_(value){
+        const match = String(value || "").match(/^(\d{4})(\d{2})(\d{2})$/);
+        return match ? `${match[1]}-${match[2]}-${match[3]}` : "";
+    }
+
+    function autoAdminSafeDeadline_(){
+        if (
+            state.authenticatedAdminEdit
+            || document.getElementById("adminSafeType")?.value !== "発表"
+        ) return;
+        const eventDate = document.getElementById("adminSafeDate");
+        const deadline = document.getElementById("adminSafeDeadline");
+        if (!eventDate?.value || !deadline || deadline.value) return;
+        const date = new Date(`${eventDate.value}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return;
+        date.setDate(date.getDate() - 7);
+        const year = String(date.getFullYear()).padStart(4, "0");
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        deadline.value = `${year}-${month}-${day}`;
+    }
+
+    function updateAdminSafeFormRules_(){
+        const type = document.getElementById("adminSafeType");
+        const attendance = document.getElementById("adminSafeAttendance");
+        const push = document.getElementById("adminSafePushFlag");
+        const deadline = document.getElementById("adminSafeDeadline");
+        const callTime = document.getElementById("adminSafeCallTime");
+        const callPlace = document.getElementById("adminSafeCallPlace");
+        const status = document.getElementById("adminSafeStatus");
+        if (!type || !attendance || !push || !deadline || !callTime || !callPlace) {
+            return;
+        }
+        const isCreate = !state.authenticatedAdminEdit;
+        const isPerformance = type.value === "発表";
+        const isPractice = type.value === "練習";
+        if (!isPerformance) {
+            attendance.value = "N";
+            deadline.value = "";
+        }
+        if (isPractice) {
+            callTime.value = "";
+            callPlace.value = "";
+            const time = document.getElementById("adminSafeTime");
+            const place = document.getElementById("adminSafePlace");
+            const targetGroup = String(
+                document.getElementById("adminSafeTargetGroup")?.value || "",
+            );
+            if (time && !time.value) {
+                time.value = targetGroup === "大人" ? "17:30" : "17:15";
+            }
+            if (place && !place.value) place.value = "藤塚小学校体育館";
+        }
+        attendance.disabled = !isPerformance;
+        deadline.disabled = !isPerformance || attendance.value !== "Y";
+        callTime.disabled = isPractice;
+        callPlace.disabled = isPractice;
+        if (status) status.disabled = isCreate;
+
+        const current = push.value || "N";
+        push.textContent = "";
+        const values = isPerformance
+            ? isCreate ? ["N", "Y"] : ["N", "Y", "S", "D"]
+            : ["N"];
+        const labels = {
+            N: "N",
+            Y: "Y（初回配信対象）",
+            S: "S（初回配信済）",
+            D: "D（締切停止）",
+        };
+        values.forEach(function(value){
+            const option = document.createElement("option");
+            option.value = value;
+            option.textContent = labels[value];
+            push.appendChild(option);
+        });
+        push.value = values.includes(current) ? current : "N";
+        push.disabled = !isPerformance;
+        autoAdminSafeDeadline_();
+    }
+
+    function resetAdminSafeForm_(){
+        state.authenticatedAdminEdit = null;
+        const values = {
+            adminSafeType: "",
+            adminSafeTargetGroup: "子ども",
+            adminSafeTitle: "",
+            adminSafeDate: "",
+            adminSafeTime: "",
+            adminSafePlace: "",
+            adminSafeCallTime: "",
+            adminSafeCallPlace: "藤塚小学校",
+            adminSafeAttendance: "N",
+            adminSafeDeadline: "",
+            adminSafePublish: "Yes",
+            adminSafeStatus: "active",
+            adminSafeNote: "",
+        };
+        Object.entries(values).forEach(function(entry){
+            const element = document.getElementById(entry[0]);
+            if (element) element.value = entry[1];
+        });
+        const title = document.getElementById("adminSafeFormTitle");
+        const editing = document.getElementById("adminSafeEditingId");
+        const submit = document.getElementById("btnAdminSafeSubmit");
+        const message = document.getElementById("adminSafeFormMessage");
+        if (title) title.textContent = "新規登録";
+        if (editing) editing.textContent = "";
+        if (submit) {
+            submit.textContent = "新規登録";
+            submit.disabled = false;
+            submit.dataset.resultUnknown = "";
+        }
+        if (message) message.textContent = "";
+        updateAdminSafeFormRules_();
+    }
+
+    function editAdminSafeSchedule_(schedule){
+        state.authenticatedAdminEdit = schedule;
+        const values = {
+            adminSafeType: schedule.kind,
+            adminSafeTargetGroup: schedule.targetGroup,
+            adminSafeTitle: schedule.title,
+            adminSafeDate: adminSafeDateInput_(schedule.date),
+            adminSafeTime: schedule.time,
+            adminSafePlace: schedule.place,
+            adminSafeCallTime: schedule.callTime,
+            adminSafeCallPlace: schedule.callPlace,
+            adminSafeAttendance: schedule.needAttendance || "N",
+            adminSafeDeadline: adminSafeDateInput_(schedule.deadlineDate),
+            adminSafePublish: schedule.publishFlag || "No",
+            adminSafeStatus: schedule.status || "active",
+            adminSafeNote: schedule.note,
+        };
+        Object.entries(values).forEach(function(entry){
+            const element = document.getElementById(entry[0]);
+            if (element) element.value = entry[1] || "";
+        });
+        const title = document.getElementById("adminSafeFormTitle");
+        const editing = document.getElementById("adminSafeEditingId");
+        const submit = document.getElementById("btnAdminSafeSubmit");
+        const message = document.getElementById("adminSafeFormMessage");
+        if (title) title.textContent = "予定を編集";
+        if (editing) editing.textContent = `ID: ${schedule.eventKey}`;
+        if (submit) {
+            submit.textContent = "保存";
+            submit.disabled = false;
+            submit.dataset.resultUnknown = "";
+        }
+        if (message) message.textContent = "";
+        updateAdminSafeFormRules_();
+        const push = document.getElementById("adminSafePushFlag");
+        if (push && Array.from(push.options).some(function(option){
+            return option.value === schedule.pushFlag;
+        })) push.value = schedule.pushFlag;
+        document.getElementById("adminSafeFormTitle")?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+        });
+    }
+
+    function filteredAdminSafeSchedules_(schedules){
+        const days = Number(document.getElementById("adminSafeDays")?.value || 60);
+        const segment = String(
+            document.getElementById("adminSafeSegmentFilter")?.value || "",
+        );
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const until = new Date(today);
+        until.setDate(until.getDate() + days);
+        return schedules.filter(function(schedule){
+            if (String(schedule.status).toLowerCase() === "archived") return false;
+            const input = adminSafeDateInput_(schedule.date);
+            const date = input ? new Date(`${input}T00:00:00`) : null;
+            if (!date || date < today || date > until) return false;
+            return !segment
+                || formatAdminSafeTargetGroup_(schedule.targetGroup) === segment;
+        });
     }
 
     function renderStagingAdminSchedules_(model){
@@ -5994,15 +6337,23 @@
         const schedules = Array.isArray(model && model.schedules)
             ? model.schedules
             : [];
+        state.authenticatedAdminSchedules = model;
         if (schedules.length === 0) {
             message.textContent = "登録されている予定はありません。";
             return;
         }
+        const filtered = filteredAdminSafeSchedules_(schedules);
         message.textContent = model.hasMore
-            ? `直近${schedules.length}件を表示しています。続きは今後のページ送り対応後に確認できます。`
-            : `${schedules.length}件の予定を表示しています。`;
+            ? `${filtered.length}件を表示中です。取得上限を超えた予定があります。`
+            : `${filtered.length}件を表示中（取得済み${schedules.length}件）です。`;
 
-        schedules.forEach(function(schedule){
+        if (filtered.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "listEmpty";
+            empty.textContent = "条件に該当する予定はありません。";
+            list.appendChild(empty);
+        }
+        filtered.forEach(function(schedule){
             const details = document.createElement("details");
             details.className = "card adminSafeScheduleCard";
             const summary = document.createElement("summary");
@@ -6041,9 +6392,10 @@
             appendAdminSafeScheduleRow_(
                 body,
                 "公開",
-                schedule.publishFlag === "Y" ? "公開" :
-                    schedule.publishFlag === "N" ? "非公開" : schedule.publishFlag,
+                schedule.publishFlag === "Yes" ? "公開" :
+                    schedule.publishFlag === "No" ? "非公開" : schedule.publishFlag,
             );
+            appendAdminSafeScheduleRow_(body, "配信", schedule.pushFlag);
             appendAdminSafeScheduleRow_(
                 body,
                 "状態",
@@ -6060,6 +6412,17 @@
             appendAdminSafeScheduleRow_(body, "通知件名", schedule.subject);
             appendAdminSafeScheduleRow_(body, "通知本文", schedule.bodyTemplate);
             appendAdminSafeScheduleRow_(body, "更新日時", schedule.updatedAt);
+            const edit = document.createElement("button");
+            edit.type = "button";
+            edit.className =
+                "btn btn-ghost btn-sm btn-compact adminSafeEditButton";
+            edit.textContent = "編集";
+            edit.addEventListener("click", function(event){
+                event.preventDefault();
+                event.stopPropagation();
+                editAdminSafeSchedule_(schedule);
+            });
+            body.appendChild(edit);
             details.appendChild(summary);
             details.appendChild(body);
             list.appendChild(details);
@@ -6090,7 +6453,108 @@
         }
     }
 
-    function bindStagingAdminReadOnly_(){
+    function collectAdminSafeForm_(){
+        const edit = state.authenticatedAdminEdit;
+        return {
+            ...(edit ? {
+                mode: "update",
+                eventKey: edit.eventKey,
+                expectedUpdatedAt: edit.updatedAt,
+            } : { mode: "create" }),
+            schedule: {
+                kind: String(document.getElementById("adminSafeType")?.value || ""),
+                title: String(document.getElementById("adminSafeTitle")?.value || "").trim(),
+                date: adminSafeCompactDate_(
+                    document.getElementById("adminSafeDate")?.value,
+                ),
+                targetGroup: String(
+                    document.getElementById("adminSafeTargetGroup")?.value || "",
+                ),
+                time: String(document.getElementById("adminSafeTime")?.value || ""),
+                place: String(document.getElementById("adminSafePlace")?.value || "").trim(),
+                callTime: String(
+                    document.getElementById("adminSafeCallTime")?.value || "",
+                ),
+                callPlace: String(
+                    document.getElementById("adminSafeCallPlace")?.value || "",
+                ).trim(),
+                needAttendance: String(
+                    document.getElementById("adminSafeAttendance")?.value || "N",
+                ),
+                pushFlag: String(
+                    document.getElementById("adminSafePushFlag")?.value || "N",
+                ),
+                deadlineDate: adminSafeCompactDate_(
+                    document.getElementById("adminSafeDeadline")?.value,
+                ),
+                publishFlag: String(
+                    document.getElementById("adminSafePublish")?.value || "No",
+                ),
+                status: edit
+                    ? String(document.getElementById("adminSafeStatus")?.value || "")
+                    : "active",
+                note: String(document.getElementById("adminSafeNote")?.value || "").trim(),
+            },
+        };
+    }
+
+    function adminSafeSubmitMessage_(kind){
+        const messages = {
+            saved: "テスト環境へ保存し、再取得した内容が一致しました。",
+            write_disabled: "現在、テスト環境の予定保存機能は停止しています。入力内容は保存されていません。",
+            forbidden: "管理者権限を確認できませんでした。",
+            not_found: "編集対象が見つかりません。予定一覧を再取得してください。",
+            conflict: "別の処理で予定が更新されました。自動上書きはしていません。一覧を再取得してください。",
+            idempotency_conflict: "同じ操作の確認情報が一致しません。自動再送はしていません。",
+            result_unknown: "通信結果を確認できません。自動再送はしていません。画面を開き直して現在値を確認してください。",
+            confirmation_failed: "保存後の再取得内容を確認できませんでした。自動再送はしていません。",
+            unauthenticated: "LINEでの本人確認を完了できませんでした。",
+            failed: "予定を保存できませんでした。保存済みとは判断していません。",
+        };
+        return messages[kind] || messages.failed;
+    }
+
+    async function submitAdminSafeForm_(){
+        const submit = document.getElementById("btnAdminSafeSubmit");
+        const message = document.getElementById("adminSafeFormMessage");
+        if (
+            !submit || !message || !window.LineAuthSession
+            || !state.authenticatedAdminAuthorized
+            || submit.disabled
+        ) return;
+        submit.disabled = true;
+        submit.textContent = state.authenticatedAdminEdit ? "保存中…" : "登録中…";
+        message.textContent = "本人認証と管理者権限を確認して保存しています…";
+        try {
+            const result = await window.LineAuthSession
+                .submitAuthenticatedAdminSchedule_(
+                    collectAdminSafeForm_(),
+                    {
+                        liff: window.liff,
+                        dependencies: { workerBaseUrl: D1_BASE },
+                    },
+                );
+            renderStagingAdminSchedules_(result.schedules);
+            resetAdminSafeForm_();
+            message.textContent = adminSafeSubmitMessage_("saved");
+        } catch (error) {
+            const kind = window.LineAuthSession
+                .classifyAdminScheduleSubmitError_(error);
+            message.textContent = adminSafeSubmitMessage_(kind);
+            if (["result_unknown", "confirmation_failed"].includes(kind)) {
+                submit.dataset.resultUnknown = "1";
+            }
+        } finally {
+            if (submit.dataset.resultUnknown !== "1") {
+                submit.disabled = false;
+                submit.textContent = state.authenticatedAdminEdit
+                    ? "保存"
+                    : "新規登録";
+            }
+        }
+    }
+
+    function bindStagingAdminSafe_(){
         const menuButton = document.getElementById("btnAdminMenuSchedules");
         const reload = document.getElementById("btnAdminSafeReload");
         const back = document.getElementById("btnAdminSafeBack");
@@ -6102,6 +6566,24 @@
             };
         }
         if (reload) reload.onclick = loadStagingAdminSchedules_;
+        document.getElementById("btnAdminSafeReset").onclick =
+            resetAdminSafeForm_;
+        document.getElementById("btnAdminSafeSubmit").onclick =
+            submitAdminSafeForm_;
+        ["adminSafeDays", "adminSafeSegmentFilter"].forEach(function(id){
+            document.getElementById(id).onchange = function(){
+                if (state.authenticatedAdminSchedules) {
+                    renderStagingAdminSchedules_(
+                        state.authenticatedAdminSchedules,
+                    );
+                }
+            };
+        });
+        ["adminSafeType", "adminSafeAttendance", "adminSafeTargetGroup"].forEach(function(id){
+            document.getElementById(id).onchange = updateAdminSafeFormRules_;
+        });
+        document.getElementById("adminSafeDate").onchange =
+            autoAdminSafeDeadline_;
         if (back) {
             back.onclick = function(){
                 showStagingAuthenticatedView_("view-home");
@@ -6414,7 +6896,8 @@
             adminMenu.style.display = adminAuthorized ? "" : "none";
             if (!adminAuthorized) adminMenu.open = false;
         }
-        bindStagingAdminReadOnly_();
+        state.authenticatedAdminAuthorized = adminAuthorized;
+        bindStagingAdminSafe_();
 
         const feedback = document.getElementById("feedbackFab");
         if (feedback) {

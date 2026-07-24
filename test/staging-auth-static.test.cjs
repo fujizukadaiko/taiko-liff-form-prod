@@ -172,13 +172,13 @@ test("安全shellは認証済みの4 viewだけを切り替える", () => {
   assert.match(viewSwitch, /自動再送はしていません/);
 });
 
-test("管理者メニューは認証済み予定一覧だけを有効にし旧管理画面へ接続しない", () => {
+test("管理者メニューは認証済み予定一覧・登録編集だけを有効にし旧管理画面へ接続しない", () => {
   assert.match(
     html,
     /id="adminMenu"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/,
   );
   assert.match(html, /id="view-admin-safe"[^>]*data-view[^>]*hidden/);
-  assert.match(html, /予定登録\/編集（閲覧のみ）/);
+  assert.match(html, /予定登録\/編集/);
   for (const id of [
     "btnAdminMenuReport",
     "btnAdminCarpool",
@@ -197,6 +197,11 @@ test("管理者メニューは認証済み予定一覧だけを有効にし旧�
   assert.ok(scheduleButton);
   assert.doesNotMatch(scheduleButton[0], /data-view-target/);
   assert.match(html, /startAuthenticatedAdminSchedules/);
+  assert.match(html, /submitAuthenticatedAdminSchedule_/);
+  assert.match(html, /classifyAdminScheduleSubmitError_/);
+  assert.match(html, /expectedUpdatedAt/);
+  assert.match(html, /自動再送しません/);
+  assert.match(html, /削除はまだ利用できません/);
   assert.match(html, /showStagingAuthenticatedView_\("view-admin-safe"\)/);
   assert.match(
     html,
