@@ -100,8 +100,8 @@ test("production相当shellは安全な認証済み機能だけを表示する",
   assert.match(html, /renderReadOnlySchedules_/);
   assert.match(html, /element\.hidden = element\.dataset\.stagingShell !== "safe"/);
   assert.doesNotMatch(html, /element\.hidden = element !== card/);
-  assert.match(html, /configureStagingProductionShell_\(status\)/);
-  assert.match(html, /registered \? "出欠を確認・回答" : "現在利用できません"/);
+  assert.match(html, /configureStagingProductionShell_\(effectiveStatus, snapshot\)/);
+  assert.match(html, /unregistered[\s\S]*"初回登録"[\s\S]*viewerOnly[\s\S]*"登録情報を変更"[\s\S]*"出欠を確認・回答"/);
   assert.match(html, /id="stagingUnavailableFeatures"/);
   assert.match(html, /安全な認証・保存APIの準備が完了するまで、旧システムには接続しません/);
   assert.match(html, /feedback\.setAttribute\("hidden", ""\)/);
@@ -131,14 +131,14 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shellはhomeと認証済み出欠viewだけを切り替える", () => {
+test("安全shellはhome・認証済み出欠・認証済み登録viewだけを切り替える", () => {
   const viewStart = html.indexOf("function showStagingAuthenticatedView_");
   const shellStart = html.indexOf("function configureStagingProductionShell_");
   const viewSwitch = html.slice(viewStart, shellStart);
   const shellEnd = html.indexOf("\n    function renderStagingReadOnlyState_", shellStart);
   const shell = html.slice(shellStart, shellEnd);
   assert.ok(viewStart >= 0 && shellStart > viewStart && shellEnd > shellStart);
-  assert.match(viewSwitch, /new Set\(\["view-home", "view-form"\]\)/);
+  assert.match(viewSwitch, /new Set\(\["view-home", "view-form", "view-register"\]\)/);
   assert.match(viewSwitch, /const active = view\.id === viewId/);
   assert.match(viewSwitch, /view\.hidden = !active/);
   assert.match(viewSwitch, /view\.classList\.toggle\("show", active\)/);
@@ -147,11 +147,15 @@ test("安全shellはhomeと認証済み出欠viewだけを切り替える", () =
   assert.match(shell, /querySelectorAll\("\.stagingLegacyFormControl"\)/);
   assert.match(shell, /element\.hidden = true/);
   assert.match(shell, /schedules\.disabled = true/);
-  assert.match(shell, /editNames\.disabled = true/);
+  assert.match(shell, /editNames\.disabled = !registered/);
   assert.doesNotMatch(
     `${viewSwitch}\n${shell}`,
     /API_ENDPOINT|fetch\(|getDecodedIDToken|lineId|memberId|no-cors|show\("#view-/,
   );
+  assert.match(viewSwitch, /submitAuthenticatedMemberProfile_/);
+  assert.match(viewSwitch, /classifyMemberSubmitError_/);
+  assert.match(viewSwitch, /memberSubmitMessage_/);
+  assert.match(viewSwitch, /自動再送はしていません/);
 });
 
 test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続する", () => {
@@ -164,7 +168,10 @@ test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続す
   assert.match(html, /buildProductionHomeViewModel_\(\s*snapshot\.viewModel/);
   assert.match(html, /renderProductionHome_\(\s*box,\s*productionHome,\s*document/);
   assert.match(html, /state\.authenticatedProductionHome = productionHome/);
-  assert.match(html, /primary\.setAttribute\("aria-controls", "view-form"\)/);
+  assert.match(
+    html,
+    /primary\.setAttribute\(\s*"aria-controls",\s*unregistered \|\| viewerOnly \? "view-register" : "view-form"/,
+  );
 
   const formView = html.indexOf('<section id="view-form" data-view>');
   const authenticatedSchedule = html.indexOf('id="readOnlyScheduleSection"');

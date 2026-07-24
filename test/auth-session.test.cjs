@@ -118,6 +118,9 @@ function registeredHome() {
     ok: true,
     registered: true,
     member: {
+      inputName: "入力者",
+      notify: true,
+      viewerOnly: false,
       performers: [
         { performerName: "本人1", segment: "大人の部" },
         { performerName: "本人2", segment: "子どもの部" },
@@ -1428,6 +1431,235 @@ test("保存エラーを安全な画面状態へ分類する", () => {
   }
 });
 
+test("会員payloadは通知とviewer-onlyを分離し氏名・区分・重複を送信前検証する", () => {
+  const dependencies = {
+    createRequestId() { return REQUEST_ID; },
+  };
+  assert.deepEqual(
+    auth.buildAuthenticatedMemberPayload_({
+      mode: "replace",
+      inputName: "　入力者　 太郎 ",
+      notify: false,
+      performers: [{
+        performerName: "　演奏者　A ",
+        segment: "大人の部",
+      }],
+    }, dependencies),
+    {
+      requestId: REQUEST_ID,
+      mode: "replace",
+      inputName: "入力者 太郎",
+      notify: false,
+      performers: [{
+        performerName: "演奏者 A",
+        segment: "大人の部",
+      }],
+    },
+  );
+  const viewer = auth.buildAuthenticatedMemberPayload_({
+    mode: "create",
+    inputName: "入力者",
+    notify: true,
+    performers: [],
+  }, dependencies);
+  assert.equal(viewer.notify, true);
+  assert.deepEqual(viewer.performers, []);
+
+  for (const invalid of [
+    {
+      mode: "create",
+      inputName: "",
+      notify: true,
+      performers: [],
+    },
+    {
+      mode: "create",
+      inputName: "入力者",
+      notify: true,
+      performers: [
+        { performerName: "同名", segment: "大人の部" },
+        { performerName: "同名", segment: "子どもの部" },
+      ],
+    },
+    {
+      mode: "create",
+      inputName: "入力者",
+      notify: true,
+      performers: [{ performerName: "名前", segment: "unknown" }],
+    },
+    {
+      mode: "create",
+      inputName: "入力者",
+      notify: true,
+      performers: [],
+      lineId: "forbidden",
+    },
+  ]) {
+    assert.throws(
+      () => auth.buildAuthenticatedMemberPayload_(invalid, dependencies),
+      auth.AuthSessionError,
+    );
+  }
+});
+
+test("会員保存は現在のIDトークンで専用routeへ送りhome再取得一致後だけ成功する", async () => {
+  const requests = [];
+  const input = {
+    mode: "replace",
+    inputName: "入力者",
+    notify: false,
+    performers: [{ performerName: "演奏者A", segment: "大人の部" }],
+  };
+  const result = await auth.submitAuthenticatedMemberProfile_(input, {
+    liff: makeLiff({ getIDToken() { return "fresh.member.token"; } }),
+    dependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      if (requests.length === 1) {
+        return jsonResponse({
+          ok: true,
+          status: "ok",
+          requestId: REQUEST_ID,
+          mode: "replace",
+          memberCount: 1,
+          viewerOnly: false,
+        });
+      }
+      return jsonResponse({
+        ok: true,
+        registered: true,
+        member: {
+          inputName: "入力者",
+          notify: false,
+          viewerOnly: false,
+          performers: [{ performerName: "演奏者A", segment: "大人の部" }],
+        },
+        events: [],
+      });
+    }, {
+      createRequestId() { return REQUEST_ID; },
+    }),
+  });
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests[0].url,
+    `${TEST_WORKER_BASE_URL}/line/members/submit-authenticated`,
+  );
+  assert.equal(requests[1].url, `${TEST_WORKER_BASE_URL}/line/home-summary`);
+  assert.equal(requests[0].options.headers.Authorization, "Bearer fresh.member.token");
+  const sent = JSON.parse(requests[0].options.body);
+  assert.deepEqual(sent, { requestId: REQUEST_ID, ...input });
+  assert.equal(JSON.stringify(sent).includes("lineId"), false);
+  assert.deepEqual(result.profile, {
+    inputName: "入力者",
+    notify: false,
+    viewerOnly: false,
+    performers: [{ performerName: "演奏者A", segment: "大人の部" }],
+  });
+});
+
+test("会員保存は再取得不一致・通信結果不明を成功扱いせず自動retryしない", async () => {
+  const input = {
+    mode: "replace",
+    inputName: "入力者",
+    notify: true,
+    performers: [],
+  };
+  let mismatchFetches = 0;
+  await assert.rejects(
+    auth.submitAuthenticatedMemberProfile_(input, {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () => {
+        mismatchFetches += 1;
+        return mismatchFetches === 1
+          ? jsonResponse({
+              ok: true,
+              status: "ok",
+              requestId: REQUEST_ID,
+              mode: "replace",
+              memberCount: 0,
+              viewerOnly: true,
+            })
+          : jsonResponse({
+              ok: true,
+              registered: true,
+              member: {
+                inputName: "別の入力者",
+                notify: true,
+                viewerOnly: true,
+                performers: [],
+              },
+              events: [],
+            });
+      }, {
+        createRequestId() { return REQUEST_ID; },
+      }),
+    }),
+    /member_confirmation_failed/,
+  );
+  assert.equal(mismatchFetches, 2);
+
+  let networkFetches = 0;
+  let networkError;
+  try {
+    await auth.submitAuthenticatedMemberProfile_(input, {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () => {
+        networkFetches += 1;
+        throw new TypeError("offline");
+      }, {
+        createRequestId() { return REQUEST_ID; },
+      }),
+    });
+  } catch (error) {
+    networkError = error;
+  }
+  assert.equal(networkFetches, 1);
+  assert.equal(auth.classifyMemberSubmitError_(networkError), "result_unknown");
+  assert.equal(
+    auth.classifyMemberSubmitError_(
+      new auth.AuthSessionError(
+        auth.AUTH_STATES.RESPONSE_ERROR,
+        "staging_member_write_disabled",
+        403,
+      ),
+    ),
+    "write_disabled",
+  );
+});
+
+test("演奏者0件の登録済みviewer profileを未登録と誤判定しない", async () => {
+  let fetchCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      fetchCount += 1;
+      return fetchCount === 1
+        ? jsonResponse({
+            ok: true,
+            registered: true,
+            member: {
+              inputName: "閲覧者",
+              notify: false,
+              viewerOnly: true,
+              performers: [],
+            },
+            events: [],
+          })
+        : jsonResponse({
+            ok: true,
+            status: "ok",
+            registered: true,
+            map: {},
+            comments: {},
+          });
+    }),
+  });
+  assert.equal(result.status, auth.AUTH_STATES.REGISTERED_READ_ONLY);
+  assert.equal(result.memberProfile.viewerOnly, true);
+  assert.equal(result.summary.memberCount, 0);
+});
+
 test("予定単位の保存ボタンは変更がある回答可能予定だけに現れる", async () => {
   const result = await registeredReadOnlyResult();
   const container = new FakeElement("div");
@@ -1787,7 +2019,17 @@ test("未登録は正常状態で、attendance/allを呼ばない", async () => 
     onState(snapshot) { states.push(snapshot.status); },
     dependencies: fetchDependencies(async () => {
       fetchCount += 1;
-      return jsonResponse({ ok: true, registered: false, members: [] });
+      return jsonResponse({
+        ok: true,
+        registered: false,
+        member: {
+          inputName: "",
+          notify: false,
+          viewerOnly: false,
+          performers: [],
+        },
+        events: [],
+      });
     }),
   });
   assert.equal(result.status, auth.AUTH_STATES.UNREGISTERED);
