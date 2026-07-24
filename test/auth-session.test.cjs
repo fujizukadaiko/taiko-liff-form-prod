@@ -1570,8 +1570,11 @@ test("UIは全状態を区別し、非機密な件数だけを表示する", () 
 
   assert.match(copies.loading.title, /安全に確認/);
   assert.match(copies.unregistered.message, /まだあなたのメンバー情報が登録されていません/);
-  assert.match(copies.registered.title, /読み取り専用/);
-  assert.match(copies.registered.message, /表示確認のみ/);
+  assert.match(copies.unregistered.message, /初回登録は現在利用できません/);
+  assert.match(copies.registered.title, /本人認証済み/);
+  assert.match(copies.registered.message, /予定ごとに保存できます/);
+  assert.match(copies.registered.message, /保存機能はテスト用ゲートにより停止している場合があります/);
+  assert.doesNotMatch(copies.registered.message, /表示確認のみ|登録・変更はまだ利用できません/);
   assert.match(copies.registered.message, /メンバー件数: 2/);
   assert.match(copies.registered.message, /回答受付中の予定: 2件/);
   assert.match(copies.registered.message, /あなたが回答可能な予定: 1件/);
