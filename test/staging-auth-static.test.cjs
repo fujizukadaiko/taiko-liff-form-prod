@@ -103,6 +103,11 @@ test("production相当shellは安全な認証済み機能だけを表示する",
   assert.match(html, /configureStagingProductionShell_\(effectiveStatus, snapshot\)/);
   assert.match(html, /unregistered[\s\S]*"初回登録"[\s\S]*viewerOnly[\s\S]*"登録情報を変更"[\s\S]*"出欠を確認・回答"/);
   assert.match(html, /id="stagingUnavailableFeatures"/);
+  assert.match(html, /id="stagingAdminAccessCard"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/);
+  assert.match(html, /管理者認証済み/);
+  assert.match(html, /管理機能は準備中です。旧管理画面には接続しません/);
+  assert.match(html, /snapshot\.adminAccess\.authorized === true/);
+  assert.match(html, /adminAccessCard\.hidden = !adminAuthorized/);
   assert.match(html, /安全な認証・保存APIの準備が完了するまで、旧システムには接続しません/);
   assert.match(html, /feedback\.setAttribute\("hidden", ""\)/);
   assert.match(html, /#feedbackFab\.fab\[hidden\]\s*\{\s*display: none !important;/);
@@ -250,7 +255,8 @@ test("通常読み取りフローは許可された2 APIだけを使用し書き
   const end = authSource.indexOf("\n  return {", start);
   const flow = authSource.slice(start, end);
   assert.doesNotMatch(flow, /attendance\/submit|\/line\/schedules|events\/by-date/);
-  assert.doesNotMatch(flow, /admin|feedback|API_ENDPOINT/);
+  assert.doesNotMatch(flow, /\/line\/admin|\/admin\/|feedback|API_ENDPOINT/);
+  assert.match(flow, /adminAccess: home\.adminAccess/);
   assert.doesNotMatch(flow, /localStorage|sessionStorage|indexedDB|document\.cookie/);
   assert.doesNotMatch(flow, /submit-authenticated/);
   assert.match(authSource, /"\/line\/attendance\/submit-authenticated"/);

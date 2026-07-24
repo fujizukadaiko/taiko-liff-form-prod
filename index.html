@@ -3547,6 +3547,20 @@
                 </div>
             </details>
 
+            <section
+                id="stagingAdminAccessCard"
+                class="card"
+                data-staging-shell="safe"
+                aria-labelledby="stagingAdminAccessHeading"
+                hidden
+            >
+                <div id="stagingAdminAccessHeading" class="sectionTitle">
+                    管理者認証済み
+                    <span class="statusLabel">安全確認済み</span>
+                </div>
+                <p class="muted">管理機能は準備中です。旧管理画面には接続しません。</p>
+            </section>
+
             <!-- ★ トップ操作ボタン -->
                 <div id="stagingHomeActions" class="homeActions" aria-label="主操作" data-staging-shell="safe">
                     <button id="btnPrimary" class="btn btn-primary btn-lg homePrimary" type="button" disabled>
@@ -6120,6 +6134,12 @@
         const editNames = document.getElementById("btnEditNames");
         const homeEvents = document.getElementById("cardEventsActive");
         const backFromForm = document.getElementById("btnBackFromForm");
+        const adminAccessCard = document.getElementById("stagingAdminAccessCard");
+        const adminAuthorized = !!(
+            snapshot &&
+            snapshot.adminAccess &&
+            snapshot.adminAccess.authorized === true
+        );
 
         if (hello) {
             const messages = {
@@ -6182,6 +6202,9 @@
         if (homeEvents && !registered) {
             homeEvents.hidden = true;
             homeEvents.style.display = "none";
+        }
+        if (adminAccessCard) {
+            adminAccessCard.hidden = !adminAuthorized;
         }
 
         const feedback = document.getElementById("feedbackFab");

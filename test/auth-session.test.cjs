@@ -117,6 +117,7 @@ function registeredHome() {
   return {
     ok: true,
     registered: true,
+    admin: { authorized: false },
     member: {
       inputName: "入力者",
       notify: true,
@@ -1527,6 +1528,7 @@ test("会員保存は現在のIDトークンで専用routeへ送りhome再取得
       return jsonResponse({
         ok: true,
         registered: true,
+        admin: { authorized: false },
         member: {
           inputName: "入力者",
           notify: false,
@@ -1582,6 +1584,7 @@ test("会員保存は再取得不一致・通信結果不明を成功扱いせ�
           : jsonResponse({
               ok: true,
               registered: true,
+              admin: { authorized: false },
               member: {
                 inputName: "別の入力者",
                 notify: true,
@@ -1638,6 +1641,7 @@ test("演奏者0件の登録済みviewer profileを未登録と誤判定しな�
         ? jsonResponse({
             ok: true,
             registered: true,
+            admin: { authorized: false },
             member: {
               inputName: "閲覧者",
               notify: false,
@@ -2022,6 +2026,7 @@ test("未登録は正常状態で、attendance/allを呼ばない", async () => 
       return jsonResponse({
         ok: true,
         registered: false,
+        admin: { authorized: false },
         member: {
           inputName: "",
           notify: false,
@@ -2035,6 +2040,55 @@ test("未登録は正常状態で、attendance/allを呼ばない", async () => 
   assert.equal(result.status, auth.AUTH_STATES.UNREGISTERED);
   assert.equal(fetchCount, 1);
   assert.deepEqual(states, [auth.AUTH_STATES.LOADING, auth.AUTH_STATES.UNREGISTERED]);
+});
+
+test("管理者権限は真偽値だけを保持し登録状態と独立して返す", async () => {
+  const registeredResult = await registeredReadOnlyResult({
+    ...registeredHome(),
+    admin: { authorized: true },
+  });
+  assert.deepEqual(registeredResult.adminAccess, { authorized: true });
+  assert.equal(JSON.stringify(registeredResult).includes("lineId"), false);
+
+  let fetchCount = 0;
+  const unregisteredResult = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      fetchCount += 1;
+      return jsonResponse({
+        ok: true,
+        registered: false,
+        admin: { authorized: true },
+        member: {
+          inputName: "",
+          notify: false,
+          viewerOnly: false,
+          performers: [],
+        },
+        events: [],
+      });
+    }),
+  });
+  assert.equal(fetchCount, 1);
+  assert.equal(unregisteredResult.status, auth.AUTH_STATES.UNREGISTERED);
+  assert.deepEqual(unregisteredResult.adminAccess, { authorized: true });
+});
+
+test("管理者権限の欠落・余分な属性・型不正をresponse errorにする", async (t) => {
+  for (const [name, adminValue] of [
+    ["欠落", undefined],
+    ["余分な属性", { authorized: true, role: "admin" }],
+    ["型不正", { authorized: "true" }],
+  ]) {
+    await t.test(name, async () => {
+      const home = registeredHome();
+      if (adminValue === undefined) delete home.admin;
+      else home.admin = adminValue;
+      const result = await registeredReadOnlyResult(home);
+      assert.equal(result.status, auth.AUTH_STATES.RESPONSE_ERROR);
+    });
+  }
 });
 
 test("HTTP・通信・応答異常を未登録と区別する", async (t) => {

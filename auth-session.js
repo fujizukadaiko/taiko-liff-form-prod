@@ -426,6 +426,13 @@
     if (body.ok !== true || typeof body.registered !== "boolean") {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
     }
+    if (
+      !isPlainObject(body.admin)
+      || Object.keys(body.admin).length !== 1
+      || typeof body.admin.authorized !== "boolean"
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_admin_access", 200);
+    }
 
     const members = Array.isArray(body.members)
       ? body.members
@@ -558,6 +565,9 @@
 
     return {
       registered: body.registered,
+      adminAccess: {
+        authorized: body.admin.authorized,
+      },
       members: normalizedMembers,
       memberProfile: {
         inputName,
@@ -2310,6 +2320,7 @@
       if (!home.registered) {
         const result = {
           status: AUTH_STATES.UNREGISTERED,
+          adminAccess: home.adminAccess,
           memberProfile: home.memberProfile,
           summary: {
             memberCount: home.memberCount,
@@ -2325,6 +2336,7 @@
       if (!attendance.registered) {
         const result = {
           status: AUTH_STATES.UNREGISTERED,
+          adminAccess: home.adminAccess,
           summary: {
             memberCount: 0,
             eventCount: home.eventCount,
@@ -2338,6 +2350,7 @@
       const viewModel = buildReadOnlyScheduleViewModel_(home, attendance);
       const result = {
         status: AUTH_STATES.REGISTERED_READ_ONLY,
+        adminAccess: home.adminAccess,
         memberProfile: viewModel.memberProfile,
         summary: {
           memberCount: viewModel.memberCount,
