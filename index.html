@@ -1546,6 +1546,47 @@
             transform:none;
             box-shadow:none !important;
         }
+        .authenticatedHomeEventRow{
+            cursor:default;
+        }
+        .authenticatedHomeEventRow:active{
+            transform:none;
+        }
+        .authenticatedHomeEventName{
+            margin:0 0 5px;
+            font-size:15px;
+            line-height:1.45;
+            color:var(--ui-primary-dark);
+        }
+        .authenticatedHomeAttendanceList{
+            list-style:none;
+            margin:10px 0 0;
+            padding:9px 0 0;
+            border-top:1px dashed var(--c-border);
+            display:grid;
+            gap:7px;
+        }
+        .authenticatedHomeAttendanceItem{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            align-items:center;
+            gap:4px 8px;
+            font-size:13px;
+        }
+        .authenticatedHomePerformerName{
+            min-width:0;
+            overflow-wrap:anywhere;
+            font-weight:700;
+        }
+        .authenticatedHomeWriteCapability{
+            grid-column:1 / -1;
+            color:var(--ui-muted-fg);
+            font-size:11px;
+        }
+        #homeOnlyNALabel[hidden],
+        .stagingLegacyFormControl[hidden]{
+            display:none !important;
+        }
         .homePrimary{
             position:relative;
             overflow:hidden;
@@ -3466,30 +3507,16 @@
             <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite" data-staging-shell="safe">
                 <h1 id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</h1>
                 <div id="authSessionMessage" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
-                <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
-                    <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
-                    <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
-                        <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
-                        <div>回答可能な予定は保存操作を試せます。</div>
-                        <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
-                        <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
-                        <div class="attendanceDraftSummary">
-                            <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
-                            <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
-                        </div>
-                    </div>
-                    <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
-                </section>
             </div>
 
             <!-- 互換性維持のためのダミー -->
                 <button id="btnReload" type="button" style="display:none;"></button>
 
             <!-- 回答受付中の公演（密リスト＋バッジ） -->
-                <div class="card" id="cardEventsActive">
+                <div class="card" id="cardEventsActive" data-staging-shell="safe" hidden>
                     <div class="row-space">
-                        <div class="sectionTitle homeCardTitle">回答受付中の公演</div>
-                        <label id="homeOnlyNALabel" style="margin-left:auto;">
+                        <div class="sectionTitle homeCardTitle">本人向け予定・出欠</div>
+                        <label id="homeOnlyNALabel" style="margin-left:auto;" hidden aria-hidden="true">
                             <input type="checkbox" id="homeOnlyNA" checked>
                             未定/未回答のみ表示
                         </label>
@@ -3551,29 +3578,43 @@
                 <button
                 id="btnBackFromForm"
                 class="btn btn-ghost btn-sm"
-                data-view-target="view-home"
                 type="button"
                 >
                 トップに戻る
                 </button>
             </div>
 
-            <div id="formEventsBox" class="muted guidePlain">
+            <section id="readOnlyScheduleSection" class="card readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
+                <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
+                <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
+                    <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
+                    <div>回答可能な予定は保存操作を試せます。</div>
+                    <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
+                    <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
+                    <div class="attendanceDraftSummary">
+                        <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
+                        <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
+                    </div>
+                </div>
+                <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
+            </section>
+
+            <div id="formEventsBox" class="muted guidePlain stagingLegacyFormControl" hidden>
                 公演読み込み中… <span class="spinner"></span>
             </div>
 
-            <div id="formFields"></div>
+            <div id="formFields" class="stagingLegacyFormControl" hidden></div>
 
-            <div class="line"></div>
+            <div class="line stagingLegacyFormControl" hidden></div>
 
-            <div class="row right">
-                <button id="btnSubmit" class="btn btn-primary" disabled>
+            <div class="row right stagingLegacyFormControl" hidden>
+                <button id="btnSubmit" class="btn btn-primary stagingLegacyFormControl" disabled hidden>
                 まとめて送信
                 </button>
             </div>
 
-            <div id="formLog" class="muted" style="margin-top:8px;"></div>
-            <div id="submitOverlay" class="overlay submitting-overlay" style="display:none;">
+            <div id="formLog" class="muted stagingLegacyFormControl" style="margin-top:8px;" hidden></div>
+            <div id="submitOverlay" class="overlay submitting-overlay stagingLegacyFormControl" style="display:none;" hidden>
                 <div class="overlay-inner">
                     <div class="spinner"></div>
                     <div class="overlay-text">送信中です…</div>
@@ -5766,20 +5807,60 @@
     }
     }
 /* ===== 初期化 ===== */
+    function showStagingAuthenticatedView_(viewId){
+        const allowedViewIds = new Set(["view-home", "view-form"]);
+        if (!allowedViewIds.has(viewId)) return false;
+        document.querySelectorAll("[data-view]").forEach(function(view){
+            const active = view.id === viewId;
+            view.hidden = !active;
+            view.classList.toggle("show", active);
+        });
+        const legalFooter = document.getElementById("legalFooter");
+        if (legalFooter) legalFooter.style.display = viewId === "view-home" ? "" : "none";
+        window.scrollTo({ top:0, behavior:"auto" });
+        return true;
+    }
+
+    function clearAuthenticatedProductionHome_(){
+        state.authenticatedProductionHome = null;
+        const card = document.getElementById("cardEventsActive");
+        const box = document.getElementById("eventsBox");
+        if (box) box.textContent = "";
+        if (card) {
+            card.hidden = true;
+            card.style.display = "none";
+        }
+    }
+
+    function renderAuthenticatedProductionHome_(snapshot){
+        const card = document.getElementById("cardEventsActive");
+        const box = document.getElementById("eventsBox");
+        if (!card || !box || !snapshot || !snapshot.viewModel) {
+            throw new Error("authenticated_production_home_unavailable");
+        }
+        const productionHome = window.LineAuthSession.buildProductionHomeViewModel_(
+            snapshot.viewModel,
+        );
+        window.LineAuthSession.renderProductionHome_(
+            box,
+            productionHome,
+            document,
+        );
+        state.authenticatedProductionHome = productionHome;
+        card.hidden = false;
+        card.style.display = "";
+    }
+
     function configureStagingProductionShell_(status){
         const homeView = document.getElementById("view-home");
         if (homeView) {
-            homeView.hidden = false;
-            homeView.classList.add("show");
             Array.from(homeView.children).forEach(function(element){
                 element.hidden = element.dataset.stagingShell !== "safe";
             });
         }
-        document.querySelectorAll("[data-view]").forEach(function(view){
-            if (view.id !== "view-home") {
-                view.classList.remove("show");
-                view.hidden = true;
-            }
+        showStagingAuthenticatedView_("view-home");
+        document.querySelectorAll(".stagingLegacyFormControl").forEach(function(element){
+            element.hidden = true;
         });
 
         const registered = status === "registered_read_only";
@@ -5787,6 +5868,8 @@
         const primary = document.getElementById("btnPrimary");
         const schedules = document.getElementById("btnSchedules");
         const editNames = document.getElementById("btnEditNames");
+        const homeEvents = document.getElementById("cardEventsActive");
+        const backFromForm = document.getElementById("btnBackFromForm");
 
         if (hello) {
             const messages = {
@@ -5805,17 +5888,20 @@
             !registered,
         );
         if (primary) {
-            primary.setAttribute("aria-controls", "authSessionCard");
+            primary.setAttribute("aria-controls", "view-form");
             if (!primary.__stagingShellBound) {
                 primary.addEventListener("click", function(){
                     if (primary.disabled) return;
-                    document.getElementById("authSessionCard")?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                    });
+                    showStagingAuthenticatedView_("view-form");
                 });
                 primary.__stagingShellBound = true;
             }
+        }
+        if (backFromForm && !backFromForm.__stagingShellBound) {
+            backFromForm.addEventListener("click", function(){
+                showStagingAuthenticatedView_("view-home");
+            });
+            backFromForm.__stagingShellBound = true;
         }
         if (schedules) {
             schedules.disabled = true;
@@ -5824,6 +5910,10 @@
         if (editNames) {
             editNames.disabled = true;
             editNames.setAttribute("aria-disabled", "true");
+        }
+        if (homeEvents && !registered) {
+            homeEvents.hidden = true;
+            homeEvents.style.display = "none";
         }
 
         const feedback = document.getElementById("feedbackFab");
@@ -5835,7 +5925,7 @@
 
     function renderStagingReadOnlyState_(snapshot){
         const status = String(snapshot && snapshot.status || "loading");
-        state.authenticatedReadOnlyStatus = status;
+        let effectiveStatus = status;
 
         const card = document.getElementById("authSessionCard");
         const title = document.getElementById("authSessionTitle");
@@ -5845,23 +5935,13 @@
         const draftPanel = document.getElementById("attendanceDraftPanel");
         const draftEventCount = document.getElementById("attendanceDraftEventCount");
         const draftPerformerCount = document.getElementById("attendanceDraftPerformerCount");
-        const copy = window.LineAuthSession.getReadOnlyUiCopy(
-            status,
-            snapshot && snapshot.summary,
-        );
-
-        if (card) card.style.display = "";
-        if (title) title.textContent = copy.title;
-        if (message) {
-            message.textContent = copy.message;
-            message.style.display = copy.message ? "" : "none";
-        }
         if (scheduleSection && scheduleList) {
             scheduleSection.hidden = true;
             scheduleList.textContent = "";
             if (draftPanel) draftPanel.hidden = true;
             if (status === "registered_read_only" && snapshot && snapshot.viewModel) {
                 try {
+                    renderAuthenticatedProductionHome_(snapshot);
                     window.LineAuthSession.renderReadOnlySchedules_(
                         scheduleList,
                         snapshot.viewModel,
@@ -5893,18 +5973,28 @@
                     }
                     scheduleSection.hidden = false;
                 } catch (_) {
-                    const errorCopy = window.LineAuthSession.getReadOnlyUiCopy("response_error");
-                    if (title) title.textContent = errorCopy.title;
-                    if (message) {
-                        message.textContent = errorCopy.message;
-                        message.style.display = errorCopy.message ? "" : "none";
-                    }
+                    effectiveStatus = "response_error";
+                    clearAuthenticatedProductionHome_();
                 }
+            } else {
+                clearAuthenticatedProductionHome_();
             }
         }
 
+        state.authenticatedReadOnlyStatus = effectiveStatus;
+        const copy = window.LineAuthSession.getReadOnlyUiCopy(
+            effectiveStatus,
+            snapshot && snapshot.summary,
+        );
+        if (card) card.style.display = "";
+        if (title) title.textContent = copy.title;
+        if (message) {
+            message.textContent = copy.message;
+            message.style.display = copy.message ? "" : "none";
+        }
+
         // production相当のhome shellを表示し、安全と明示した要素だけを許可する。
-        configureStagingProductionShell_(status);
+        configureStagingProductionShell_(effectiveStatus);
     }
 
     function renderEnvironmentConfigFailure_(){
