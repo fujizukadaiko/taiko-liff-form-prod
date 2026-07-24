@@ -467,7 +467,7 @@
       }
       const eventKey = readResponseString(event, "eventKey", {
         required: true,
-        maxLength: 160,
+        maxLength: 128,
         code: "invalid_event_key",
       });
       if (eventKeys.has(eventKey)) {
@@ -753,7 +753,7 @@
       return {
         eventKey: readResponseString(event, "eventKey", {
           required: true,
-          maxLength: 160,
+          maxLength: 128,
           code: "invalid_production_home_event",
         }),
         title: readResponseString(event, "title", {
@@ -1319,10 +1319,7 @@
     const refreshDraftControls = function () {
       if (!draftPreviewEnabled) return;
       draftControls.forEach(function (control, key) {
-        const current = draftState.get(key);
-        control.radios.forEach((radio) => { radio.disabled = submitInFlight; });
-        control.reset.disabled = submitInFlight;
-        control.reset.hidden = !current || !current.changed;
+        control.select.disabled = submitInFlight;
       });
       submitControls.forEach(function (control, eventIndex) {
         let payload = null;
@@ -1337,7 +1334,11 @@
           onFatalError();
           return;
         }
-        control.button.hidden = !submitUiEnabled || !payload;
+        const hasChanges = !!payload;
+        control.unsaved.hidden = !hasChanges;
+        control.reset.hidden = !hasChanges;
+        control.reset.disabled = submitInFlight;
+        control.button.hidden = !submitUiEnabled || !hasChanges;
         control.button.disabled = submitInFlight;
         control.button.textContent = submitInFlight && activeSubmitEventIndex === eventIndex
           ? "保存しています…"
@@ -1356,121 +1357,148 @@
 
     model.events.forEach(function (event, eventIndex) {
       const card = documentImpl.createElement("article");
-      card.className = "readOnlyScheduleCard";
+      const segmentClass = PRODUCTION_HOME_SEGMENT_CLASSES.get(event.targetGroupLabel) || "";
+      const baseCardClass = [
+        "fEvent",
+        "productionAttendanceEvent",
+        segmentClass ? `productionAttendanceEvent-${segmentClass}` : "",
+      ].filter(Boolean).join(" ");
+      card.className = baseCardClass;
       card.setAttribute("role", "listitem");
 
-      const title = documentImpl.createElement("h3");
-      title.className = "readOnlyScheduleTitle";
+      const panelId = `attendance-event-panel-${eventIndex}`;
+      const toggle = documentImpl.createElement("button");
+      toggle.type = "button";
+      toggle.className = "fHead productionAttendanceAccordionButton";
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-controls", panelId);
+
+      const row1 = documentImpl.createElement("span");
+      row1.className = "fRow1";
+      const date = documentImpl.createElement("span");
+      date.className = "t-date";
+      date.textContent = [event.dateLabel, event.timeLabel].filter(Boolean).join(" ");
+      row1.appendChild(date);
+      if (event.targetGroupLabel) {
+        const segment = documentImpl.createElement("span");
+        segment.className = `seg-badge ${segmentClass}`;
+        segment.textContent = event.targetGroupLabel;
+        row1.appendChild(segment);
+      }
+      const unsaved = documentImpl.createElement("span");
+      unsaved.className = "badge-unsaved";
+      unsaved.textContent = "未保存";
+      unsaved.hidden = true;
+      row1.appendChild(unsaved);
+      toggle.appendChild(row1);
+
+      const row2 = documentImpl.createElement("span");
+      row2.className = "fRow2";
+      const title = documentImpl.createElement("span");
+      title.className = "t-title";
       title.textContent = event.title;
-      card.appendChild(title);
+      row2.appendChild(title);
+      if (event.place) {
+        const place = documentImpl.createElement("span");
+        place.className = "t-place";
+        place.textContent = `@ ${event.place}`;
+        row2.appendChild(place);
+      }
+      toggle.appendChild(row2);
 
-      const eventCapability = documentImpl.createElement("p");
-      eventCapability.className = event.eventAllowed
-        ? "readOnlyCapability readOnlyCapabilityOpen"
-        : "readOnlyCapability readOnlyCapabilityClosed";
-      eventCapability.textContent = `予定の回答可否: ${event.eventWriteLabel}`;
-      card.appendChild(eventCapability);
-
-      const date = documentImpl.createElement("p");
-      date.className = "readOnlyScheduleDate";
-      date.textContent = event.dateLabel;
-      card.appendChild(date);
-
-      const meta = documentImpl.createElement("div");
-      meta.className = "readOnlyScheduleMeta";
-      appendReadOnlyMeta_(documentImpl, meta, "開始時刻", event.timeLabel);
-      appendReadOnlyMeta_(documentImpl, meta, "場所", event.place);
-      appendReadOnlyMeta_(documentImpl, meta, "対象", event.targetGroupLabel);
-      appendReadOnlyMeta_(documentImpl, meta, "回答期限", event.deadlineLabel);
-      appendReadOnlyMeta_(documentImpl, meta, "状態", event.status);
-      appendReadOnlyMeta_(documentImpl, meta, "備考", event.note);
-      if (meta.childNodes.length > 0) card.appendChild(meta);
-
-      const attendanceTitle = documentImpl.createElement("h4");
-      attendanceTitle.className = "readOnlyAttendanceTitle";
-      attendanceTitle.textContent = "本人の出欠状況";
-      card.appendChild(attendanceTitle);
-
-      const performers = documentImpl.createElement("ul");
-      performers.className = "readOnlyAttendanceList";
+      const statusRow = documentImpl.createElement("span");
+      statusRow.className = "fStatusRow";
+      const statusPills = new Map();
       event.performers.forEach(function (performer, performerIndex) {
-        const item = documentImpl.createElement("li");
-        const name = documentImpl.createElement("span");
-        name.className = "readOnlyPerformerName";
-        name.textContent = performer.performerName;
-        const attendance = documentImpl.createElement("span");
-        attendance.className = "readOnlyAttendanceStatus";
-        attendance.textContent = performer.attendanceLabel;
-        const capability = documentImpl.createElement("span");
-        capability.className = performer.attendanceWriteAllowed
-          ? "readOnlyPerformerCapability readOnlyCapabilityOpen"
-          : "readOnlyPerformerCapability readOnlyCapabilityClosed";
-        capability.textContent = `回答可否: ${performer.attendanceWriteLabel}`;
-        item.appendChild(name);
-        item.appendChild(attendance);
-        item.appendChild(capability);
+        const pill = documentImpl.createElement("span");
+        pill.className = `pill sm ${
+          PRODUCTION_HOME_ATTENDANCE_CLASSES.get(performer.initialAttend) || "stat-na"
+        }`;
+        pill.textContent = `${performer.performerName}：${performer.attendanceLabel}`;
+        statusRow.appendChild(pill);
+        statusPills.set(draftKey_(eventIndex, performerIndex), pill);
+      });
+      toggle.appendChild(statusRow);
 
-        if (
+      const sub = documentImpl.createElement("span");
+      sub.className = "fSub productionAttendanceSub";
+      const deadlineText = event.deadlineLabel
+        ? `回答期限：${event.deadlineLabel}`
+        : "回答期限：—";
+      sub.textContent = `${deadlineText}／${event.eventWriteLabel}`;
+      toggle.appendChild(sub);
+      card.appendChild(toggle);
+
+      const body = documentImpl.createElement("div");
+      body.id = panelId;
+      body.className = "fBody productionAttendanceBody";
+      body.hidden = true;
+      toggle.addEventListener("click", function () {
+        const expanded = body.hidden;
+        body.hidden = !expanded;
+        card.className = expanded ? `${baseCardClass} open` : baseCardClass;
+        toggle.setAttribute("aria-expanded", String(expanded));
+      });
+
+      if (event.place) {
+        const placeDetail = documentImpl.createElement("p");
+        placeDetail.className = "fPlaceDetail";
+        placeDetail.textContent = `＠ ${event.place}`;
+        body.appendChild(placeDetail);
+      }
+      if (event.note) {
+        const note = documentImpl.createElement("p");
+        note.className = "productionAttendanceNote";
+        note.textContent = event.note;
+        body.appendChild(note);
+      }
+
+      event.performers.forEach(function (performer, performerIndex) {
+        const row = documentImpl.createElement("div");
+        row.className = "row-att productionAttendanceRow";
+        const editable =
           draftPreviewEnabled &&
           event.eventAllowed &&
           event.eventWriteReason === "open" &&
           performer.attendanceWriteAllowed &&
-          performer.attendanceWriteReason === "open"
-        ) {
+          performer.attendanceWriteReason === "open";
+        const name = documentImpl.createElement(editable ? "label" : "span");
+        name.className = "nameLabel";
+        name.textContent = performer.performerName;
+        row.appendChild(name);
+        const attendance = documentImpl.createElement("span");
+        attendance.className = "productionAttendanceCurrent";
+        attendance.textContent = performer.attendanceLabel;
+        const capability = documentImpl.createElement("span");
+        capability.className = performer.attendanceWriteAllowed
+          ? "productionAttendanceCapability productionAttendanceCapabilityOpen"
+          : "productionAttendanceCapability productionAttendanceCapabilityClosed";
+        capability.textContent = performer.attendanceWriteLabel;
+
+        if (editable) {
           const key = draftKey_(eventIndex, performerIndex);
-          const groupId = `attendance-draft-${eventIndex}-${performerIndex}`;
-          const fieldset = documentImpl.createElement("fieldset");
-          fieldset.className = "attendanceDraftFieldset";
-          const legend = documentImpl.createElement("legend");
-          legend.textContent = `${performer.performerName}の出欠`;
-          fieldset.appendChild(legend);
-
-          const choices = documentImpl.createElement("div");
-          choices.className = "attendanceDraftChoices";
-          const radios = [];
-          ATTENDANCE_DRAFT_OPTIONS.forEach(function (option, optionIndex) {
-            const choice = documentImpl.createElement("span");
-            choice.className = "attendanceDraftChoice";
-            const radio = documentImpl.createElement("input");
-            const radioId = `${groupId}-${optionIndex}`;
-            radio.type = "radio";
-            radio.id = radioId;
-            radio.name = groupId;
-            radio.value = option.attend;
-            radio.checked = performer.initialAttend === option.attend;
-            radio.addEventListener("change", function () {
-              if (!radio.checked) return;
-              try {
-                setAttendanceDraftSelection_(draftState, key, option.attend);
-                const submitControl = submitControls.get(eventIndex);
-                if (submitControl) submitControl.status.textContent = "";
-                refreshDraftControls();
-              } catch (_) {
-                onFatalError();
-              }
-            });
-            const label = documentImpl.createElement("label");
-            label.setAttribute("for", radioId);
-            label.textContent = option.label;
-            choice.appendChild(radio);
-            choice.appendChild(label);
-            choices.appendChild(choice);
-            radios.push(radio);
+          const selectId = `attendance-select-${eventIndex}-${performerIndex}`;
+          name.setAttribute("for", selectId);
+          const select = documentImpl.createElement("select");
+          select.id = selectId;
+          select.className = "attSel selectBtn productionAttendanceSelect";
+          const placeholder = documentImpl.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "（選択してください）";
+          placeholder.disabled = true;
+          select.appendChild(placeholder);
+          ATTENDANCE_DRAFT_OPTIONS.forEach(function (option) {
+            const choice = documentImpl.createElement("option");
+            choice.value = option.attend;
+            choice.textContent = option.label;
+            select.appendChild(choice);
           });
-          fieldset.appendChild(choices);
-
-          const reset = documentImpl.createElement("button");
-          reset.type = "button";
-          reset.className = "attendanceDraftReset";
-          reset.textContent = "変更を取り消す";
-          reset.hidden = true;
-          reset.addEventListener("click", function () {
+          select.value = ATTENDANCE_DRAFT_VALUES.has(performer.initialAttend)
+            ? performer.initialAttend
+            : "";
+          select.addEventListener("change", function () {
             try {
-              const restored = resetAttendanceDraftSelection_(draftState, key);
-              radios.forEach(function (radio) {
-                radio.checked = ATTENDANCE_DRAFT_VALUES.has(restored.initialAttend)
-                  && radio.value === restored.initialAttend;
-              });
+              setAttendanceDraftSelection_(draftState, key, select.value);
               const submitControl = submitControls.get(eventIndex);
               if (submitControl) submitControl.status.textContent = "";
               refreshDraftControls();
@@ -1478,16 +1506,32 @@
               onFatalError();
             }
           });
-          fieldset.appendChild(reset);
-          item.appendChild(fieldset);
-          draftControls.set(key, { radios, reset, attendance });
+          row.appendChild(select);
+          row.appendChild(capability);
+          draftControls.set(key, {
+            select,
+            attendance,
+            statusPill: statusPills.get(key),
+            performerName: performer.performerName,
+          });
+        } else {
+          const readOnly = documentImpl.createElement("span");
+          readOnly.className = "productionAttendanceReadOnly";
+          readOnly.appendChild(attendance);
+          readOnly.appendChild(capability);
+          row.appendChild(readOnly);
         }
-        performers.appendChild(item);
+        body.appendChild(row);
       });
-      card.appendChild(performers);
+
+      const commentNotice = documentImpl.createElement("p");
+      commentNotice.className = "productionAttendanceCommentDisabled";
+      commentNotice.textContent =
+        "コメント：安全な保存先を準備中のため、現在は入力できません。";
+      body.appendChild(commentNotice);
 
       if (
-        submitUiEnabled &&
+        draftPreviewEnabled &&
         event.eventAllowed &&
         event.eventWriteReason === "open" &&
         event.performers.some((performer) =>
@@ -1499,7 +1543,33 @@
         submitStatus.setAttribute("role", "status");
         submitStatus.setAttribute("aria-live", "polite");
         submitStatus.tabIndex = -1;
-        card.appendChild(submitStatus);
+        body.appendChild(submitStatus);
+
+        const actionRow = documentImpl.createElement("div");
+        actionRow.className = "productionAttendanceActions";
+        const resetButton = documentImpl.createElement("button");
+        resetButton.type = "button";
+        resetButton.className = "btn btn-ghost productionAttendanceReset";
+        resetButton.textContent = "この予定の変更を取り消す";
+        resetButton.hidden = true;
+        resetButton.addEventListener("click", function () {
+          try {
+            event.performers.forEach(function (performer, performerIndex) {
+              const key = draftKey_(eventIndex, performerIndex);
+              if (!draftControls.has(key)) return;
+              const restored = resetAttendanceDraftSelection_(draftState, key);
+              const control = draftControls.get(key);
+              control.select.value = ATTENDANCE_DRAFT_VALUES.has(restored.initialAttend)
+                ? restored.initialAttend
+                : "";
+            });
+            submitStatus.textContent = "";
+            refreshDraftControls();
+          } catch (_) {
+            onFatalError();
+          }
+        });
+        actionRow.appendChild(resetButton);
 
         const submitButton = documentImpl.createElement("button");
         submitButton.type = "button";
@@ -1546,6 +1616,11 @@
                 throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
               }
               control.attendance.textContent = update.attendanceLabel;
+              control.statusPill.className = `pill sm ${
+                PRODUCTION_HOME_ATTENDANCE_CLASSES.get(update.attend) || "stat-na"
+              }`;
+              control.statusPill.textContent =
+                `${control.performerName}：${update.attendanceLabel}`;
             });
             submitStatus.textContent = getAttendanceSubmitMessage_("saved");
           } catch (error) {
@@ -1558,9 +1633,16 @@
             refreshDraftControls();
           }
         });
-        card.appendChild(submitButton);
-        submitControls.set(eventIndex, { button: submitButton, status: submitStatus });
+        actionRow.appendChild(submitButton);
+        body.appendChild(actionRow);
+        submitControls.set(eventIndex, {
+          button: submitButton,
+          reset: resetButton,
+          status: submitStatus,
+          unsaved,
+        });
       }
+      card.appendChild(body);
       container.appendChild(card);
     });
     refreshDraftControls();

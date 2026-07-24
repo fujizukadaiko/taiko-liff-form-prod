@@ -512,6 +512,29 @@ test("productionホーム表示モデルはWorker由来の回答可否改ざん�
   }
 });
 
+test("event key上限をWorkerと同じ128文字に統一する", async () => {
+  const valid = await registeredReadOnlyResult();
+  const validModel = structuredClone(valid.viewModel);
+  validModel.events[0].eventKey = "a".repeat(128);
+  assert.doesNotThrow(() => auth.buildProductionHomeViewModel_(validModel));
+
+  const invalidModel = structuredClone(valid.viewModel);
+  invalidModel.events[0].eventKey = "a".repeat(129);
+  assert.throws(
+    () => auth.buildProductionHomeViewModel_(invalidModel),
+    (error) => error.type === auth.AUTH_STATES.RESPONSE_ERROR,
+  );
+
+  const invalidHome = registeredHome();
+  invalidHome.events[0].eventKey = "a".repeat(129);
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => jsonResponse(invalidHome)),
+  });
+  assert.equal(result.status, auth.AUTH_STATES.RESPONSE_ERROR);
+});
+
 test("productionホームは既存CSS部品へ安全なDOMだけで描画する", async () => {
   const result = await registeredReadOnlyResult();
   const productionHome = auth.buildProductionHomeViewModel_(result.viewModel);
@@ -798,7 +821,7 @@ test("すべての回答可否理由を安全な日本語へ変換する", async
   }
 });
 
-test("回答可能な本人演奏者だけにradio draft UIを生成する", async () => {
+test("回答可能な本人演奏者だけにproduction形式のselect draft UIを生成する", async () => {
   const result = await registeredReadOnlyResult();
   const container = new FakeElement("div");
   const summaries = [];
@@ -813,33 +836,33 @@ test("回答可能な本人演奏者だけにradio draft UIを生成する", asy
   ), 2);
 
   const elements = collectElements(container);
-  const radios = elements.filter((element) => element.tagName === "INPUT");
-  const fieldsets = elements.filter((element) => element.tagName === "FIELDSET");
-  const legends = elements.filter((element) => element.tagName === "LEGEND");
+  const selects = elements.filter((element) => element.tagName === "SELECT");
+  const options = elements.filter((element) => element.tagName === "OPTION");
   const labels = elements.filter((element) => element.tagName === "LABEL");
-  const resets = elements.filter((element) => element.tagName === "BUTTON");
+  const accordionButtons = elements.filter(
+    (element) => element.className === "fHead productionAttendanceAccordionButton",
+  );
 
-  // event-1は2人、event-2は対象区分が合う1人だけが各3選択肢を持つ。
-  assert.equal(fieldsets.length, 3);
-  assert.equal(radios.length, 9);
-  assert.equal(labels.length, 9);
-  assert.equal(resets.length, 3);
-  assert.ok(legends.every((legend) => /の出欠$/.test(legend.textContent)));
-  assert.ok(radios.every((radio) => radio.type === "radio"));
-  assert.ok(resets.every((button) => button.type === "button"));
+  // event-1は2人、event-2は対象区分が合う1人だけが各1つのselectを持つ。
+  assert.equal(selects.length, 3);
+  assert.equal(options.length, 12);
+  assert.equal(labels.length, 3);
+  assert.equal(accordionButtons.length, 2);
+  assert.ok(accordionButtons.every((button) => button.type === "button"));
   assert.deepEqual(summaries[0], { changedEventCount: 0, changedPerformerCount: 0 });
 
   // 参加と欠席は初期選択、未回答の本人2は未選択。
-  assert.equal(radios.filter((radio) => radio.checked).length, 2);
-  assert.ok(radios.some((radio) => radio.checked && radio.value === "参加"));
-  assert.ok(radios.some((radio) => radio.checked && radio.value === "欠席"));
-  assert.deepEqual(new Set(radios.map((radio) => radio.value)), new Set(["参加", "欠席", "未定"]));
+  assert.deepEqual(selects.map((select) => select.value), ["参加", "", "欠席"]);
+  assert.deepEqual(
+    new Set(options.map((option) => option.value)),
+    new Set(["", "参加", "欠席", "未定"]),
+  );
 
-  for (const radio of radios) {
-    assert.doesNotMatch(`${radio.id}\n${radio.name}`, /event-[12]|本人[12]/);
+  for (const select of selects) {
+    assert.doesNotMatch(select.id, /event-[12]|本人[12]/);
   }
   for (const label of labels) {
-    assert.ok(radios.some((radio) => radio.id === label.attributes.for));
+    assert.ok(selects.some((select) => select.id === label.attributes.for));
   }
   for (const element of elements) {
     assert.equal(Object.keys(element.attributes).some((name) => name.startsWith("data-")), false);
@@ -862,8 +885,8 @@ test("回答不可理由ごとに入力DOMを生成せず現在の出欠を維�
       enableDraftPreview: true,
     });
     const elements = collectElements(container);
-    // 元の3回答可能演奏者から1人を除外するため、2組×3 radio。
-    assert.equal(elements.filter((element) => element.tagName === "INPUT").length, 6, reason);
+    // 元の3回答可能演奏者から1人を除外するため、selectは2つ。
+    assert.equal(elements.filter((element) => element.tagName === "SELECT").length, 2, reason);
     assert.match(container.textContent, /出席/);
   }
 
@@ -882,8 +905,8 @@ test("回答不可理由ごとに入力DOMを生成せず現在の出欠を維�
     enableDraftPreview: true,
   });
   assert.equal(
-    collectElements(container).filter((element) => element.tagName === "INPUT").length,
-    3,
+    collectElements(container).filter((element) => element.tagName === "SELECT").length,
+    1,
   );
   assert.match(container.textContent, /回答期限終了/);
   assert.match(container.textContent, /出席/);
@@ -913,11 +936,11 @@ test("現在値を初期選択へ反映し未回答・データなしは未選�
     auth.renderReadOnlySchedules_(container, model, fakeDocument(), {
       enableDraftPreview: true,
     });
-    const checked = collectElements(container).filter(
-      (element) => element.tagName === "INPUT" && element.checked,
+    const selects = collectElements(container).filter(
+      (element) => element.tagName === "SELECT",
     );
-    assert.equal(checked.length, expected ? 1 : 0, initialAttend);
-    if (expected) assert.equal(checked[0].value, expected);
+    assert.equal(selects.length, 1, initialAttend);
+    assert.equal(selects[0].value, expected, initialAttend);
   }
 });
 
@@ -949,7 +972,7 @@ test("draft変更・元回答への復帰・取り消しをメモリ内だけで
   assert.equal(restored.changed, false);
 });
 
-test("radio操作と変更取り消しが集計と初期選択を更新する", async () => {
+test("select操作と予定単位の変更取り消しが集計と初期選択を更新する", async () => {
   const result = await registeredReadOnlyResult();
   const container = new FakeElement("div");
   const summaries = [];
@@ -958,22 +981,22 @@ test("radio操作と変更取り消しが集計と初期選択を更新する", 
     onDraftSummary(summary) { summaries.push(summary); },
   });
   const elements = collectElements(container);
-  const firstGroup = elements.find((element) => element.tagName === "FIELDSET");
-  const groupElements = collectElements(firstGroup);
-  const radios = groupElements.filter((element) => element.tagName === "INPUT");
-  const reset = groupElements.find((element) => element.tagName === "BUTTON");
-  const absence = radios.find((radio) => radio.value === "欠席");
+  const firstCard = elements.find((element) => element.tagName === "ARTICLE");
+  const cardElements = collectElements(firstCard);
+  const select = cardElements.find((element) => element.tagName === "SELECT");
+  const reset = cardElements.find(
+    (element) => element.className === "btn btn-ghost productionAttendanceReset",
+  );
 
-  radios.forEach((radio) => { radio.checked = false; });
-  absence.checked = true;
-  absence.dispatch("change");
+  select.value = "欠席";
+  select.dispatch("change");
   assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
   assert.equal(reset.hidden, false);
 
   reset.dispatch("click");
   assert.deepEqual(summaries.at(-1), { changedEventCount: 0, changedPerformerCount: 0 });
   assert.equal(reset.hidden, true);
-  assert.equal(radios.find((radio) => radio.value === "参加").checked, true);
+  assert.equal(select.value, "参加");
 });
 
 test("draft再描画でDOM・listenerを重複させずHTML風の本人名もtextContentで扱う", async () => {
@@ -992,12 +1015,12 @@ test("draft再描画でDOM・listenerを重複させずHTML風の本人名もtex
 
   const elements = collectElements(container);
   assert.equal(elements.filter((element) => element.tagName === "ARTICLE").length, 2);
-  assert.equal(elements.filter((element) => element.tagName === "INPUT").length, 6);
+  assert.equal(elements.filter((element) => element.tagName === "SELECT").length, 2);
   assert.equal(elements.filter((element) => element.tagName === "IMG").length, 0);
   assert.match(container.textContent, /<img src=x/);
-  for (const input of elements.filter((element) => element.tagName === "INPUT")) {
-    assert.equal((input.listeners.change || []).length, 1);
-    assert.doesNotMatch(`${input.id}\n${input.name}`, /<img|onerror/);
+  for (const select of elements.filter((element) => element.tagName === "SELECT")) {
+    assert.equal((select.listeners.change || []).length, 1);
+    assert.doesNotMatch(select.id, /<img|onerror/);
   }
 });
 
@@ -1294,13 +1317,14 @@ test("予定単位の保存ボタンは変更がある回答可能予定だけ�
   assert.ok(submitButtons.every((button) => button.type === "button" && button.hidden));
   assert.ok(submitButtons.every((button) => !/event-|本人/.test(button.id)));
 
-  const firstCardRadios = collectElements(cards[0]).filter((element) => element.tagName === "INPUT");
-  const absence = firstCardRadios.find((radio) => radio.value === "欠席" && !radio.checked);
-  absence.checked = true;
-  absence.dispatch("change");
+  const firstSelect = collectElements(cards[0]).find(
+    (element) => element.tagName === "SELECT",
+  );
+  firstSelect.value = "欠席";
+  firstSelect.dispatch("change");
   assert.equal(submitButtons[0].hidden, false);
   assert.equal(submitButtons[1].hidden, true);
-  assert.equal(fetchCount, 0, "表示・radio変更だけでは通信しない");
+  assert.equal(fetchCount, 0, "表示・select変更だけでは通信しない");
   assert.equal(
     collectElements(container).some((element) => /一括保存/.test(element.textContent)),
     false,
@@ -1323,11 +1347,11 @@ test("書き込みゲート停止時はdraftを保持しlegacyへfallbackしな�
     }),
   });
   const firstCard = collectElements(container).find((element) => element.tagName === "ARTICLE");
-  const absence = collectElements(firstCard).find(
-    (element) => element.tagName === "INPUT" && element.value === "欠席" && !element.checked,
+  const select = collectElements(firstCard).find(
+    (element) => element.tagName === "SELECT",
   );
-  absence.checked = true;
-  absence.dispatch("change");
+  select.value = "欠席";
+  select.dispatch("change");
   const button = collectElements(firstCard).find(
     (element) => element.className === "attendanceSubmitButton",
   );
@@ -1335,7 +1359,7 @@ test("書き込みゲート停止時はdraftを保持しlegacyへfallbackしな�
 
   assert.equal(requests.length, 1);
   assert.match(requests[0].url, /\/line\/attendance\/submit-authenticated$/);
-  assert.equal(absence.checked, true);
+  assert.equal(select.value, "欠席");
   assert.equal(button.hidden, false);
   assert.equal(button.disabled, false);
   assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
@@ -1372,16 +1396,16 @@ test("保存成功後は再取得で確認した予定だけ確定し他予定dr
     }),
   });
   const cards = collectElements(container).filter((element) => element.tagName === "ARTICLE");
-  const changeRadio = (card, value) => {
-    const radio = collectElements(card).find(
-      (element) => element.tagName === "INPUT" && element.value === value && !element.checked,
+  const changeSelect = (card, value) => {
+    const select = collectElements(card).find(
+      (element) => element.tagName === "SELECT",
     );
-    radio.checked = true;
-    radio.dispatch("change");
-    return radio;
+    select.value = value;
+    select.dispatch("change");
+    return select;
   };
-  changeRadio(cards[0], "欠席");
-  const otherDraft = changeRadio(cards[1], "未定");
+  changeSelect(cards[0], "欠席");
+  const otherDraft = changeSelect(cards[1], "未定");
   const buttons = cards.map((card) => collectElements(card).find(
     (element) => element.className === "attendanceSubmitButton",
   ));
@@ -1399,7 +1423,7 @@ test("保存成功後は再取得で確認した予定だけ確定し他予定dr
   assert.match(cards[0].textContent, /欠席/);
   assert.equal(buttons[0].hidden, true);
   assert.equal(buttons[1].hidden, false);
-  assert.equal(otherDraft.checked, true);
+  assert.equal(otherDraft.value, "未定");
   assert.deepEqual(summaries.at(-1), { changedEventCount: 1, changedPerformerCount: 1 });
 });
 
@@ -1429,11 +1453,11 @@ test("保存中ロックは連打と別予定の同時POSTを防ぎ全draft操�
   });
   const cards = collectElements(container).filter((element) => element.tagName === "ARTICLE");
   for (const [card, value] of [[cards[0], "欠席"], [cards[1], "未定"]]) {
-    const radio = collectElements(card).find(
-      (element) => element.tagName === "INPUT" && element.value === value && !element.checked,
+    const select = collectElements(card).find(
+      (element) => element.tagName === "SELECT",
     );
-    radio.checked = true;
-    radio.dispatch("change");
+    select.value = value;
+    select.dispatch("change");
   }
   const buttons = cards.map((card) => collectElements(card).find(
     (element) => element.className === "attendanceSubmitButton",
@@ -1444,7 +1468,9 @@ test("保存中ロックは連打と別予定の同時POSTを防ぎ全draft操�
   await buttons[0].dispatchAsync("click");
   assert.equal(requests.length, 1);
   const controls = collectElements(container).filter((element) =>
-    element.tagName === "INPUT" || element.tagName === "BUTTON"
+    element.tagName === "SELECT" ||
+    element.className === "attendanceSubmitButton" ||
+    element.className === "btn btn-ghost productionAttendanceReset"
   );
   assert.ok(controls.every((element) => element.disabled));
   releaseSubmit();
@@ -1476,24 +1502,24 @@ test("通信失敗・timeoutは自動retryせず保存結果不明としてdraft
         submitDependencies: dependencies,
       });
       const card = collectElements(container).find((element) => element.tagName === "ARTICLE");
-      const radio = collectElements(card).find(
-        (element) => element.tagName === "INPUT" && element.value === "欠席" && !element.checked,
+      const select = collectElements(card).find(
+        (element) => element.tagName === "SELECT",
       );
-      radio.checked = true;
-      radio.dispatch("change");
+      select.value = "欠席";
+      select.dispatch("change");
       const button = collectElements(card).find(
         (element) => element.className === "attendanceSubmitButton",
       );
       await button.dispatchAsync("click");
       assert.equal(fetchCount, 1);
-      assert.equal(radio.checked, true);
+      assert.equal(select.value, "欠席");
       assert.equal(button.hidden, false);
       assert.match(card.textContent, /保存結果を確認できませんでした/);
     });
   }
 });
 
-test("予定カードはtextContentだけで安全に描画し、操作要素を生成しない", () => {
+test("回答不可予定はtextContentだけで描画し、accordion以外の操作要素を生成しない", () => {
   const documentImpl = fakeDocument();
   const container = new FakeElement("div");
   const htmlLikeTitle = '<img src=x onerror="throw new Error(1)">';
@@ -1530,10 +1556,50 @@ test("予定カードはtextContentだけで安全に描画し、操作要素を
   assert.match(container.textContent, /回答不可<\/b>/);
   assert.match(container.textContent, /<img src=x onerror/);
   const tags = collectTags(container);
-  for (const forbidden of ["IMG", "SCRIPT", "B", "INPUT", "SELECT", "TEXTAREA", "BUTTON", "FORM"]) {
+  for (const forbidden of ["IMG", "SCRIPT", "B", "INPUT", "SELECT", "TEXTAREA", "FORM"]) {
     assert.equal(tags.includes(forbidden), false, forbidden);
   }
+  const accordion = collectElements(container).filter(
+    (element) => element.className === "fHead productionAttendanceAccordionButton",
+  );
+  assert.equal(accordion.length, 1);
+  assert.equal(accordion[0].type, "button");
   assert.equal(container.attributes.role, "list");
+});
+
+test("production形式の予定カードは安全な連番で開閉する", async () => {
+  const result = await registeredReadOnlyResult();
+  const container = new FakeElement("div");
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+  });
+  const firstCard = collectElements(container).find(
+    (element) => element.tagName === "ARTICLE",
+  );
+  const toggle = collectElements(firstCard).find(
+    (element) => element.className === "fHead productionAttendanceAccordionButton",
+  );
+  const body = collectElements(firstCard).find(
+    (element) => element.className === "fBody productionAttendanceBody",
+  );
+
+  assert.equal(body.hidden, true);
+  assert.equal(toggle.attributes["aria-expanded"], "false");
+  assert.equal(toggle.attributes["aria-controls"], body.id);
+  assert.doesNotMatch(
+    `${body.id}\n${toggle.attributes["aria-controls"]}`,
+    /event-[12]|本人/,
+  );
+
+  toggle.dispatch("click");
+  assert.equal(body.hidden, false);
+  assert.equal(toggle.attributes["aria-expanded"], "true");
+  assert.match(firstCard.className, /\bopen\b/);
+
+  toggle.dispatch("click");
+  assert.equal(body.hidden, true);
+  assert.equal(toggle.attributes["aria-expanded"], "false");
+  assert.doesNotMatch(firstCard.className, /\bopen\b/);
 });
 
 test("予定0件のDOMは正常な空状態だけを表示する", () => {

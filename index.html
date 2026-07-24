@@ -1234,67 +1234,118 @@
             margin-top:8px;
             font-weight:700;
         }
-        .attendanceDraftFieldset{
-            grid-column:1 / -1;
-            min-width:0;
-            margin:4px 0 0;
-            padding:10px;
-            border:1px solid var(--c-border);
-            border-radius:10px;
+        .productionAttendanceEvent-seg-child{
+            border-color:var(--seg-child-border) !important;
         }
-        .attendanceDraftFieldset legend{
-            max-width:100%;
-            padding:0 4px;
-            font-weight:700;
+        .productionAttendanceEvent-seg-adult{
+            border-color:var(--seg-adult-border) !important;
+        }
+        .productionAttendanceEvent-seg-both{
+            border-color:var(--seg-both-border) !important;
+        }
+        .productionAttendanceEvent-seg-child.open .fHead{
+            background:#ffecec;
+        }
+        .productionAttendanceEvent-seg-adult.open .fHead{
+            background:#e6f0ff;
+        }
+        .productionAttendanceEvent-seg-both.open .fHead{
+            background:#efe7ff;
+        }
+        .productionAttendanceAccordionButton{
+            display:block;
+            width:100%;
+            border:0;
+            color:inherit;
+            background:transparent;
+            font:inherit;
+            text-align:start;
+        }
+        .productionAttendanceAccordionButton:focus-visible{
+            outline:3px solid rgba(31,93,139,.3);
+            outline-offset:-3px;
+        }
+        .productionAttendanceAccordionButton .fRow1,
+        .productionAttendanceAccordionButton .fRow2,
+        .productionAttendanceAccordionButton .fStatusRow,
+        .productionAttendanceAccordionButton .fSub{
+            width:100%;
+        }
+        .productionAttendanceAccordionButton .badge-unsaved{
+            margin-left:auto;
+        }
+        .productionAttendanceSub{
+            display:block;
+        }
+        .productionAttendanceBody{
+            padding-top:2px;
+        }
+        .productionAttendanceNote,
+        .fPlaceDetail{
+            margin:4px 0 8px;
+            color:var(--c-muted);
             overflow-wrap:anywhere;
         }
-        .attendanceDraftChoices{
-            display:flex;
-            flex-wrap:wrap;
-            gap:8px;
+        .productionAttendanceRow{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 120px;
+            gap:6px 10px;
+            padding:10px 0;
+            border-top:1px dashed var(--c-border);
         }
-        .attendanceDraftChoice{
-            position:relative;
-            flex:1 1 6em;
+        .productionAttendanceRow .nameLabel{
+            align-self:center;
             min-width:0;
+            overflow-wrap:anywhere;
         }
-        .attendanceDraftChoice input{
-            position:absolute;
-            inset-inline-start:10px;
-            top:50%;
-            width:18px;
-            height:18px;
-            margin:0;
-            transform:translateY(-50%);
+        .productionAttendanceSelect{
+            max-width:100%;
         }
-        .attendanceDraftChoice label{
-            display:block;
-            min-height:44px;
-            padding:11px 10px 10px 36px;
-            border:1px solid var(--c-border);
-            border-radius:10px;
-            background:#fff;
+        .productionAttendanceCapability{
+            grid-column:1 / -1;
+            font-size:12px;
             font-weight:700;
-            line-height:1.35;
-            cursor:pointer;
         }
-        .attendanceDraftChoice input:checked + label{
-            border-color:#17643a;
-            background:#edf8f1;
+        .productionAttendanceCapabilityOpen{
+            color:#17643a;
         }
-        .attendanceDraftChoice input:focus-visible + label{
-            outline:3px solid rgba(23,100,58,.25);
-            outline-offset:2px;
+        .productionAttendanceCapabilityClosed{
+            color:var(--c-muted);
         }
-        .attendanceDraftReset{
-            min-height:40px;
-            margin-top:10px;
-            padding:8px 12px;
-            border:1px solid var(--c-border);
-            border-radius:9px;
-            background:#fff;
-            color:var(--c-text);
+        .productionAttendanceReadOnly{
+            display:grid;
+            justify-items:end;
+            gap:2px;
+        }
+        .productionAttendanceReadOnly .productionAttendanceCapability{
+            grid-column:auto;
+            text-align:end;
+        }
+        .productionAttendanceCurrent{
             font-weight:700;
+        }
+        .productionAttendanceCommentDisabled{
+            margin:10px 0 0;
+            padding:8px 10px;
+            border:1px solid var(--c-border);
+            border-radius:8px;
+            color:var(--c-muted);
+            background:#f7f7f7;
+            font-size:13px;
+        }
+        .productionAttendanceActions{
+            display:grid;
+            gap:8px;
+            margin-top:8px;
+        }
+        .productionAttendanceReset{
+            width:100%;
+            min-height:42px;
+        }
+        .productionAttendanceReset[hidden],
+        .attendanceSubmitButton[hidden],
+        .productionAttendanceAccordionButton .badge-unsaved[hidden]{
+            display:none !important;
         }
         .attendanceSubmitStatus{
             min-height:1.5em;
@@ -1316,8 +1367,8 @@
             font-weight:700;
         }
         .attendanceSubmitButton:disabled,
-        .attendanceDraftReset:disabled,
-        .attendanceDraftChoice input:disabled + label{
+        .productionAttendanceReset:disabled,
+        .productionAttendanceSelect:disabled{
             cursor:not-allowed;
             opacity:.6;
         }
@@ -1326,8 +1377,13 @@
             color:var(--c-muted);
         }
         @media (max-width:420px){
-            .readOnlyScheduleCard{ padding:12px; }
-            .readOnlyScheduleMetaRow{ grid-template-columns:4.8em minmax(0,1fr); }
+            .productionAttendanceRow{
+                grid-template-columns:minmax(0,1fr) 112px;
+            }
+            .productionAttendanceRow .selectBtn{
+                width:112px;
+                min-width:112px;
+            }
         }
 
     /* ===== Admin（管理画面） ===== */adminListFetch
@@ -3584,11 +3640,12 @@
                 </button>
             </div>
 
-            <section id="readOnlyScheduleSection" class="card readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
-                <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
+            <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
+                <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定・出欠</h2>
                 <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
                     <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
-                    <div>回答可能な予定は保存操作を試せます。</div>
+                    <div>予定をタップして開き、演奏者ごとの回答を選択してください。</div>
+                    <div>保存は予定ごとに行います。ほかの予定の未保存内容は送信しません。</div>
                     <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
                     <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
                     <div class="attendanceDraftSummary">
