@@ -6049,11 +6049,18 @@
                     dependencies: { workerBaseUrl: D1_BASE },
                 },
             );
-            log.textContent = registerMode === "create"
+            const successMessage = registerMode === "create"
                 ? "初回登録が完了しました。"
                 : "登録情報を保存しました。";
+            log.textContent = successMessage;
             showStagingAuthenticatedView_("view-home");
             await initStagingAuthenticatedReadOnly_();
+            if (typeof window.showSnackbar === "function") {
+                window.showSnackbar(successMessage, {
+                    variant: "success",
+                    duration: 5000,
+                });
+            }
         } catch (error) {
             const kind = window.LineAuthSession.classifyMemberSubmitError_(error);
             log.textContent = memberSubmitMessage_(kind);
