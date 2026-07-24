@@ -5,8 +5,6 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   "use strict";
 
-  const STAGING_WORKER_BASE_URL =
-    "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
   const AUTHENTICATED_ATTENDANCE_SUBMIT_PATH =
     "/line/attendance/submit-authenticated";
   const DEFAULT_TIMEOUT_MS = 10000;
@@ -90,15 +88,44 @@
     return headers;
   }
 
+  function resolveWorkerBaseUrl_(dependencies) {
+    const raw = typeof dependencies?.workerBaseUrl === "string"
+      ? dependencies.workerBaseUrl.trim()
+      : "";
+    try {
+      const parsed = new URL(raw);
+      if (
+        !raw ||
+        parsed.protocol !== "https:" ||
+        parsed.username ||
+        parsed.password ||
+        parsed.pathname !== "/" ||
+        parsed.search ||
+        parsed.hash ||
+        parsed.origin !== raw
+      ) {
+        throw new Error("invalid");
+      }
+      return parsed.origin;
+    } catch (_) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_worker_base_url",
+        0,
+      );
+    }
+  }
+
   async function authenticatedFetch_(path, options, idToken, dependencies) {
     const token = validateIdToken(idToken);
-    const target = new URL(String(path || ""), STAGING_WORKER_BASE_URL);
-    if (target.origin !== STAGING_WORKER_BASE_URL || !target.pathname.startsWith("/")) {
+    const deps = dependencies || {};
+    const workerBaseUrl = resolveWorkerBaseUrl_(deps);
+    const target = new URL(String(path || ""), `${workerBaseUrl}/`);
+    if (target.origin !== workerBaseUrl || !target.pathname.startsWith("/")) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_worker_target", 0);
     }
 
     const opts = options || {};
-    const deps = dependencies || {};
     const fetchImpl = deps.fetchImpl || root.fetch;
     const AbortControllerImpl = deps.AbortControllerImpl || root.AbortController;
     const setTimeoutImpl = deps.setTimeoutImpl || root.setTimeout;
@@ -1524,7 +1551,6 @@
   return {
     AUTH_STATES,
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
-    STAGING_WORKER_BASE_URL,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
     authenticatedFetch_,

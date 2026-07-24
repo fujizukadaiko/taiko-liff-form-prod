@@ -3,15 +3,44 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>藤塚太鼓 出欠・予定</title>
+  <title>[STAGING] 藤塚太鼓 出欠・予定</title>
   
     <!-- ===== 共通設定（環境・バージョン） ===== -->
+        <script src="./env-config.js"></script>
         <script>
+            const ENVIRONMENT_CONFIG_RESULT = (() => {
+                try {
+                    const api = window.TaikoEnvironmentConfig;
+                    if (!api || typeof api.resolveRuntimeConfig !== "function") {
+                        return { ok: false, error: "environment_config_unavailable" };
+                    }
+                    return api.resolveRuntimeConfig(window.location);
+                } catch (_) {
+                    return { ok: false, error: "environment_config_unavailable" };
+                }
+            })();
+            const APP_STARTUP_ALLOWED = ENVIRONMENT_CONFIG_RESULT.ok === true;
+            const APP_ENV_CONFIG = APP_STARTUP_ALLOWED
+                ? ENVIRONMENT_CONFIG_RESULT.config
+                : null;
+
             // === 基本設定 ===
-            const FRONT_VERSION = "Front v6.4.5";  // stable ver→v6.3.1, PROD v1.2.8 反映済み
-            const LIFF_ID = "2008020568-2jVl00Rn";         // ←差し替え
-            const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbzaeqchlDJmkQGMKEYm9pQEOmp-GWgt0jhxRsO3Uq_G9GxaaE3n9p-fYcO6eprlLO5QLQ/exec";     // GAS v106.2 （PROD v1.0.2 反映済み）
-            const D1_API_BASE_URL = "https://taiko-worker-plain-staging.fujizukadaiko.workers.dev";
+            const ENVIRONMENT = APP_ENV_CONFIG ? APP_ENV_CONFIG.environment : "";
+            const FRONT_VERSION = APP_ENV_CONFIG ? APP_ENV_CONFIG.frontVersion : "";
+            const LIFF_ID = APP_ENV_CONFIG ? APP_ENV_CONFIG.liffId : "";
+            const API_ENDPOINT = APP_ENV_CONFIG ? APP_ENV_CONFIG.gasBaseUrl : "";
+            const D1_API_BASE_URL = APP_ENV_CONFIG ? APP_ENV_CONFIG.workerBaseUrl : "";
+            const EXPECTED_PAGE_HOSTNAME = APP_ENV_CONFIG
+                ? APP_ENV_CONFIG.expectedPageHostname
+                : "";
+            const SHOW_ENVIRONMENT_BANNER = APP_ENV_CONFIG
+                ? APP_ENV_CONFIG.showEnvironmentBanner === true
+                : false;
+            document.documentElement.dataset.environment = ENVIRONMENT || "invalid";
+            document.documentElement.dataset.showEnvironmentBanner =
+                SHOW_ENVIRONMENT_BANNER ? "true" : "false";
+            document.documentElement.dataset.environmentConfig =
+                APP_STARTUP_ALLOWED ? "valid" : "invalid";
             // stagingは本人認証済みデータを読み取り、隔離された認証済み保存UIだけを使う。
             // GAS・管理・従来画面などのlegacy経路は、このモードでは起動しない。
             const STAGING_AUTHENTICATED_READ_ONLY = true;
@@ -143,7 +172,24 @@
                 );
                 }
                 // 他スクリプトから参照しやすいよう window にまとめて公開
-                window.__APP_CONFIG__ = { FRONT_VERSION, LIFF_ID, API_ENDPOINT, D1_BASE, ENV_NS, ICS_FEED_URL, ICS_FEED_URLS };
+                window.__APP_CONFIG_STATUS__ = {
+                    ok: APP_STARTUP_ALLOWED,
+                    error: APP_STARTUP_ALLOWED
+                        ? ""
+                        : String(ENVIRONMENT_CONFIG_RESULT.error || "environment_config_unavailable")
+                };
+                window.__APP_CONFIG__ = {
+                    ENVIRONMENT,
+                    FRONT_VERSION,
+                    LIFF_ID,
+                    API_ENDPOINT,
+                    D1_BASE,
+                    ENV_NS,
+                    ICS_FEED_URL,
+                    ICS_FEED_URLS,
+                    EXPECTED_PAGE_HOSTNAME,
+                    SHOW_ENVIRONMENT_BANNER
+                };
             })();
         </script>
 
@@ -227,6 +273,41 @@
         font-weight: 600; letter-spacing: 0.03em;
         }
 
+        .environmentBanner{
+        position:sticky;
+        top:0;
+        z-index:60;
+        box-sizing:border-box;
+        min-height:32px;
+        padding:6px 12px;
+        color:#eaf4ff;
+        background:#174a72;
+        border-bottom:1px solid rgba(255,255,255,.28);
+        font-size:12px;
+        font-weight:800;
+        line-height:20px;
+        letter-spacing:.08em;
+        text-align:center;
+        }
+        html[data-show-environment-banner="false"] .environmentBanner{
+        display:none;
+        }
+        .environmentFatal{
+        width:min(100% - 32px, 448px);
+        box-sizing:border-box;
+        margin:24px auto;
+        padding:16px;
+        border:2px solid #174a72;
+        border-radius:12px;
+        color:#17324a;
+        background:#eef7ff;
+        font-size:14px;
+        line-height:1.7;
+        }
+        html[data-environment-config="invalid"] #feedbackFab{
+        display:none !important;
+        }
+
         header{
         padding:13px 18px 12px; font-size:18px;
         background:var(--ui-primary-dark); border-bottom:1px solid rgba(255,255,255,.12);
@@ -298,6 +379,9 @@
         position:sticky; top:0; z-index:50;
         backdrop-filter:blur(6px);
         -webkit-backdrop-filter:blur(6px);
+        }
+        html[data-show-environment-banner="true"] header.is-sticky{
+        top:32px;
         }
 
         .warnBox{ background:#fff7d6; border:1px solid #f3d27a; padding:10px; border-radius:10px; color:#7a5b00; }
@@ -1133,6 +1217,15 @@
             background:#fffaf0;
             font-size:14px;
             line-height:1.6;
+        }
+        .saveEnvironmentNotice{
+            margin:0 0 8px;
+            padding:6px 8px;
+            border:1px solid #78a9cf;
+            border-radius:8px;
+            color:#173f60;
+            background:#eef7ff;
+            font-weight:800;
         }
         .attendanceDraftSummary{
             display:grid;
@@ -3233,6 +3326,12 @@
 </head>
 
 <body>
+  <div id="environmentBanner" class="environmentBanner" role="status">
+    STAGING／テスト環境
+  </div>
+  <div id="environmentFatal" class="environmentFatal" role="alert" hidden>
+    環境設定を安全に確認できないため、アプリを停止しました。LINEからテスト環境を開き直してください。
+  </div>
   <header class="is-sticky">
   <div class="brandBlock">
     <svg class="taikoMark" viewBox="0 0 28 28" aria-hidden="true" focusable="false">
@@ -3269,7 +3368,8 @@
                 <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
                     <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
                     <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
-                        <div>テスト環境です。回答可能な予定は保存操作を試せます。</div>
+                        <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
+                        <div>回答可能な予定は保存操作を試せます。</div>
                         <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
                         <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
                         <div class="attendanceDraftSummary">
@@ -5643,6 +5743,9 @@
                             enableDraftPreview: STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY,
                             enableSubmitUi: STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI,
                             liff: window.liff,
+                            submitDependencies: {
+                                workerBaseUrl: D1_BASE,
+                            },
                             onDraftSummary: function(summary){
                                 if (draftEventCount) {
                                     draftEventCount.textContent =
@@ -5690,6 +5793,20 @@
         setHomePrimaryButton("本人認証済み・読み取り専用", true);
     }
 
+    function renderEnvironmentConfigFailure_(){
+        document.documentElement.dataset.environmentConfig = "invalid";
+        const fatal = document.getElementById("environmentFatal");
+        if (fatal) fatal.hidden = false;
+        document.querySelector("header")?.setAttribute("hidden", "");
+        document.querySelector("main")?.setAttribute("hidden", "");
+        document.getElementById("legalFooter")?.setAttribute("hidden", "");
+        const feedback = document.getElementById("feedbackFab");
+        if (feedback) {
+            feedback.setAttribute("hidden", "");
+            feedback.style.display = "none";
+        }
+    }
+
     async function initStagingAuthenticatedReadOnly_(){
         if (!window.LineAuthSession) {
             renderStagingReadOnlyState_({ status: "network_error" });
@@ -5699,11 +5816,18 @@
             liff: window.liff,
             liffId: LIFF_ID,
             onState: renderStagingReadOnlyState_,
+            dependencies: {
+                workerBaseUrl: D1_BASE,
+            },
         });
     }
 
     async function init(){
     try{
+        if (!APP_STARTUP_ALLOWED) {
+            renderEnvironmentConfigFailure_();
+            return;
+        }
         $("#ver").textContent = FRONT_VERSION;
 
         if (STAGING_AUTHENTICATED_READ_ONLY) {
