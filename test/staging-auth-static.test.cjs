@@ -189,18 +189,25 @@ test("productionホームアダプターは旧renderer・業務ルール・通�
   assert.doesNotMatch(integration, /dataset|setAttribute\(["']data-/);
 });
 
-test("draft preview以外の書き込みUI・submit・未エスケープinnerHTMLを使わない", () => {
+test("production形式の出欠UIは安全なDOMと予定単位buttonだけを使う", () => {
   const start = authSource.indexOf("function renderReadOnlySchedules_");
   const end = authSource.indexOf("\n  function getAuthUiCopy", start);
   assert.ok(start >= 0 && end > start);
   const renderer = authSource.slice(start, end);
   assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|outerHTML/);
-  assert.doesNotMatch(renderer, /createElement\(["'](?:select|textarea|form)["']\)/i);
+  assert.match(renderer, /createElement\("select"\)/);
+  assert.doesNotMatch(renderer, /createElement\(["'](?:input|textarea|form)["']\)/i);
   assert.doesNotMatch(renderer, /addEventListener\(["']submit["']/i);
-  assert.match(renderer, /radio\.type = "radio"/);
-  assert.match(renderer, /reset\.type = "button"/);
+  assert.match(renderer, /toggle\.type = "button"/);
+  assert.match(renderer, /submitButton\.type = "button"/);
+  assert.match(renderer, /この予定の変更を保存/);
+  assert.match(renderer, /コメント：安全な保存先を準備中/);
   assert.match(renderer, /enableDraftPreview/);
   assert.match(renderer, /textContent/);
+  assert.match(
+    html,
+    /\.productionAttendanceReset\[hidden\],[\s\S]*\.attendanceSubmitButton\[hidden\],[\s\S]*\.productionAttendanceAccordionButton \.badge-unsaved\[hidden\]\s*\{[\s\S]*display:none !important;/,
+  );
 });
 
 test("通常読み取りフローは許可された2 APIだけを使用し書き込みへ進まない", () => {
@@ -214,13 +221,17 @@ test("通常読み取りフローは許可された2 APIだけを使用し書き
   assert.match(authSource, /"\/line\/attendance\/submit-authenticated"/);
 });
 
-test("attendanceWriteは読み取り専用表示にだけ使用する", () => {
+test("attendanceWriteだけを入力可否の根拠にする", () => {
   assert.match(authSource, /validateAttendanceWrite_/);
   assert.match(authSource, /eventAllowedCount/);
   assert.match(authSource, /performerAllowedEventCount/);
-  assert.match(authSource, /予定の回答可否/);
-  assert.match(authSource, /回答可否:/);
-  assert.doesNotMatch(authSource, /createElement\(["'](?:select|textarea|form)["']\)/i);
+  assert.match(authSource, /EVENT_WRITE_LABELS/);
+  assert.match(authSource, /PERFORMER_WRITE_LABELS/);
+  assert.match(
+    authSource,
+    /event\.eventAllowed[\s\S]*event\.eventWriteReason === "open"[\s\S]*performer\.attendanceWriteAllowed[\s\S]*performer\.attendanceWriteReason === "open"/,
+  );
+  assert.doesNotMatch(authSource, /createElement\(["'](?:textarea|form)["']\)/i);
   assert.doesNotMatch(authSource, /addEventListener\(["']submit["']/i);
 });
 
@@ -229,7 +240,7 @@ test("draft previewは認証済み予定単位保存だけを追加しlegacy経�
   assert.match(authSource, /createAttendanceDraftState_/);
   assert.match(authSource, /変更を取り消す/);
   assert.match(html, /const STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI = true;/);
-  assert.match(html, /回答可能な予定は保存操作を試せます/);
+  assert.match(html, /保存は予定ごとに行います。ほかの予定の未保存内容は送信しません/);
   assert.match(html, /「変更を保存しました。」と表示された回答だけがサーバーへ反映されています/);
   assert.match(authSource, /submit-authenticated/);
   assert.doesNotMatch(authSource, /"\/line\/attendance\/submit"/);
@@ -243,12 +254,13 @@ test("draft DOMは安全な連番を使いidentityをdata属性へ保存しな�
   const start = authSource.indexOf("function renderReadOnlySchedules_");
   const end = authSource.indexOf("\n  function getAuthUiCopy", start);
   const renderer = authSource.slice(start, end);
-  assert.match(renderer, /attendance-draft-\$\{eventIndex\}-\$\{performerIndex\}/);
+  assert.match(renderer, /attendance-select-\$\{eventIndex\}-\$\{performerIndex\}/);
+  assert.match(renderer, /attendance-event-panel-\$\{eventIndex\}/);
   assert.doesNotMatch(renderer, /dataset|setAttribute\(["']data-/);
-  assert.doesNotMatch(renderer, /radio\.(?:id|name)\s*=.*eventKey|radio\.(?:id|name)\s*=.*performerName/);
-  assert.match(renderer, /createElement\("fieldset"\)/);
-  assert.match(renderer, /createElement\("legend"\)/);
-  assert.match(renderer, /label\.setAttribute\("for", radioId\)/);
+  assert.doesNotMatch(renderer, /select\.id\s*=.*eventKey|select\.id\s*=.*performerName/);
+  assert.match(renderer, /createElement\("select"\)/);
+  assert.match(renderer, /createElement\("option"\)/);
+  assert.match(renderer, /name\.setAttribute\("for", selectId\)/);
 });
 
 test("index.htmlのインラインJavaScriptが構文上有効", () => {
