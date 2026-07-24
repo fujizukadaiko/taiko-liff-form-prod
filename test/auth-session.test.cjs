@@ -1602,6 +1602,24 @@ test("production形式の予定カードは安全な連番で開閉する", asyn
   assert.doesNotMatch(firstCard.className, /\bopen\b/);
 });
 
+test("production出欠フォームと同じくイベント備考を描画しない", async () => {
+  const result = await registeredReadOnlyResult();
+  result.viewModel.events[0].note = "出欠フォームには表示しない備考";
+  const container = new FakeElement("div");
+
+  auth.renderReadOnlySchedules_(container, result.viewModel, fakeDocument(), {
+    enableDraftPreview: true,
+  });
+
+  assert.doesNotMatch(container.textContent, /出欠フォームには表示しない備考/);
+  assert.equal(
+    collectElements(container).some(
+      (element) => element.className === "productionAttendanceNote",
+    ),
+    false,
+  );
+});
+
 test("予定0件のDOMは正常な空状態だけを表示する", () => {
   const container = new FakeElement("div");
   const count = auth.renderReadOnlySchedules_(container, { events: [] }, fakeDocument());
