@@ -1446,12 +1446,6 @@
         placeDetail.textContent = `＠ ${event.place}`;
         body.appendChild(placeDetail);
       }
-      if (event.note) {
-        const note = documentImpl.createElement("p");
-        note.className = "productionAttendanceNote";
-        note.textContent = event.note;
-        body.appendChild(note);
-      }
 
       event.performers.forEach(function (performer, performerIndex) {
         const row = documentImpl.createElement("div");
