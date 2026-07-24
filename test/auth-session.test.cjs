@@ -446,6 +446,107 @@ test("出欠statusを正式な日本語表示へ変換し、本人メンバー�
   assert.equal(JSON.stringify(result.viewModel).includes("memberId"), false);
 });
 
+test("認証済みデータをproductionホーム表示モデルへ変換し全予定を保持する", async () => {
+  const result = await registeredReadOnlyResult();
+  const productionHome = auth.buildProductionHomeViewModel_(result.viewModel);
+
+  assert.equal(productionHome.eventCount, 2);
+  assert.equal(productionHome.memberCount, 2);
+  assert.deepEqual(
+    productionHome.events.map((event) => event.eventKey),
+    ["event-1", "event-2"],
+  );
+  assert.deepEqual(
+    productionHome.events[0].performers,
+    [
+      {
+        performerName: "本人1",
+        attendanceLabel: "出席",
+        attendanceClass: "stat-ok",
+        attendanceWriteAllowed: true,
+        attendanceWriteLabel: "回答可能",
+      },
+      {
+        performerName: "本人2",
+        attendanceLabel: "未回答",
+        attendanceClass: "stat-na",
+        attendanceWriteAllowed: true,
+        attendanceWriteLabel: "回答可能",
+      },
+    ],
+  );
+  assert.equal(productionHome.events[1].attendanceWriteAllowed, true);
+  assert.equal(productionHome.events[1].attendanceWriteLabel, "回答受付中");
+  assert.equal(
+    productionHome.events[1].performers[1].attendanceWriteLabel,
+    "この予定の対象外",
+  );
+});
+
+test("productionホーム表示モデルはWorker由来の回答可否改ざんを拒否する", async (t) => {
+  const result = await registeredReadOnlyResult();
+  const cases = [
+    ["event可否", (model) => { model.events[0].eventAllowed = false; }],
+    ["event理由", (model) => { model.events[0].eventWriteReason = "deadline_passed"; }],
+    ["event文言", (model) => { model.events[0].eventWriteLabel = "回答可能"; }],
+    ["演奏者可否", (model) => {
+      model.events[0].performers[0].attendanceWriteAllowed = false;
+    }],
+    ["演奏者文言", (model) => {
+      model.events[0].performers[0].attendanceWriteLabel = "この予定の対象外";
+    }],
+    ["出欠文言", (model) => {
+      model.events[0].performers[0].attendanceLabel = "未回答";
+    }],
+  ];
+
+  for (const [name, mutate] of cases) {
+    await t.test(name, () => {
+      const model = structuredClone(result.viewModel);
+      mutate(model);
+      assert.throws(
+        () => auth.buildProductionHomeViewModel_(model),
+        (error) => error.type === auth.AUTH_STATES.RESPONSE_ERROR,
+      );
+    });
+  }
+});
+
+test("productionホームは既存CSS部品へ安全なDOMだけで描画する", async () => {
+  const result = await registeredReadOnlyResult();
+  const productionHome = auth.buildProductionHomeViewModel_(result.viewModel);
+  const container = new FakeElement("div");
+
+  assert.equal(
+    auth.renderProductionHome_(container, productionHome, fakeDocument()),
+    2,
+  );
+  const elements = collectElements(container);
+  const tags = collectTags(container);
+  assert.equal(tags.filter((tag) => tag === "ARTICLE").length, 2);
+  assert.equal(tags.filter((tag) => tag === "H3").length, 2);
+  assert.equal(tags.includes("BUTTON"), false);
+  assert.equal(tags.includes("INPUT"), false);
+  assert.equal(tags.includes("SELECT"), false);
+  assert.match(container.textContent, /予定1/);
+  assert.match(container.textContent, /本人1出席回答可能/);
+  assert.match(container.textContent, /本人2未回答回答可能/);
+  assert.match(container.textContent, /回答受付中/);
+
+  const attributes = JSON.stringify(elements.map((element) => element.attributes));
+  assert.doesNotMatch(attributes, /event-1|event-2|本人1|本人2/);
+});
+
+test("productionホームは予定0件を正常な空表示として扱う", () => {
+  const container = new FakeElement("div");
+  const model = auth.buildProductionHomeViewModel_({
+    events: [],
+    memberCount: 1,
+  });
+  assert.equal(auth.renderProductionHome_(container, model, fakeDocument()), 0);
+  assert.match(container.textContent, /現在表示できる予定はありません/);
+});
+
 test("予定0件は正常な読み取り専用空状態として扱う", async () => {
   const home = registeredHome();
   home.events = [];

@@ -676,6 +676,232 @@
     };
   }
 
+  const PRODUCTION_HOME_ATTENDANCE_CLASSES = new Map([
+    ["参加", "stat-ok"],
+    ["欠席", "stat-ng"],
+    ["未定", "stat-pd"],
+    ["未回答", "stat-na"],
+    ["データなし", "stat-na"],
+  ]);
+  const PRODUCTION_HOME_SEGMENT_CLASSES = new Map([
+    ["大人", "seg-adult"],
+    ["子ども", "seg-child"],
+    ["両方", "seg-both"],
+  ]);
+
+  function buildProductionHomeViewModel_(readOnlyViewModel) {
+    if (!isPlainObject(readOnlyViewModel) || !Array.isArray(readOnlyViewModel.events)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_production_home_view", 0);
+    }
+
+    const events = readOnlyViewModel.events.map(function (event) {
+      if (
+        !isPlainObject(event) ||
+        typeof event.eventAllowed !== "boolean" ||
+        typeof event.eventWriteReason !== "string" ||
+        !EVENT_WRITE_REASONS.has(event.eventWriteReason) ||
+        event.eventWriteLabel !== EVENT_WRITE_LABELS.get(event.eventWriteReason) ||
+        event.eventAllowed !== (event.eventWriteReason === "open") ||
+        !Array.isArray(event.performers)
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_production_home_event", 0);
+      }
+
+      const targetGroupLabel = readResponseString(event, "targetGroupLabel", {
+        nullable: true,
+        maxLength: 20,
+        code: "invalid_production_home_event",
+      });
+      if (targetGroupLabel && !PRODUCTION_HOME_SEGMENT_CLASSES.has(targetGroupLabel)) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_production_home_event", 0);
+      }
+
+      const performers = event.performers.map(function (performer) {
+        if (
+          !isPlainObject(performer) ||
+          typeof performer.attendanceWriteAllowed !== "boolean" ||
+          typeof performer.attendanceWriteReason !== "string" ||
+          !PERFORMER_WRITE_REASONS.has(performer.attendanceWriteReason) ||
+          performer.attendanceWriteLabel !==
+            PERFORMER_WRITE_LABELS.get(performer.attendanceWriteReason) ||
+          performer.attendanceWriteAllowed !==
+            (performer.attendanceWriteReason === "open") ||
+          !ATTENDANCE_LABELS.has(performer.initialAttend) ||
+          performer.attendanceLabel !== ATTENDANCE_LABELS.get(performer.initialAttend)
+        ) {
+          throw makeError(
+            AUTH_STATES.RESPONSE_ERROR,
+            "invalid_production_home_performer",
+            0,
+          );
+        }
+        return {
+          performerName: readResponseString(performer, "performerName", {
+            required: true,
+            maxLength: 200,
+            code: "invalid_production_home_performer",
+          }),
+          attendanceLabel: performer.attendanceLabel,
+          attendanceClass: PRODUCTION_HOME_ATTENDANCE_CLASSES.get(
+            performer.initialAttend,
+          ),
+          attendanceWriteAllowed: performer.attendanceWriteAllowed,
+          attendanceWriteLabel: performer.attendanceWriteLabel,
+        };
+      });
+
+      return {
+        eventKey: readResponseString(event, "eventKey", {
+          required: true,
+          maxLength: 160,
+          code: "invalid_production_home_event",
+        }),
+        title: readResponseString(event, "title", {
+          required: true,
+          maxLength: 200,
+          code: "invalid_production_home_event",
+        }),
+        dateLabel: readResponseString(event, "dateLabel", {
+          required: true,
+          maxLength: 40,
+          code: "invalid_production_home_event",
+        }),
+        timeLabel: readResponseString(event, "timeLabel", {
+          nullable: true,
+          maxLength: 5,
+          code: "invalid_production_home_event",
+        }),
+        place: readResponseString(event, "place", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_production_home_event",
+        }),
+        targetGroupLabel,
+        targetGroupClass: targetGroupLabel
+          ? PRODUCTION_HOME_SEGMENT_CLASSES.get(targetGroupLabel)
+          : "",
+        deadlineLabel: readResponseString(event, "deadlineLabel", {
+          nullable: true,
+          maxLength: 40,
+          code: "invalid_production_home_event",
+        }),
+        attendanceWriteAllowed: event.eventAllowed,
+        attendanceWriteLabel: event.eventWriteLabel,
+        performers,
+      };
+    });
+
+    return {
+      events,
+      eventCount: events.length,
+      memberCount: Number.isInteger(readOnlyViewModel.memberCount)
+        ? readOnlyViewModel.memberCount
+        : 0,
+    };
+  }
+
+  function renderProductionHome_(container, productionHomeViewModel, documentImpl) {
+    if (
+      !container ||
+      !documentImpl ||
+      typeof documentImpl.createElement !== "function" ||
+      !isPlainObject(productionHomeViewModel) ||
+      !Array.isArray(productionHomeViewModel.events)
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "production_home_ui_unavailable", 0);
+    }
+
+    container.textContent = "";
+    container.setAttribute("role", "list");
+    if (productionHomeViewModel.events.length === 0) {
+      const empty = documentImpl.createElement("p");
+      empty.className = "listEmpty";
+      empty.textContent = "現在表示できる予定はありません。";
+      container.appendChild(empty);
+      return 0;
+    }
+
+    const list = documentImpl.createElement("div");
+    list.className = "evList authenticatedHomeEventList";
+    productionHomeViewModel.events.forEach(function (event) {
+      const card = documentImpl.createElement("article");
+      card.className = "eventRow authenticatedHomeEventRow";
+      card.setAttribute("role", "listitem");
+
+      const head = documentImpl.createElement("div");
+      head.className = "eventHead";
+      const headLeft = documentImpl.createElement("div");
+      headLeft.className = "eventHead-left";
+      if (event.targetGroupLabel) {
+        const segment = documentImpl.createElement("span");
+        segment.className = `seg-badge ${event.targetGroupClass}`;
+        segment.textContent = event.targetGroupLabel;
+        headLeft.appendChild(segment);
+      }
+      const headRight = documentImpl.createElement("div");
+      headRight.className = "eventHead-right";
+      const eventCapability = documentImpl.createElement("span");
+      eventCapability.className = event.attendanceWriteAllowed
+        ? "tag open"
+        : "tag closed";
+      eventCapability.textContent = event.attendanceWriteLabel;
+      headRight.appendChild(eventCapability);
+      head.appendChild(headLeft);
+      head.appendChild(headRight);
+      card.appendChild(head);
+
+      const title = documentImpl.createElement("h3");
+      title.className = "authenticatedHomeEventName";
+      title.textContent = event.title;
+      card.appendChild(title);
+
+      const schedule = documentImpl.createElement("div");
+      schedule.className = "eventTitle";
+      const date = documentImpl.createElement("span");
+      date.className = "title-date";
+      date.textContent = [event.dateLabel, event.timeLabel].filter(Boolean).join(" ");
+      schedule.appendChild(date);
+      if (event.place) {
+        const place = documentImpl.createElement("span");
+        place.className = "title-place";
+        place.textContent = `@ ${event.place}`;
+        schedule.appendChild(place);
+      }
+      card.appendChild(schedule);
+
+      if (event.deadlineLabel) {
+        const deadline = documentImpl.createElement("div");
+        deadline.className = "eventSub";
+        deadline.textContent = `回答期限：${event.deadlineLabel}`;
+        card.appendChild(deadline);
+      }
+
+      const performers = documentImpl.createElement("ul");
+      performers.className = "authenticatedHomeAttendanceList";
+      event.performers.forEach(function (performer) {
+        const item = documentImpl.createElement("li");
+        item.className = "authenticatedHomeAttendanceItem";
+        const name = documentImpl.createElement("span");
+        name.className = "authenticatedHomePerformerName";
+        name.textContent = performer.performerName;
+        const attendance = documentImpl.createElement("span");
+        attendance.className = `pill sm ${performer.attendanceClass}`;
+        attendance.textContent = performer.attendanceLabel;
+        const capability = documentImpl.createElement("span");
+        capability.className = "authenticatedHomeWriteCapability";
+        capability.textContent = performer.attendanceWriteLabel;
+        item.appendChild(name);
+        item.appendChild(attendance);
+        item.appendChild(capability);
+        performers.appendChild(item);
+      });
+      card.appendChild(performers);
+      list.appendChild(card);
+    });
+    container.appendChild(list);
+    return productionHomeViewModel.events.length;
+  }
+
   function draftKey_(eventIndex, performerIndex) {
     return `${eventIndex}:${performerIndex}`;
   }
@@ -1557,6 +1783,7 @@
     authenticatedFetch_,
     buildAuthenticatedAttendanceEventPayload_,
     buildAuthenticatedAttendanceDraftPayloads_,
+    buildProductionHomeViewModel_,
     buildReadOnlyScheduleViewModel_,
     classifyAttendanceSubmitError_,
     createAttendanceDraftState_,
@@ -1566,6 +1793,7 @@
     getAuthUiCopy,
     getAttendanceSubmitMessage_,
     getReadOnlyUiCopy,
+    renderProductionHome_,
     renderReadOnlySchedules_,
     resetAttendanceDraftSelection_,
     setAttendanceDraftSelection_,

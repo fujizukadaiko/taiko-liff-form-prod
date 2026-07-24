@@ -119,27 +119,74 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   const primary = openingTag("btnPrimary");
   const schedules = openingTag("btnSchedules");
   const editNames = openingTag("btnEditNames");
+  const backFromForm = openingTag("btnBackFromForm");
 
   assert.doesNotMatch(primary, /data-view-target/);
   assert.doesNotMatch(schedules, /data-view-target/);
   assert.doesNotMatch(editNames, /data-view-target/);
+  assert.doesNotMatch(backFromForm, /data-view-target/);
   assert.match(schedules, /\bdisabled\b/);
   assert.match(editNames, /\bdisabled\b/);
   assert.match(html, /予定表（準備中）/);
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shell以外のviewは表示対象から除外する", () => {
-  const start = html.indexOf("function configureStagingProductionShell_");
-  const end = html.indexOf("\n    function renderStagingReadOnlyState_", start);
-  const shell = html.slice(start, end);
-  assert.ok(start >= 0 && end > start);
-  assert.match(shell, /view\.id !== "view-home"/);
-  assert.match(shell, /view\.classList\.remove\("show"\)/);
-  assert.match(shell, /view\.hidden = true/);
+test("安全shellはhomeと認証済み出欠viewだけを切り替える", () => {
+  const viewStart = html.indexOf("function showStagingAuthenticatedView_");
+  const shellStart = html.indexOf("function configureStagingProductionShell_");
+  const viewSwitch = html.slice(viewStart, shellStart);
+  const shellEnd = html.indexOf("\n    function renderStagingReadOnlyState_", shellStart);
+  const shell = html.slice(shellStart, shellEnd);
+  assert.ok(viewStart >= 0 && shellStart > viewStart && shellEnd > shellStart);
+  assert.match(viewSwitch, /new Set\(\["view-home", "view-form"\]\)/);
+  assert.match(viewSwitch, /const active = view\.id === viewId/);
+  assert.match(viewSwitch, /view\.hidden = !active/);
+  assert.match(viewSwitch, /view\.classList\.toggle\("show", active\)/);
+  assert.match(shell, /showStagingAuthenticatedView_\("view-home"\)/);
+  assert.match(shell, /showStagingAuthenticatedView_\("view-form"\)/);
+  assert.match(shell, /querySelectorAll\("\.stagingLegacyFormControl"\)/);
+  assert.match(shell, /element\.hidden = true/);
   assert.match(shell, /schedules\.disabled = true/);
   assert.match(shell, /editNames\.disabled = true/);
-  assert.doesNotMatch(shell, /API_ENDPOINT|fetch\(|getDecodedIDToken|lineId|memberId|no-cors/);
+  assert.doesNotMatch(
+    `${viewSwitch}\n${shell}`,
+    /API_ENDPOINT|fetch\(|getDecodedIDToken|lineId|memberId|no-cors|show\("#view-/,
+  );
+});
+
+test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続する", () => {
+  assert.match(
+    html,
+    /id="cardEventsActive"[^>]*data-staging-shell="safe"[^>]*hidden/,
+  );
+  assert.match(html, /本人向け予定・出欠/);
+  assert.match(html, /id="homeOnlyNALabel"[^>]*hidden[^>]*aria-hidden="true"/);
+  assert.match(html, /buildProductionHomeViewModel_\(\s*snapshot\.viewModel/);
+  assert.match(html, /renderProductionHome_\(\s*box,\s*productionHome,\s*document/);
+  assert.match(html, /state\.authenticatedProductionHome = productionHome/);
+  assert.match(html, /primary\.setAttribute\("aria-controls", "view-form"\)/);
+
+  const formView = html.indexOf('<section id="view-form" data-view>');
+  const authenticatedSchedule = html.indexOf('id="readOnlyScheduleSection"');
+  assert.ok(formView >= 0 && authenticatedSchedule > formView);
+  assert.match(html, /class="[^"]*stagingLegacyFormControl[^"]*"[^>]*hidden/);
+});
+
+test("productionホームアダプターは旧renderer・業務ルール・通信へ依存しない", () => {
+  const adapterStart = authSource.indexOf("function buildProductionHomeViewModel_");
+  const rendererStart = authSource.indexOf("function renderProductionHome_", adapterStart);
+  const rendererEnd = authSource.indexOf("\n  function draftKey_", rendererStart);
+  assert.ok(adapterStart >= 0 && rendererStart > adapterStart && rendererEnd > rendererStart);
+  const integration = authSource.slice(adapterStart, rendererEnd);
+  assert.match(integration, /event\.eventWriteLabel !== EVENT_WRITE_LABELS\.get/);
+  assert.match(integration, /performer\.attendanceWriteLabel !==/);
+  assert.match(integration, /textContent/);
+  assert.doesNotMatch(
+    integration,
+    /innerHTML|insertAdjacentHTML|outerHTML|fetch\(|API_ENDPOINT|HomeEventsUI|isPastDeadline|matchSeg|splitEventsForForm|onSubmit|addEventListener/,
+  );
+  assert.doesNotMatch(integration, /createElement\(["'](?:button|input|select|textarea|form)["']\)/i);
+  assert.doesNotMatch(integration, /dataset|setAttribute\(["']data-/);
 });
 
 test("draft preview以外の書き込みUI・submit・未エスケープinnerHTMLを使わない", () => {
