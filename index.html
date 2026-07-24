@@ -1324,14 +1324,24 @@
         .productionAttendanceCurrent{
             font-weight:700;
         }
-        .productionAttendanceCommentDisabled{
+        .productionAttendanceCommentInput{
+            width:100%;
+            min-height:42px;
             margin:10px 0 0;
             padding:8px 10px;
             border:1px solid var(--c-border);
             border-radius:8px;
-            color:var(--c-muted);
-            background:#f7f7f7;
-            font-size:13px;
+            background:#fff;
+            font-size:16px;
+            box-sizing:border-box;
+        }
+        .productionAttendanceCommentInput:disabled{
+            cursor:not-allowed;
+            opacity:.6;
+        }
+        .productionAttendanceBody .commentReadOnly{
+            margin:10px 0 0;
+            overflow-wrap:anywhere;
         }
         .productionAttendanceActions{
             display:grid;

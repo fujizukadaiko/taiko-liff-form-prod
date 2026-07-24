@@ -253,6 +253,9 @@
     ATTENDANCE_DRAFT_OPTIONS.map((option) => option.attend),
   );
   const MAX_DRAFT_ITEMS_PER_EVENT = 10;
+  const MAX_ATTENDANCE_COMMENT_LENGTH = 100;
+  const REQUEST_ID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const EVENT_WRITE_REASONS = new Set([
     "open",
     "inactive",
@@ -557,6 +560,9 @@
     if (!body.map || typeof body.map !== "object" || Array.isArray(body.map)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_response", 200);
     }
+    if (!isPlainObject(body.comments)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_response", 200);
+    }
 
     const memberNames = new Set((home && home.members || []).map(function (member) {
       return member.performerName;
@@ -564,7 +570,7 @@
     const normalizedMap = {};
     let attendanceCount = 0;
     for (const [eventKey, rows] of Object.entries(body.map)) {
-      if (!eventKey || eventKey.length > 160) {
+      if (!eventKey || eventKey.length > 128) {
         throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_response", 200);
       }
       if (!Array.isArray(rows)) {
@@ -596,10 +602,34 @@
         return { performerName, attend };
       });
     }
-    if (!body.registered && attendanceCount > 0) {
+    const normalizedComments = {};
+    let commentCount = 0;
+    for (const [eventKey, value] of Object.entries(body.comments)) {
+      if (!eventKey || eventKey.length > 128 || !isPlainObject(value)) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_response", 200);
+      }
+      const comment = readResponseString(value, "comment", {
+        nullable: true,
+        maxLength: MAX_ATTENDANCE_COMMENT_LENGTH,
+        code: "invalid_attendance_response",
+      });
+      readResponseString(value, "updatedAt", {
+        nullable: true,
+        maxLength: 64,
+        code: "invalid_attendance_response",
+      });
+      normalizedComments[eventKey] = comment;
+      commentCount += 1;
+    }
+    if (!body.registered && (attendanceCount > 0 || commentCount > 0)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_attendance_response", 200);
     }
-    return { registered: body.registered, attendanceCount, map: normalizedMap };
+    return {
+      registered: body.registered,
+      attendanceCount,
+      map: normalizedMap,
+      comments: normalizedComments,
+    };
   }
 
   async function fetchAttendanceSummary_(idToken, home, dependencies) {
@@ -644,6 +674,7 @@
         eventAllowed: event.attendanceWrite.eventAllowed,
         eventWriteReason: event.attendanceWrite.eventReason,
         eventWriteLabel: EVENT_WRITE_LABELS.get(event.attendanceWrite.eventReason),
+        initialComment: attendance.comments[event.eventKey] || "",
         performers: home.members.map(function (member) {
           const attend = attendanceByPerformer.get(member.performerName) || "未回答";
           const label = ATTENDANCE_LABELS.get(attend);
@@ -906,6 +937,18 @@
     return `${eventIndex}:${performerIndex}`;
   }
 
+  function eventDraftKey_(eventIndex) {
+    return `event:${eventIndex}`;
+  }
+
+  function createAttendanceRequestId_() {
+    const requestId = root?.crypto?.randomUUID?.();
+    if (typeof requestId !== "string" || !REQUEST_ID_PATTERN.test(requestId)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "request_id_unavailable", 0);
+    }
+    return requestId;
+  }
+
   function createAttendanceDraftState_(validatedEvents) {
     if (!Array.isArray(validatedEvents)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
@@ -916,6 +959,12 @@
         throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
       }
       if (!Array.isArray(event.performers)) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
+      }
+      if (
+        typeof event.initialComment !== "string"
+        || event.initialComment.length > MAX_ATTENDANCE_COMMENT_LENGTH
+      ) {
         throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_source", 0);
       }
       const seenPerformers = new Set();
@@ -944,6 +993,21 @@
           selectedAttend: performer.initialAttend,
           changed: false,
         });
+      });
+      const commentEditable =
+        event.eventAllowed === true
+        && event.eventWriteReason === "open"
+        && event.performers.some(function (performer) {
+          return performer.attendanceWriteAllowed === true
+            && performer.attendanceWriteReason === "open";
+        });
+      draftState.set(eventDraftKey_(eventIndex), {
+        eventKey: event.eventKey,
+        initialComment: event.initialComment,
+        selectedComment: event.initialComment,
+        commentChanged: false,
+        commentEditable,
+        requestId: createAttendanceRequestId_(),
       });
     });
     return draftState;
@@ -975,6 +1039,44 @@
       ...current,
       selectedAttend: current.initialAttend,
       changed: false,
+    };
+    draftState.set(key, next);
+    return { ...next };
+  }
+
+  function setAttendanceCommentDraft_(draftState, eventIndex, selectedComment) {
+    const key = eventDraftKey_(eventIndex);
+    if (
+      !(draftState instanceof Map)
+      || !draftState.has(key)
+      || typeof selectedComment !== "string"
+      || selectedComment.length > MAX_ATTENDANCE_COMMENT_LENGTH
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_comment_draft", 0);
+    }
+    const current = draftState.get(key);
+    if (!current.commentEditable) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_comment_draft", 0);
+    }
+    const next = {
+      ...current,
+      selectedComment,
+      commentChanged: selectedComment.trim() !== current.initialComment,
+    };
+    draftState.set(key, next);
+    return { ...next };
+  }
+
+  function resetAttendanceCommentDraft_(draftState, eventIndex) {
+    const key = eventDraftKey_(eventIndex);
+    if (!(draftState instanceof Map) || !draftState.has(key)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_comment_draft", 0);
+    }
+    const current = draftState.get(key);
+    const next = {
+      ...current,
+      selectedComment: current.initialComment,
+      commentChanged: false,
     };
     draftState.set(key, next);
     return { ...next };
@@ -1038,8 +1140,34 @@
       if (items.length > MAX_DRAFT_ITEMS_PER_EVENT) {
         throw makeError(AUTH_STATES.RESPONSE_ERROR, "draft_items_limit_exceeded", 0);
       }
-      if (items.length > 0) {
-        payloads.push({ eventKey: event.eventKey, mode: "merge", items });
+      const eventDraft = draftState.get(eventDraftKey_(eventIndex));
+      if (
+        !eventDraft
+        || eventDraft.eventKey !== event.eventKey
+        || typeof eventDraft.initialComment !== "string"
+        || typeof eventDraft.selectedComment !== "string"
+        || eventDraft.selectedComment.length > MAX_ATTENDANCE_COMMENT_LENGTH
+        || eventDraft.commentChanged
+          !== (eventDraft.selectedComment.trim() !== eventDraft.initialComment)
+        || typeof eventDraft.commentEditable !== "boolean"
+        || !REQUEST_ID_PATTERN.test(eventDraft.requestId)
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+      }
+      if (eventDraft.commentChanged && !eventDraft.commentEditable) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+      }
+      if (items.length > 0 || eventDraft.commentChanged) {
+        payloads.push({
+          requestId: eventDraft.requestId,
+          eventKey: event.eventKey,
+          mode: "merge",
+          items,
+          commentTouched: eventDraft.commentChanged,
+          ...(eventDraft.commentChanged
+            ? { comment: eventDraft.selectedComment.trim() }
+            : {}),
+        });
       }
     });
     return payloads;
@@ -1114,21 +1242,83 @@
     return updates;
   }
 
+  function applyConfirmedAttendanceCommentDraft_(
+    validatedEvents,
+    draftState,
+    eventIndex,
+    confirmedComment,
+  ) {
+    if (
+      !Number.isInteger(eventIndex)
+      || eventIndex < 0
+      || eventIndex >= validatedEvents.length
+      || typeof confirmedComment !== "string"
+      || confirmedComment.length > MAX_ATTENDANCE_COMMENT_LENGTH
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+    }
+    const event = validatedEvents[eventIndex];
+    const key = eventDraftKey_(eventIndex);
+    const current = draftState.get(key);
+    if (!current || current.eventKey !== event.eventKey) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_confirmation", 0);
+    }
+    const next = {
+      ...current,
+      initialComment: confirmedComment,
+      selectedComment: confirmedComment,
+      commentChanged: false,
+    };
+    draftState.set(key, next);
+    return { ...next };
+  }
+
+  function rotateAttendanceDraftRequestId_(draftState, eventIndex) {
+    const key = eventDraftKey_(eventIndex);
+    if (!(draftState instanceof Map) || !draftState.has(key)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_draft_state", 0);
+    }
+    const current = draftState.get(key);
+    draftState.set(key, {
+      ...current,
+      requestId: createAttendanceRequestId_(),
+    });
+  }
+
   function validateAuthenticatedAttendancePayload_(payload) {
     if (!isPlainObject(payload)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
     }
     const topLevelKeys = Object.keys(payload);
+    const hasComment = Object.prototype.hasOwnProperty.call(payload, "comment");
     if (
-      topLevelKeys.length !== 3 ||
-      !topLevelKeys.every((key) => ["eventKey", "mode", "items"].includes(key)) ||
+      !topLevelKeys.every((key) =>
+        ["requestId", "eventKey", "mode", "items", "commentTouched", "comment"]
+          .includes(key)
+      ) ||
+      topLevelKeys.length !== (hasComment ? 6 : 5) ||
+      typeof payload.requestId !== "string" ||
+      !REQUEST_ID_PATTERN.test(payload.requestId) ||
       typeof payload.eventKey !== "string" ||
       !payload.eventKey ||
       payload.eventKey.length > 128 ||
       payload.mode !== "merge" ||
       !Array.isArray(payload.items) ||
-      payload.items.length < 1 ||
-      payload.items.length > MAX_DRAFT_ITEMS_PER_EVENT
+      payload.items.length > MAX_DRAFT_ITEMS_PER_EVENT ||
+      typeof payload.commentTouched !== "boolean" ||
+      payload.commentTouched !== hasComment
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
+    }
+    const comment = hasComment && typeof payload.comment === "string"
+      ? payload.comment.trim()
+      : "";
+    if (
+      (hasComment && (
+        typeof payload.comment !== "string"
+        || comment.length > MAX_ATTENDANCE_COMMENT_LENGTH
+      ))
+      || (payload.items.length === 0 && !payload.commentTouched)
     ) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_payload", 0);
     }
@@ -1152,7 +1342,14 @@
       seenPerformers.add(item.performerName);
       return { performerName: item.performerName, attend: item.attend };
     });
-    return { eventKey: payload.eventKey, mode: "merge", items };
+    return {
+      requestId: payload.requestId,
+      eventKey: payload.eventKey,
+      mode: "merge",
+      items,
+      commentTouched: payload.commentTouched,
+      ...(payload.commentTouched ? { comment } : {}),
+    };
   }
 
   function getCurrentLiffIdToken_(liff) {
@@ -1168,32 +1365,57 @@
     return validateIdToken(idToken);
   }
 
-  function validateAttendanceSubmitSuccess_(body, expectedCount) {
+  function validateAttendanceSubmitSuccess_(body, payload) {
     if (
       !isPlainObject(body) ||
       body.ok !== true ||
       body.status !== "ok" ||
+      body.requestId !== payload.requestId ||
       !Number.isInteger(body.updatedCount) ||
-      body.updatedCount !== expectedCount
+      body.updatedCount !== payload.items.length ||
+      typeof body.commentUpdated !== "boolean" ||
+      body.commentUpdated !== payload.commentTouched
     ) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_submit_response", 200);
     }
-    return body.updatedCount;
+    return {
+      updatedCount: body.updatedCount,
+      commentUpdated: body.commentUpdated,
+    };
   }
 
   function confirmSubmittedAttendance_(attendance, payload) {
-    if (!attendance || attendance.registered !== true || !isPlainObject(attendance.map)) {
+    if (
+      !attendance
+      || attendance.registered !== true
+      || !isPlainObject(attendance.map)
+      || !isPlainObject(attendance.comments)
+    ) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
     }
-    const rows = attendance.map[payload.eventKey];
-    if (!Array.isArray(rows)) {
-      throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
+    let rows = attendance.map[payload.eventKey];
+    if (payload.items.length > 0 && !Array.isArray(rows)) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "attendance_confirmation_failed",
+        200,
+      );
     }
+    if (!Array.isArray(rows)) rows = [];
     const confirmed = new Map(rows.map((row) => [row.performerName, row.attend]));
     if (payload.items.some((item) => confirmed.get(item.performerName) !== item.attend)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
     }
-    return payload.items.map((item) => ({ ...item }));
+    if (
+      payload.commentTouched
+      && attendance.comments[payload.eventKey] !== payload.comment
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "attendance_confirmation_failed", 200);
+    }
+    return {
+      items: payload.items.map((item) => ({ ...item })),
+      comment: payload.commentTouched ? payload.comment : null,
+    };
   }
 
   async function submitAuthenticatedAttendancePayload_(payload, options) {
@@ -1214,13 +1436,15 @@
         idToken,
         opts.dependencies,
       );
-      const updatedCount = validateAttendanceSubmitSuccess_(
-        submitBody,
-        validatedPayload.items.length,
-      );
+      const success = validateAttendanceSubmitSuccess_(submitBody, validatedPayload);
       const attendance = await fetchAttendanceSummary_(idToken, home, opts.dependencies);
-      const confirmedItems = confirmSubmittedAttendance_(attendance, validatedPayload);
-      return { updatedCount, confirmedItems };
+      const confirmed = confirmSubmittedAttendance_(attendance, validatedPayload);
+      return {
+        updatedCount: success.updatedCount,
+        commentUpdated: success.commentUpdated,
+        confirmedItems: confirmed.items,
+        confirmedComment: confirmed.comment,
+      };
     } finally {
       idToken = "";
     }
@@ -1242,6 +1466,10 @@
     }
     if (status === 403) return "not_allowed";
     if (status === 404) return "event_not_found";
+    if (status === 409 && code === "comment_requires_attendance") {
+      return "comment_needs_attendance";
+    }
+    if (status === 409 && code === "idempotency_conflict") return "response_error";
     if (status === 409) return "event_not_available";
     if ([400, 413, 415].includes(status)) return "response_error";
     if (status === 503 && code === "attendance_write_failed") return "save_unavailable";
@@ -1262,6 +1490,7 @@
       not_allowed: "現在の状態では、この回答を保存できません。画面を再読み込みしてください。",
       event_not_found: "予定を確認できません。画面を再読み込みしてください。",
       event_not_available: "受付状態が変更されたため保存できません。画面を再読み込みしてください。",
+      comment_needs_attendance: "初回は出欠も選択して、コメントと一緒に保存してください。",
       save_unavailable: "一時的に保存できませんでした。時間をおいてもう一度お試しください。",
       network_uncertain: "保存結果を確認できませんでした。自動再送信は行っていません。画面を開き直して現在の回答をご確認ください。",
       response_error: "サーバーから予期しない応答がありました。",
@@ -1309,6 +1538,7 @@
       ? createAttendanceDraftState_(model.events)
       : null;
     const draftControls = new Map();
+    const commentControls = new Map();
     const submitControls = new Map();
     let submitInFlight = false;
     let activeSubmitEventIndex = -1;
@@ -1320,6 +1550,9 @@
       if (!draftPreviewEnabled) return;
       draftControls.forEach(function (control, key) {
         control.select.disabled = submitInFlight;
+      });
+      commentControls.forEach(function (control) {
+        control.input.disabled = submitInFlight;
       });
       submitControls.forEach(function (control, eventIndex) {
         let payload = null;
@@ -1518,11 +1751,52 @@
         body.appendChild(row);
       });
 
-      const commentNotice = documentImpl.createElement("p");
-      commentNotice.className = "productionAttendanceCommentDisabled";
-      commentNotice.textContent =
-        "コメント：安全な保存先を準備中のため、現在は入力できません。";
-      body.appendChild(commentNotice);
+      const eventCommentEditable =
+        draftPreviewEnabled
+        && event.eventAllowed
+        && event.eventWriteReason === "open"
+        && event.performers.some((performer) =>
+          performer.attendanceWriteAllowed && performer.attendanceWriteReason === "open"
+        );
+      const commentDivider = documentImpl.createElement("div");
+      commentDivider.className = "line";
+      body.appendChild(commentDivider);
+      if (eventCommentEditable) {
+        const commentLabel = documentImpl.createElement("label");
+        const commentId = `attendance-comment-${eventIndex}`;
+        commentLabel.setAttribute("for", commentId);
+        commentLabel.textContent = "コメント（任意・100文字まで）";
+        body.appendChild(commentLabel);
+        const commentInput = documentImpl.createElement("input");
+        commentInput.type = "text";
+        commentInput.id = commentId;
+        commentInput.maxLength = MAX_ATTENDANCE_COMMENT_LENGTH;
+        commentInput.className = "evComment productionAttendanceCommentInput";
+        commentInput.value = event.initialComment;
+        commentInput.addEventListener("input", function () {
+          try {
+            setAttendanceCommentDraft_(
+              draftState,
+              eventIndex,
+              commentInput.value,
+            );
+            const submitControl = submitControls.get(eventIndex);
+            if (submitControl) submitControl.status.textContent = "";
+            refreshDraftControls();
+          } catch (_) {
+            onFatalError();
+          }
+        });
+        body.appendChild(commentInput);
+        commentControls.set(eventIndex, { input: commentInput });
+      } else {
+        const commentReadOnly = documentImpl.createElement("p");
+        commentReadOnly.className = "commentReadOnly";
+        commentReadOnly.textContent = event.initialComment
+          ? `コメント：${event.initialComment}`
+          : "コメント：（コメントなし）";
+        body.appendChild(commentReadOnly);
+      }
 
       if (
         draftPreviewEnabled &&
@@ -1557,6 +1831,14 @@
                 ? restored.initialAttend
                 : "";
             });
+            const restoredComment = resetAttendanceCommentDraft_(
+              draftState,
+              eventIndex,
+            );
+            const commentControl = commentControls.get(eventIndex);
+            if (commentControl) {
+              commentControl.input.value = restoredComment.initialComment;
+            }
             submitStatus.textContent = "";
             refreshDraftControls();
           } catch (_) {
@@ -1598,12 +1880,14 @@
               members: model.members,
               dependencies: opts.submitDependencies,
             });
-            const updates = applyConfirmedAttendanceDraft_(
-              model.events,
-              draftState,
-              eventIndex,
-              result.confirmedItems,
-            );
+            const updates = result.confirmedItems.length > 0
+              ? applyConfirmedAttendanceDraft_(
+                model.events,
+                draftState,
+                eventIndex,
+                result.confirmedItems,
+              )
+              : [];
             updates.forEach(function (update) {
               const control = draftControls.get(update.key);
               if (!control) {
@@ -1616,6 +1900,20 @@
               control.statusPill.textContent =
                 `${control.performerName}：${update.attendanceLabel}`;
             });
+            if (result.commentUpdated) {
+              const confirmedComment = applyConfirmedAttendanceCommentDraft_(
+                model.events,
+                draftState,
+                eventIndex,
+                result.confirmedComment,
+              );
+              event.initialComment = confirmedComment.initialComment;
+              const commentControl = commentControls.get(eventIndex);
+              if (commentControl) {
+                commentControl.input.value = confirmedComment.initialComment;
+              }
+            }
+            rotateAttendanceDraftRequestId_(draftState, eventIndex);
             submitStatus.textContent = getAttendanceSubmitMessage_("saved");
           } catch (error) {
             submitStatus.textContent = getAttendanceSubmitMessage_(
@@ -1856,6 +2154,7 @@
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
+    applyConfirmedAttendanceCommentDraft_,
     authenticatedFetch_,
     buildAuthenticatedAttendanceEventPayload_,
     buildAuthenticatedAttendanceDraftPayloads_,
@@ -1871,7 +2170,9 @@
     getReadOnlyUiCopy,
     renderProductionHome_,
     renderReadOnlySchedules_,
+    resetAttendanceCommentDraft_,
     resetAttendanceDraftSelection_,
+    setAttendanceCommentDraft_,
     setAttendanceDraftSelection_,
     summarizeAttendanceDraft_,
     submitAuthenticatedAttendancePayload_,

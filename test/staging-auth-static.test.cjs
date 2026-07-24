@@ -196,12 +196,14 @@ test("production形式の出欠UIは安全なDOMと予定単位buttonだけを�
   const renderer = authSource.slice(start, end);
   assert.doesNotMatch(renderer, /innerHTML|insertAdjacentHTML|outerHTML/);
   assert.match(renderer, /createElement\("select"\)/);
-  assert.doesNotMatch(renderer, /createElement\(["'](?:input|textarea|form)["']\)/i);
+  assert.match(renderer, /createElement\("input"\)/);
+  assert.doesNotMatch(renderer, /createElement\(["'](?:textarea|form)["']\)/i);
   assert.doesNotMatch(renderer, /addEventListener\(["']submit["']/i);
   assert.match(renderer, /toggle\.type = "button"/);
   assert.match(renderer, /submitButton\.type = "button"/);
   assert.match(renderer, /この予定の変更を保存/);
-  assert.match(renderer, /コメント：安全な保存先を準備中/);
+  assert.match(renderer, /コメント（任意・100文字まで）/);
+  assert.match(renderer, /commentInput\.maxLength = MAX_ATTENDANCE_COMMENT_LENGTH/);
   assert.match(renderer, /enableDraftPreview/);
   assert.match(renderer, /textContent/);
   assert.match(

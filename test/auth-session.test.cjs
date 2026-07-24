@@ -7,6 +7,7 @@ const auth = require("../auth-session.js");
 
 const TOKEN = "header.payload.signature";
 const TEST_WORKER_BASE_URL = "https://staging-worker.example.test";
+const REQUEST_ID = "123e4567-e89b-42d3-a456-426614174000";
 
 function jsonResponse(body, status = 200, contentType = "application/json") {
   return {
@@ -181,6 +182,34 @@ function registeredAttendance() {
         { performerName: "本人2", attend: "参加" },
       ],
     },
+    comments: {
+      "event-1": {
+        comment: "連絡事項",
+        updatedAt: "2026-07-24T00:00:00.000Z",
+      },
+    },
+  };
+}
+
+function attendanceSubmitPayload(overrides = {}) {
+  return {
+    requestId: REQUEST_ID,
+    eventKey: "event-1",
+    mode: "merge",
+    items: [{ performerName: "本人1", attend: "欠席" }],
+    commentTouched: false,
+    ...overrides,
+  };
+}
+
+function attendanceSubmitResponse(payload, overrides = {}) {
+  return {
+    ok: true,
+    status: "ok",
+    requestId: payload.requestId,
+    updatedCount: payload.items.length,
+    commentUpdated: payload.commentTouched,
+    ...overrides,
   };
 }
 
@@ -361,7 +390,7 @@ test("本人向け予定を全件保持し、日付・時刻順の読み取り�
       requestCount += 1;
       return requestCount === 1
         ? jsonResponse(home)
-        : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+        : jsonResponse({ status: "ok", ok: true, registered: true, map: {}, comments: {} });
     }),
   });
 
@@ -581,7 +610,7 @@ test("予定0件は正常な読み取り専用空状態として扱う", async (
       requestCount += 1;
       return requestCount === 1
         ? jsonResponse(home)
-        : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+        : jsonResponse({ status: "ok", ok: true, registered: true, map: {}, comments: {} });
     }),
   });
   assert.equal(result.status, auth.AUTH_STATES.REGISTERED_READ_ONLY);
@@ -646,6 +675,7 @@ test("重複・不正予定と未知の出欠statusをresponse_errorにする", 
                 ok: true,
                 registered: true,
                 map: { "event-1": [row] },
+                comments: {},
               });
         }),
       });
@@ -781,7 +811,7 @@ test("すべての回答可否理由を安全な日本語へ変換する", async
           fetchCount += 1;
           return fetchCount === 1
             ? jsonResponse(home)
-            : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+            : jsonResponse({ status: "ok", ok: true, registered: true, map: {}, comments: {} });
         }),
       });
       const container = new FakeElement("div");
@@ -811,7 +841,7 @@ test("すべての回答可否理由を安全な日本語へ変換する", async
           fetchCount += 1;
           return fetchCount === 1
             ? jsonResponse(home)
-            : jsonResponse({ status: "ok", ok: true, registered: true, map: {} });
+            : jsonResponse({ status: "ok", ok: true, registered: true, map: {}, comments: {} });
         }),
       });
       const container = new FakeElement("div");
@@ -839,6 +869,9 @@ test("回答可能な本人演奏者だけにproduction形式のselect draft UI�
   const selects = elements.filter((element) => element.tagName === "SELECT");
   const options = elements.filter((element) => element.tagName === "OPTION");
   const labels = elements.filter((element) => element.tagName === "LABEL");
+  const commentInputs = elements.filter(
+    (element) => element.className === "evComment productionAttendanceCommentInput",
+  );
   const accordionButtons = elements.filter(
     (element) => element.className === "fHead productionAttendanceAccordionButton",
   );
@@ -846,7 +879,11 @@ test("回答可能な本人演奏者だけにproduction形式のselect draft UI�
   // event-1は2人、event-2は対象区分が合う1人だけが各1つのselectを持つ。
   assert.equal(selects.length, 3);
   assert.equal(options.length, 12);
-  assert.equal(labels.length, 3);
+  assert.equal(labels.length, 5);
+  assert.equal(commentInputs.length, 2);
+  assert.ok(commentInputs.every(
+    (input) => input.type === "text" && input.maxLength === 100,
+  ));
   assert.equal(accordionButtons.length, 2);
   assert.ok(accordionButtons.every((button) => button.type === "button"));
   assert.deepEqual(summaries[0], { changedEventCount: 0, changedPerformerCount: 0 });
@@ -862,7 +899,11 @@ test("回答可能な本人演奏者だけにproduction形式のselect draft UI�
     assert.doesNotMatch(select.id, /event-[12]|本人[12]/);
   }
   for (const label of labels) {
-    assert.ok(selects.some((select) => select.id === label.attributes.for));
+    assert.ok(
+      [...selects, ...commentInputs].some(
+        (control) => control.id === label.attributes.for,
+      ),
+    );
   }
   for (const element of elements) {
     assert.equal(Object.keys(element.attributes).some((name) => name.startsWith("data-")), false);
@@ -947,7 +988,7 @@ test("現在値を初期選択へ反映し未回答・データなしは未選�
 test("draft変更・元回答への復帰・取り消しをメモリ内だけで管理する", async () => {
   const result = await registeredReadOnlyResult();
   const state = auth.createAttendanceDraftState_(result.viewModel.events);
-  assert.equal(state.size, 3);
+  assert.equal(state.size, 5);
   assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
     changedEventCount: 0,
     changedPerformerCount: 0,
@@ -1032,27 +1073,40 @@ test("変更された本人演奏者だけをevent別merge payloadへ変換す�
   auth.setAttendanceDraftSelection_(state, "1:0", "未定");
 
   const payloads = auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state);
-  assert.deepEqual(payloads, [
-    {
-      eventKey: "event-1",
-      mode: "merge",
-      items: [
-        { performerName: "本人1", attend: "欠席" },
-        { performerName: "本人2", attend: "参加" },
-      ],
-    },
-    {
-      eventKey: "event-2",
-      mode: "merge",
-      items: [{ performerName: "本人1", attend: "未定" }],
-    },
-  ]);
+  assert.equal(payloads.length, 2);
+  assert.deepEqual(
+    payloads.map(({ requestId, ...payload }) => payload),
+    [
+      {
+        eventKey: "event-1",
+        mode: "merge",
+        items: [
+          { performerName: "本人1", attend: "欠席" },
+          { performerName: "本人2", attend: "参加" },
+        ],
+        commentTouched: false,
+      },
+      {
+        eventKey: "event-2",
+        mode: "merge",
+        items: [{ performerName: "本人1", attend: "未定" }],
+        commentTouched: false,
+      },
+    ],
+  );
+  assert.ok(payloads.every((payload) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(payload.requestId)
+  ));
   assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
     changedEventCount: 2,
     changedPerformerCount: 3,
   });
   const serialized = JSON.stringify(payloads);
-  assert.doesNotMatch(serialized, /lineId|line_id|lineUserId|userId|memberId|token|comment/);
+  assert.doesNotMatch(serialized, /lineId|line_id|lineUserId|userId|memberId|token/);
+  assert.ok(payloads.every((payload) =>
+    payload.commentTouched === false && !Object.hasOwn(payload, "comment")
+  ));
   assert.deepEqual(
     new Set(payloads.flatMap((payload) => payload.items.map((item) => item.attend))),
     new Set(["参加", "欠席", "未定"]),
@@ -1061,6 +1115,87 @@ test("変更された本人演奏者だけをevent別merge payloadへ変換す�
   auth.resetAttendanceDraftSelection_(state, "0:1");
   const afterReset = auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state);
   assert.deepEqual(afterReset[0].items, [{ performerName: "本人1", attend: "欠席" }]);
+});
+
+test("コメントdraftは予定単位で保持し、変更時だけ本文を送る", async () => {
+  const result = await registeredReadOnlyResult();
+  const state = auth.createAttendanceDraftState_(result.viewModel.events);
+  const requestId = state.get("event:0").requestId;
+
+  const changed = auth.setAttendanceCommentDraft_(state, 0, "  集合時刻を確認します  ");
+  assert.equal(changed.initialComment, "連絡事項");
+  assert.equal(changed.commentChanged, true);
+  const [payload] = auth.buildAuthenticatedAttendanceDraftPayloads_(
+    result.viewModel.events,
+    state,
+  );
+  assert.deepEqual(payload, {
+    requestId,
+    eventKey: "event-1",
+    mode: "merge",
+    items: [],
+    commentTouched: true,
+    comment: "集合時刻を確認します",
+  });
+  assert.equal(
+    auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state)[0].requestId,
+    requestId,
+    "保存結果不明時に同じ操作を識別できるよう、成功確定前はrequestIdを維持する",
+  );
+  assert.deepEqual(auth.summarizeAttendanceDraft_(result.viewModel.events, state), {
+    changedEventCount: 1,
+    changedPerformerCount: 0,
+  });
+
+  const restored = auth.resetAttendanceCommentDraft_(state, 0);
+  assert.equal(restored.selectedComment, "連絡事項");
+  assert.equal(restored.commentChanged, false);
+  assert.deepEqual(
+    auth.buildAuthenticatedAttendanceDraftPayloads_(result.viewModel.events, state),
+    [],
+  );
+  assert.throws(
+    () => auth.setAttendanceCommentDraft_(state, 0, "あ".repeat(101)),
+    /invalid_comment_draft/,
+  );
+});
+
+test("コメントだけの保存も再取得したD1正本と一致してから成功にする", async () => {
+  const payload = attendanceSubmitPayload({
+    items: [],
+    commentTouched: true,
+    comment: "集合時刻を確認します",
+  });
+  let fetchCount = 0;
+  const result = await auth.submitAuthenticatedAttendancePayload_(payload, {
+    liff: makeLiff(),
+    members: [{ performerName: "本人1" }],
+    dependencies: fetchDependencies(async () => {
+      fetchCount += 1;
+      return fetchCount === 1
+        ? jsonResponse(attendanceSubmitResponse(payload))
+        : jsonResponse({
+            ok: true,
+            status: "ok",
+            registered: true,
+            map: {},
+            comments: {
+              "event-1": {
+                comment: "集合時刻を確認します",
+                updatedAt: "2026-07-24T00:00:00.000Z",
+              },
+            },
+          });
+    }),
+  });
+
+  assert.equal(fetchCount, 2);
+  assert.deepEqual(result, {
+    updatedCount: 0,
+    commentUpdated: true,
+    confirmedItems: [],
+    confirmedComment: "集合時刻を確認します",
+  });
 });
 
 test("draft payloadは不正値・不整合・1予定11件を安全に拒否する", async () => {
@@ -1088,6 +1223,7 @@ test("draft payloadは不正値・不整合・1予定11件を安全に拒否す�
     eventKey: "validated-event",
     eventAllowed: true,
     eventWriteReason: "open",
+    initialComment: "",
     performers,
   }];
   const oversized = auth.createAttendanceDraftState_(events);
@@ -1111,11 +1247,7 @@ test("draft payloadは不正値・不整合・1予定11件を安全に拒否す�
 test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだけへ送る", async () => {
   const requests = [];
   let tokenCalls = 0;
-  const payload = {
-    eventKey: "event-1",
-    mode: "merge",
-    items: [{ performerName: "本人1", attend: "欠席" }],
-  };
+  const payload = attendanceSubmitPayload();
   const result = await auth.submitAuthenticatedAttendancePayload_(payload, {
     liff: makeLiff({
       getIDToken() {
@@ -1127,12 +1259,13 @@ test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだ�
     dependencies: fetchDependencies(async (url, options) => {
       requests.push({ url, options });
       return requests.length === 1
-        ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
+        ? jsonResponse(attendanceSubmitResponse(payload))
         : jsonResponse({
             ok: true,
             status: "ok",
             registered: true,
             map: { "event-1": [{ performerName: "本人1", attend: "欠席" }] },
+            comments: {},
           });
     }),
   });
@@ -1140,7 +1273,9 @@ test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだ�
   assert.equal(tokenCalls, 1);
   assert.deepEqual(result, {
     updatedCount: 1,
+    commentUpdated: false,
     confirmedItems: [{ performerName: "本人1", attend: "欠席" }],
+    confirmedComment: null,
   });
   assert.equal(requests.length, 2);
   assert.equal(
@@ -1162,11 +1297,7 @@ test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだ�
 });
 
 test("保存Token・payload・成功応答が不正なら安全側に停止する", async (t) => {
-  const payload = {
-    eventKey: "event-1",
-    mode: "merge",
-    items: [{ performerName: "本人1", attend: "欠席" }],
-  };
+  const payload = attendanceSubmitPayload();
   await t.test("Tokenなし", async () => {
     let fetchCount = 0;
     await assert.rejects(
@@ -1198,10 +1329,12 @@ test("保存Token・payload・成功応答が不正なら安全側に停止す�
   });
 
   for (const [name, response] of [
-    ["ok不正", { ok: false, status: "ok", updatedCount: 1 }],
-    ["status不正", { ok: true, status: "success", updatedCount: 1 }],
-    ["updatedCount型不正", { ok: true, status: "ok", updatedCount: "1" }],
-    ["updatedCount不一致", { ok: true, status: "ok", updatedCount: 2 }],
+    ["ok不正", attendanceSubmitResponse(payload, { ok: false })],
+    ["status不正", attendanceSubmitResponse(payload, { status: "success" })],
+    ["requestId不一致", attendanceSubmitResponse(payload, { requestId: REQUEST_ID.replace(/0$/, "1") })],
+    ["updatedCount型不正", attendanceSubmitResponse(payload, { updatedCount: "1" })],
+    ["updatedCount不一致", attendanceSubmitResponse(payload, { updatedCount: 2 })],
+    ["commentUpdated不一致", attendanceSubmitResponse(payload, { commentUpdated: true })],
   ]) {
     await t.test(name, async () => {
       let fetchCount = 0;
@@ -1228,7 +1361,7 @@ test("保存Token・payload・成功応答が不正なら安全側に停止す�
         members: [{ performerName: "本人1" }],
         dependencies: fetchDependencies(async () => {
           fetchCount += 1;
-          return jsonResponse({ ok: true, status: "ok", updatedCount: 1 }, 201);
+          return jsonResponse(attendanceSubmitResponse(payload), 201);
         }),
       }),
       /unexpected_success_status/,
@@ -1238,17 +1371,14 @@ test("保存Token・payload・成功応答が不正なら安全側に停止す�
 });
 
 test("保存後のattendance再取得が一致しなければdraft確定材料にしない", async (t) => {
-  const payload = {
-    eventKey: "event-1",
-    mode: "merge",
-    items: [{ performerName: "本人1", attend: "欠席" }],
-  };
+  const payload = attendanceSubmitPayload();
   for (const [name, attendanceResponse] of [
     ["値不一致", jsonResponse({
       ok: true,
       status: "ok",
       registered: true,
       map: { "event-1": [{ performerName: "本人1", attend: "参加" }] },
+      comments: {},
     })],
     ["不正JSON", jsonResponse(new SyntaxError("invalid"))],
     ["不正構造", jsonResponse({ ok: true, status: "ok", registered: true })],
@@ -1262,7 +1392,7 @@ test("保存後のattendance再取得が一致しなければdraft確定材料�
           dependencies: fetchDependencies(async () => {
             fetchCount += 1;
             return fetchCount === 1
-              ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
+              ? jsonResponse(attendanceSubmitResponse(payload))
               : attendanceResponse;
           }),
         }),
@@ -1281,6 +1411,8 @@ test("保存エラーを安全な画面状態へ分類する", () => {
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "performer_not_allowed", 403), "not_allowed"],
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "event_not_found", 404), "event_not_found"],
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "attendance_deadline_passed", 409), "event_not_available"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "idempotency_conflict", 409), "response_error"],
+    [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "comment_requires_attendance", 409), "comment_needs_attendance"],
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "invalid_request", 400), "response_error"],
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "payload_too_large", 413), "response_error"],
     [new auth.AuthSessionError(auth.AUTH_STATES.RESPONSE_ERROR, "unsupported_media_type", 415), "response_error"],
@@ -1379,9 +1511,11 @@ test("保存成功後は再取得で確認した予定だけ確定し他予定dr
     onDraftSummary(summary) { summaries.push(summary); },
     submitDependencies: fetchDependencies(async (url, options) => {
       requests.push({ url, options });
-      return requests.length === 1
-        ? jsonResponse({ ok: true, status: "ok", updatedCount: 1 })
-        : jsonResponse({
+      if (requests.length === 1) {
+        const sent = JSON.parse(options.body);
+        return jsonResponse(attendanceSubmitResponse(sent));
+      }
+      return jsonResponse({
             ok: true,
             status: "ok",
             registered: true,
@@ -1391,6 +1525,12 @@ test("保存成功後は再取得で確認した予定だけ確定し他予定dr
                 { performerName: "本人1", attend: "欠席" },
                 { performerName: "本人2", attend: "参加" },
               ],
+            },
+            comments: {
+              "event-1": {
+                comment: "連絡事項",
+                updatedAt: "2026-07-24T00:00:00.000Z",
+              },
             },
           });
     }),
@@ -1413,11 +1553,14 @@ test("保存成功後は再取得で確認した予定だけ確定し他予定dr
 
   assert.equal(requests.length, 2);
   const sent = JSON.parse(requests[0].options.body);
-  assert.deepEqual(sent, {
-    eventKey: "event-1",
-    mode: "merge",
-    items: [{ performerName: "本人1", attend: "欠席" }],
-  });
+  assert.match(
+    sent.requestId,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
+  assert.deepEqual(
+    { ...sent, requestId: REQUEST_ID },
+    attendanceSubmitPayload(),
+  );
   assert.equal(requests[1].options.body, "{}");
   assert.match(cards[0].textContent, /変更を保存しました/);
   assert.match(cards[0].textContent, /欠席/);
@@ -1441,13 +1584,20 @@ test("保存中ロックは連打と別予定の同時POSTを防ぎ全draft操�
       requests.push({ url, options });
       if (requests.length === 1) {
         await submitGate;
-        return jsonResponse({ ok: true, status: "ok", updatedCount: 1 });
+        const sent = JSON.parse(options.body);
+        return jsonResponse(attendanceSubmitResponse(sent));
       }
       return jsonResponse({
         ok: true,
         status: "ok",
         registered: true,
         map: { "event-1": [{ performerName: "本人1", attend: "欠席" }] },
+        comments: {
+          "event-1": {
+            comment: "連絡事項",
+            updatedAt: "2026-07-24T00:00:00.000Z",
+          },
+        },
       });
     }),
   });
@@ -1535,6 +1685,7 @@ test("回答不可予定はtextContentだけで描画し、accordion以外の操
       deadlineLabel: "2026年7月25日（土）",
       status: "active",
       note: "",
+      initialComment: "",
       eventAllowed: false,
       eventWriteReason: "deadline_passed",
       eventWriteLabel: '<b onclick="throw new Error(3)">回答不可</b>',
@@ -1717,7 +1868,13 @@ test("attendanceのHTTP・構造異常を成功扱いしない", async (t) => {
         count += 1;
         return count === 1
           ? jsonResponse(registeredHome())
-          : jsonResponse({ status: "ok", ok: true, registered: false, map: {} });
+          : jsonResponse({
+              status: "ok",
+              ok: true,
+              registered: false,
+              map: {},
+              comments: {},
+            });
       }),
     });
     assert.equal(result.status, auth.AUTH_STATES.UNREGISTERED);
