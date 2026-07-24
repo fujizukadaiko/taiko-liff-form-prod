@@ -1380,14 +1380,15 @@
       case AUTH_STATES.UNREGISTERED:
         return {
           title: "LINE本人認証に成功しました",
-          message: "テスト環境には、まだあなたのメンバー情報が登録されていません。\n現在は安全な読み取り確認段階です。",
+          message: "テスト環境には、まだあなたのメンバー情報が登録されていません。\n初回登録は現在利用できません。",
         };
       case AUTH_STATES.REGISTERED_READ_ONLY:
         return {
-          title: "テスト環境・読み取り専用",
+          title: "テスト環境・本人認証済み",
           message: [
             "LINE本人認証に成功しました。",
-            "現在は表示確認のみです。出欠の登録・変更はまだ利用できません。",
+            "回答可能な予定では、出席・欠席・未定を選び、予定ごとに保存できます。",
+            "保存機能はテスト用ゲートにより停止している場合があります。画面の保存結果を確認してください。",
             `本人に紐づくメンバー件数: ${Number(counts.memberCount) || 0}`,
             `表示予定件数: ${Number(counts.eventCount) || 0}`,
             `出欠データ件数: ${Number(counts.attendanceCount) || 0}`,

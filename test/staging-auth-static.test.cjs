@@ -41,14 +41,21 @@ test("staging表示とhostname不一致時のfail closedを維持する", () => 
 });
 
 test("本人認証済み読み取り専用モードは従来初期化へ進まない", () => {
+  assert.match(html, /const STAGING_PRODUCTION_UI_SHELL = true;/);
   assert.match(html, /const STAGING_AUTHENTICATED_READ_ONLY = true;/);
   assert.match(html, /const STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY = true;/);
   assert.doesNotMatch(html, /STAGING_AUTH_CHECK_ONLY/);
-  assert.match(html, /if \(STAGING_AUTHENTICATED_READ_ONLY\) \{\s*await initStagingAuthenticatedReadOnly_\(\);\s*return;\s*\}/);
+  assert.match(
+    html,
+    /if \(!STAGING_PRODUCTION_UI_SHELL \|\| !STAGING_AUTHENTICATED_READ_ONLY\) \{\s*renderEnvironmentConfigFailure_\(\);\s*return;\s*\}\s*await initStagingAuthenticatedReadOnly_\(\);\s*return;/,
+  );
   const mainInit = html.indexOf("async function init(){", html.indexOf("function initStagingAuthenticatedReadOnly_"));
-  const guard = html.indexOf("if (STAGING_AUTHENTICATED_READ_ONLY)", mainInit);
-  const legacyRefresh = html.indexOf("await refreshData();", guard);
+  const guard = html.indexOf("if (!STAGING_PRODUCTION_UI_SHELL || !STAGING_AUTHENTICATED_READ_ONLY)", mainInit);
+  const safeStart = html.indexOf("await initStagingAuthenticatedReadOnly_();", guard);
+  const safeReturn = html.indexOf("return;", safeStart);
+  const legacyRefresh = html.indexOf("await refreshData();", safeReturn);
   assert.ok(mainInit >= 0 && guard > mainInit && legacyRefresh > guard);
+  assert.ok(safeStart > guard && safeReturn > safeStart && legacyRefresh > safeReturn);
   assert.ok(
     (html.match(/if \(STAGING_AUTHENTICATED_READ_ONLY\) return;/g) || []).length >= 5,
     "独立した予定・通知・feedback初期化にもread-onlyガードが必要",
@@ -81,8 +88,9 @@ test("新しい認証通信はTokenを永続化・記録せずno-corsを使わ�
   assert.match(authSource, /credentials: "omit"/);
 });
 
-test("読み取り専用UIは従来画面とfeedbackを隠す", () => {
+test("production相当shellは安全な認証済み機能だけを表示する", () => {
   assert.match(html, /<script src="\.\/auth-session\.js"><\/script>/);
+  assert.match(html, /id="stagingHomeActions"[^>]*class="homeActions"[^>]*data-staging-shell="safe"/);
   assert.match(html, /id="authSessionCard"/);
   assert.match(html, /id="authSessionTitle"/);
   assert.match(html, /id="authSessionMessage"/);
@@ -90,9 +98,48 @@ test("読み取り専用UIは従来画面とfeedbackを隠す", () => {
   assert.match(html, /id="readOnlyScheduleList"/);
   assert.match(html, /getReadOnlyUiCopy/);
   assert.match(html, /renderReadOnlySchedules_/);
-  assert.match(html, /element\.hidden = element !== card/);
-  assert.match(html, /getElementById\("feedbackFab"\).*setAttribute\("hidden"/);
-  assert.match(html, /本人認証済み・読み取り専用/);
+  assert.match(html, /element\.hidden = element\.dataset\.stagingShell !== "safe"/);
+  assert.doesNotMatch(html, /element\.hidden = element !== card/);
+  assert.match(html, /configureStagingProductionShell_\(status\)/);
+  assert.match(html, /registered \? "出欠を確認・回答" : "現在利用できません"/);
+  assert.match(html, /id="stagingUnavailableFeatures"/);
+  assert.match(html, /安全な認証・保存APIの準備が完了するまで、旧システムには接続しません/);
+  assert.match(html, /feedback\.setAttribute\("hidden", ""\)/);
+  assert.match(html, /#feedbackFab\.fab\[hidden\]\s*\{\s*display: none !important;/);
+  assert.match(html, /feedback\.style\.display = "none"/);
+});
+
+test("安全未対応のホーム操作は旧画面への遷移属性を持たない", () => {
+  const openingTag = (id) => {
+    const match = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
+    assert.ok(match, `${id} が必要`);
+    return match[0];
+  };
+
+  const primary = openingTag("btnPrimary");
+  const schedules = openingTag("btnSchedules");
+  const editNames = openingTag("btnEditNames");
+
+  assert.doesNotMatch(primary, /data-view-target/);
+  assert.doesNotMatch(schedules, /data-view-target/);
+  assert.doesNotMatch(editNames, /data-view-target/);
+  assert.match(schedules, /\bdisabled\b/);
+  assert.match(editNames, /\bdisabled\b/);
+  assert.match(html, /予定表（準備中）/);
+  assert.match(html, /登録氏名の変更（準備中）/);
+});
+
+test("安全shell以外のviewは表示対象から除外する", () => {
+  const start = html.indexOf("function configureStagingProductionShell_");
+  const end = html.indexOf("\n    function renderStagingReadOnlyState_", start);
+  const shell = html.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(shell, /view\.id !== "view-home"/);
+  assert.match(shell, /view\.classList\.remove\("show"\)/);
+  assert.match(shell, /view\.hidden = true/);
+  assert.match(shell, /schedules\.disabled = true/);
+  assert.match(shell, /editNames\.disabled = true/);
+  assert.doesNotMatch(shell, /API_ENDPOINT|fetch\(|getDecodedIDToken|lineId|memberId|no-cors/);
 });
 
 test("draft preview以外の書き込みUI・submit・未エスケープinnerHTMLを使わない", () => {

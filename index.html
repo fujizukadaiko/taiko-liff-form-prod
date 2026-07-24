@@ -41,8 +41,9 @@
                 SHOW_ENVIRONMENT_BANNER ? "true" : "false";
             document.documentElement.dataset.environmentConfig =
                 APP_STARTUP_ALLOWED ? "valid" : "invalid";
-            // stagingは本人認証済みデータを読み取り、隔離された認証済み保存UIだけを使う。
-            // GAS・管理・従来画面などのlegacy経路は、このモードでは起動しない。
+            // stagingはproduction相当の画面shellを表示し、安全な認証済み機能だけを接続する。
+            const STAGING_PRODUCTION_UI_SHELL = true;
+            // GAS・管理・従来の本人判定などのlegacy初期化は、このガードで起動しない。
             const STAGING_AUTHENTICATED_READ_ONLY = true;
             // 回答可能な本人演奏者だけに、隔離されたstaging draft UIを表示する。
             const STAGING_ATTENDANCE_DRAFT_PREVIEW_ONLY = true;
@@ -1504,6 +1505,47 @@
             margin:10px 0 20px;
         }
         .homeActions .btn{ width:100%; box-sizing:border-box; }
+        .stagingShellIntro{
+            margin-bottom:10px;
+        }
+        .stagingShellIntro .sectionTitle{
+            margin-bottom:6px;
+        }
+        .stagingUnavailableFeatures{
+            margin-top:16px;
+            border-color:#b8cee8;
+            background:#f5f9ff;
+        }
+        .stagingUnavailableFeatures p{
+            margin:7px 0 0;
+        }
+        .stagingUnavailableList{
+            margin:10px 0 0;
+            padding-left:1.25em;
+            display:grid;
+            gap:5px;
+            color:var(--ui-muted-fg);
+            font-size:13px;
+            line-height:1.55;
+        }
+        .stagingUnavailableFeatures .statusLabel{
+            display:inline-block;
+            margin-left:.45em;
+            padding:2px 7px;
+            border:1px solid #92b2d7;
+            border-radius:999px;
+            color:#315f91;
+            background:#fff;
+            font-size:11px;
+            font-weight:700;
+            vertical-align:middle;
+        }
+        .homeActions .btn:disabled,
+        .homeEditLink:disabled{
+            cursor:not-allowed;
+            transform:none;
+            box-shadow:none !important;
+        }
         .homePrimary{
             position:relative;
             overflow:hidden;
@@ -2736,6 +2778,9 @@
         -webkit-tap-highlight-color: transparent;
         transition: transform .12s ease, box-shadow .12s ease, opacity .12s ease;
         }
+        #feedbackFab.fab[hidden]{
+        display: none !important;
+        }
         #feedbackFab.fab img{
         width: 26px;
         height: 26px;
@@ -3361,24 +3406,8 @@
 
     <!-- ===== View: ホーム（メンバー用トップ画面） ===== -->
         <section id="view-home" data-view class="show">
-            <div id="hello" class="muted"></div>
-            <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite">
-                <h1 id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</h1>
-                <div id="authSessionMessage" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
-                <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
-                    <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
-                    <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
-                        <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
-                        <div>回答可能な予定は保存操作を試せます。</div>
-                        <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
-                        <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
-                        <div class="attendanceDraftSummary">
-                            <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
-                            <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
-                        </div>
-                    </div>
-                    <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
-                </section>
+            <div id="hello" class="muted" data-staging-shell="safe">
+                本人情報を安全に確認しています…
             </div>
             <!-- 管理メニュー（管理者のみ表示） -->
                 <details id="adminMenu" class="card adminMenuCard" style="display:none;">
@@ -3412,14 +3441,14 @@
             </details>
 
             <!-- ★ トップ操作ボタン -->
-                <div class="homeActions" aria-label="主操作">
-                    <button id="btnPrimary" class="btn btn-primary btn-lg homePrimary" data-view-target="view-form" disabled>
+                <div id="stagingHomeActions" class="homeActions" aria-label="主操作" data-staging-shell="safe">
+                    <button id="btnPrimary" class="btn btn-primary btn-lg homePrimary" type="button" disabled>
                     <span class="homePrimaryText">
-                        <span class="homePrimaryTitle">読み込み中…</span>
+                        <span class="homePrimaryTitle">本人確認中…</span>
                     </span>
                     <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
-                    <button id="btnSchedules" class="btn btn-outline btn-lg homeSecondary" data-view-target="view-schedules">
+                    <button id="btnSchedules" class="btn btn-outline btn-lg homeSecondary" type="button" disabled aria-disabled="true">
                     <span class="homeSecondaryInner">
                         <span class="homeIcon" aria-hidden="true">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -3428,12 +3457,30 @@
                             </svg>
                         </span>
                         <span class="homeSecondaryText">
-                            <span class="homeSecondaryTitle">予定表</span>
+                            <span class="homeSecondaryTitle">予定表（準備中）</span>
                         </span>
                     </span>
-                    <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
                 </div>
+
+            <div id="authSessionCard" class="card" style="display:none;" role="status" aria-live="polite" data-staging-shell="safe">
+                <h1 id="authSessionTitle" class="sectionTitle">本人情報を安全に確認しています…</h1>
+                <div id="authSessionMessage" class="muted" style="margin-top:8px; white-space:pre-line;"></div>
+                <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
+                    <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定</h2>
+                    <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
+                        <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
+                        <div>回答可能な予定は保存操作を試せます。</div>
+                        <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
+                        <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
+                        <div class="attendanceDraftSummary">
+                            <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
+                            <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
+                        </div>
+                    </div>
+                    <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
+                </section>
+            </div>
 
             <!-- 互換性維持のためのダミー -->
                 <button id="btnReload" type="button" style="display:none;"></button>
@@ -3453,12 +3500,25 @@
                         </div>
                     </div>
                 </div>
-                <div id="profileEditSlotNormal" class="homeProfileEditSlot">
-                    <button id="btnEditNames" class="btn btn-outline btn-lg homeEditLink" data-view-target="view-register" style="display:none;">
+                <div id="profileEditSlotNormal" class="homeProfileEditSlot" data-staging-shell="safe">
+                    <button id="btnEditNames" class="btn btn-outline btn-lg homeEditLink" type="button" disabled aria-disabled="true">
                     <span class="homeEditLinkIcon" aria-hidden="true">✎</span>
-                    <span>登録氏名を変更する</span>
+                    <span>登録氏名の変更（準備中）</span>
                     </button>
                 </div>
+
+                <aside id="stagingUnavailableFeatures" class="card stagingUnavailableFeatures" aria-labelledby="stagingUnavailableHeading" data-staging-shell="safe">
+                    <div id="stagingUnavailableHeading" class="sectionTitle">
+                        現在利用できない機能
+                        <span class="statusLabel">準備中</span>
+                    </div>
+                    <p class="muted">安全な認証・保存APIの準備が完了するまで、旧システムには接続しません。</p>
+                    <ul class="stagingUnavailableList">
+                        <li>予定表の絞り込み表示</li>
+                        <li>初回登録・メンバー情報変更</li>
+                        <li>管理・配車・通知・ご意見BOX</li>
+                    </ul>
+                </aside>
 
             <!-- あなたの登録状況（トップでは非表示） -->
                 <div class="card" style="display:none;">
@@ -5706,6 +5766,73 @@
     }
     }
 /* ===== 初期化 ===== */
+    function configureStagingProductionShell_(status){
+        const homeView = document.getElementById("view-home");
+        if (homeView) {
+            homeView.hidden = false;
+            homeView.classList.add("show");
+            Array.from(homeView.children).forEach(function(element){
+                element.hidden = element.dataset.stagingShell !== "safe";
+            });
+        }
+        document.querySelectorAll("[data-view]").forEach(function(view){
+            if (view.id !== "view-home") {
+                view.classList.remove("show");
+                view.hidden = true;
+            }
+        });
+
+        const registered = status === "registered_read_only";
+        const hello = document.getElementById("hello");
+        const primary = document.getElementById("btnPrimary");
+        const schedules = document.getElementById("btnSchedules");
+        const editNames = document.getElementById("btnEditNames");
+
+        if (hello) {
+            const messages = {
+                loading: "本人情報を安全に確認しています…",
+                registered_read_only: "本人認証済みの予定と出欠を表示しています。",
+                unregistered: "LINEアカウントに対応する登録情報が見つかりません。",
+                auth_error: "LINEでの本人確認を完了できませんでした。",
+                network_error: "通信エラーのため本人情報を確認できませんでした。",
+                response_error: "受信したデータを安全に確認できませんでした。",
+            };
+            hello.textContent = messages[status] || messages.response_error;
+        }
+
+        setHomePrimaryButton(
+            registered ? "出欠を確認・回答" : "現在利用できません",
+            !registered,
+        );
+        if (primary) {
+            primary.setAttribute("aria-controls", "authSessionCard");
+            if (!primary.__stagingShellBound) {
+                primary.addEventListener("click", function(){
+                    if (primary.disabled) return;
+                    document.getElementById("authSessionCard")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                    });
+                });
+                primary.__stagingShellBound = true;
+            }
+        }
+        if (schedules) {
+            schedules.disabled = true;
+            schedules.setAttribute("aria-disabled", "true");
+        }
+        if (editNames) {
+            editNames.disabled = true;
+            editNames.setAttribute("aria-disabled", "true");
+        }
+
+        const feedback = document.getElementById("feedbackFab");
+        if (feedback) {
+            feedback.setAttribute("hidden", "");
+            feedback.style.display = "none";
+        }
+    }
+
     function renderStagingReadOnlyState_(snapshot){
         const status = String(snapshot && snapshot.status || "loading");
         state.authenticatedReadOnlyStatus = status;
@@ -5776,21 +5903,8 @@
             }
         }
 
-        // 読み取り専用モードでは、結果カード以外の既存画面へ進ませない。
-        const homeView = document.getElementById("view-home");
-        if (homeView) {
-            Array.from(homeView.children).forEach(function(element){
-                element.hidden = element !== card;
-            });
-        }
-        document.querySelectorAll("[data-view]").forEach(function(view){
-            if (view.id !== "view-home") {
-                view.classList.remove("show");
-                view.hidden = true;
-            }
-        });
-        document.getElementById("feedbackFab")?.setAttribute("hidden", "");
-        setHomePrimaryButton("本人認証済み・読み取り専用", true);
+        // production相当のhome shellを表示し、安全と明示した要素だけを許可する。
+        configureStagingProductionShell_(status);
     }
 
     function renderEnvironmentConfigFailure_(){
@@ -5830,10 +5944,13 @@
         }
         $("#ver").textContent = FRONT_VERSION;
 
-        if (STAGING_AUTHENTICATED_READ_ONLY) {
-            await initStagingAuthenticatedReadOnly_();
+        // stagingで安全shellまたはlegacy停止ガードが外れていたら、旧初期化へfallbackしない。
+        if (!STAGING_PRODUCTION_UI_SHELL || !STAGING_AUTHENTICATED_READ_ONLY) {
+            renderEnvironmentConfigFailure_();
             return;
         }
+        await initStagingAuthenticatedReadOnly_();
+        return;
 
         try {
     await liff.init({ liffId: LIFF_ID });
