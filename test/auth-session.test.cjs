@@ -195,6 +195,37 @@ function registeredAttendance() {
   };
 }
 
+function adminSchedulesResponse(overrides = {}) {
+  return {
+    ok: true,
+    status: "ok",
+    schedules: [{
+      eventKey: "admin-event-1",
+      date: "20260730",
+      title: "管理予定",
+      kind: "練習",
+      targetGroup: "both",
+      time: "18:00",
+      place: "テスト会場",
+      callTime: "17:30",
+      callPlace: "入口",
+      needAttendance: "Y",
+      pushFlag: "N",
+      deadlineDate: "20260729",
+      firstPushAt: "",
+      lastRemindAt: "",
+      publishFlag: "Y",
+      status: "active",
+      subject: "通知件名",
+      bodyTemplate: "通知本文",
+      note: "備考",
+      updatedAt: "2026/07/24 12:00:00",
+    }],
+    hasMore: false,
+    ...overrides,
+  };
+}
+
 function attendanceSubmitPayload(overrides = {}) {
   return {
     requestId: REQUEST_ID,
@@ -2073,6 +2104,76 @@ test("管理者権限は真偽値だけを保持し登録状態と独立して�
   assert.equal(fetchCount, 1);
   assert.equal(unregisteredResult.status, auth.AUTH_STATES.UNREGISTERED);
   assert.deepEqual(unregisteredResult.adminAccess, { authorized: true });
+});
+
+test("管理予定一覧は操作時のIDトークンで専用GETだけを呼ぶ", async () => {
+  const requests = [];
+  const result = await auth.startAuthenticatedAdminSchedules({
+    liff: makeLiff(),
+    dependencies: fetchDependencies(async (url, options) => {
+      requests.push({ url, options });
+      return jsonResponse(adminSchedulesResponse());
+    }),
+  });
+
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_SCHEDULES_PATH}`,
+  );
+  assert.equal(requests[0].options.method, "GET");
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.equal(requests[0].options.body, undefined);
+  assert.deepEqual(result, {
+    schedules: adminSchedulesResponse().schedules,
+    hasMore: false,
+  });
+  assert.equal(JSON.stringify(result).includes("lineId"), false);
+});
+
+test("管理予定一覧は不正契約・Token欠落・HTTP失敗を成功扱いしない", async (t) => {
+  for (const [name, response] of [
+    ["余分なtop-level属性", jsonResponse(adminSchedulesResponse({ extra: true }))],
+    ["hasMore型不正", jsonResponse(adminSchedulesResponse({ hasMore: "false" }))],
+    ["予定重複", jsonResponse(adminSchedulesResponse({
+      schedules: [
+        adminSchedulesResponse().schedules[0],
+        adminSchedulesResponse().schedules[0],
+      ],
+    }))],
+    ["日付不正", jsonResponse(adminSchedulesResponse({
+      schedules: [{
+        ...adminSchedulesResponse().schedules[0],
+        date: "20260231",
+      }],
+    }))],
+    ["管理者拒否", jsonResponse({ ok: false, error: "admin_forbidden" }, 403)],
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        auth.startAuthenticatedAdminSchedules({
+          liff: makeLiff(),
+          dependencies: fetchDependencies(async () => response),
+        }),
+        (error) => error instanceof auth.AuthSessionError,
+      );
+    });
+  }
+
+  await t.test("Tokenなし", async () => {
+    let fetchCount = 0;
+    await assert.rejects(
+      auth.startAuthenticatedAdminSchedules({
+        liff: makeLiff({ getIDToken() { return null; } }),
+        dependencies: fetchDependencies(async () => {
+          fetchCount += 1;
+        }),
+      }),
+      (error) => error instanceof auth.AuthSessionError
+        && error.type === auth.AUTH_STATES.UNAUTHENTICATED,
+    );
+    assert.equal(fetchCount, 0);
+  });
 });
 
 test("管理者権限の欠落・余分な属性・型不正をresponse errorにする", async (t) => {

@@ -1577,35 +1577,6 @@
         .stagingShellIntro .sectionTitle{
             margin-bottom:6px;
         }
-        .stagingUnavailableFeatures{
-            margin-top:16px;
-            border-color:#b8cee8;
-            background:#f5f9ff;
-        }
-        .stagingUnavailableFeatures p{
-            margin:7px 0 0;
-        }
-        .stagingUnavailableList{
-            margin:10px 0 0;
-            padding-left:1.25em;
-            display:grid;
-            gap:5px;
-            color:var(--ui-muted-fg);
-            font-size:13px;
-            line-height:1.55;
-        }
-        .stagingUnavailableFeatures .statusLabel{
-            display:inline-block;
-            margin-left:.45em;
-            padding:2px 7px;
-            border:1px solid #92b2d7;
-            border-radius:999px;
-            color:#315f91;
-            background:#fff;
-            font-size:11px;
-            font-weight:700;
-            vertical-align:middle;
-        }
         .homeActions .btn:disabled,
         .homeEditLink:disabled{
             cursor:not-allowed;
@@ -3468,8 +3439,58 @@
     </style>
     <!-- ===== Custom Overrides（最後に評価されるCSS） ===== -->
         <style id="custom-overrides">
-        /* 本番用スタイルはすべて Base CSS に移管済み。
-        ここは一時的なホットフィックス・検証用に空で残しておく。 */
+        .adminSafeStatus{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+            margin-bottom:10px;
+        }
+        .adminSafeScheduleList{
+            display:grid;
+            gap:10px;
+        }
+        .adminSafeScheduleCard{
+            margin:0;
+            padding:0;
+            overflow:hidden;
+        }
+        .adminSafeScheduleCard > summary{
+            cursor:pointer;
+            list-style:none;
+            padding:14px 16px;
+        }
+        .adminSafeScheduleCard > summary::-webkit-details-marker{ display:none; }
+        .adminSafeScheduleTitle{
+            font-weight:700;
+            line-height:1.45;
+        }
+        .adminSafeScheduleMeta{
+            color:var(--c-muted);
+            font-size:12px;
+            margin-top:4px;
+        }
+        .adminSafeScheduleBody{
+            border-top:1px solid var(--c-border);
+            padding:12px 16px 16px;
+            display:grid;
+            gap:8px;
+        }
+        .adminSafeScheduleRow{
+            display:grid;
+            grid-template-columns:7.5em minmax(0, 1fr);
+            gap:8px;
+            font-size:13px;
+        }
+        .adminSafeScheduleLabel{ color:var(--c-muted); }
+        .adminSafeReadOnlyNotice{
+            border:1px solid #93c5fd;
+            background:#eff6ff;
+            color:#1e3a8a;
+            border-radius:10px;
+            padding:10px 12px;
+            font-size:13px;
+        }
         </style>
   
     <!-- LIFF SDK -->
@@ -3517,49 +3538,40 @@
                 本人情報を安全に確認しています…
             </div>
             <!-- 管理メニュー（管理者のみ表示） -->
-                <details id="adminMenu" class="card adminMenuCard" style="display:none;">
+                <details
+                    id="adminMenu"
+                    class="card adminMenuCard"
+                    data-staging-shell="safe"
+                    hidden
+                >
                 <summary class="adminMenuSummary" aria-expanded="false">
                     <span class="adminMenuTitle">管理者メニュー</span>
                     <span class="adminMenuCaret" aria-hidden="true">⌄</span>
                 </summary>
                 <div class="adminMenuBody">
                 <div class="adminMenuGrid">
-                    <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin">
-                        予定登録/編集
+                    <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" type="button">
+                        予定登録/編集（閲覧のみ）
                     </button>
-                    <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-report">
-                        出欠結果一覧
+                    <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
+                        出欠結果一覧（準備中）
                     </button>
-                    <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" data-view-target="view-admin-carpool">
-                        配車補助
+                    <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
+                        配車補助（準備中）
                     </button>
-                    <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" data-view-target="view-custom-push">
-                        カスタム通知
+                    <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
+                        カスタム通知（準備中）
                     </button>
-                    <button id="btnSummary" class="btn btn-outline btn-sm btn-compact" data-view-target="view-summary">
-                        サマリ
+                    <button id="btnSummary" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
+                        サマリ（準備中）
                     </button>
-                    <button id="btnFeedback" class="btn btn-outline btn-sm btn-compact" data-view-target="view-feedback">
-                        ご意見BOX
+                    <button id="btnFeedback" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
+                        ご意見BOX（準備中）
                     </button>
                 </div>
-                <div class="small muted" style="margin-top:6px;">※ 管理者のみ表示されます</div>
+                <div class="small muted" style="margin-top:6px;">※ 管理者だけに表示しています。書き込み機能はまだ開放していません。</div>
                 </div>
             </details>
-
-            <section
-                id="stagingAdminAccessCard"
-                class="card"
-                data-staging-shell="safe"
-                aria-labelledby="stagingAdminAccessHeading"
-                hidden
-            >
-                <div id="stagingAdminAccessHeading" class="sectionTitle">
-                    管理者認証済み
-                    <span class="statusLabel">安全確認済み</span>
-                </div>
-                <p class="muted">管理機能は準備中です。旧管理画面には接続しません。</p>
-            </section>
 
             <!-- ★ トップ操作ボタン -->
                 <div id="stagingHomeActions" class="homeActions" aria-label="主操作" data-staging-shell="safe">
@@ -3613,18 +3625,6 @@
                     <span>登録氏名の変更（準備中）</span>
                     </button>
                 </div>
-
-                <aside id="stagingUnavailableFeatures" class="card stagingUnavailableFeatures" aria-labelledby="stagingUnavailableHeading" data-staging-shell="safe">
-                    <div id="stagingUnavailableHeading" class="sectionTitle">
-                        現在利用できない機能
-                        <span class="statusLabel">準備中</span>
-                    </div>
-                    <p class="muted">安全な認証・保存APIの準備が完了するまで、旧システムには接続しません。</p>
-                    <ul class="stagingUnavailableList">
-                        <li>予定表の絞り込み表示</li>
-                        <li>管理・配車・通知・ご意見BOX</li>
-                    </ul>
-                </aside>
 
             <!-- あなたの登録状況（トップでは非表示） -->
                 <div class="card" style="display:none;">
@@ -3920,7 +3920,51 @@
             </div>
         </section>
 
-    <!-- ===== View: 予定登録（管理者） ===== -->
+    <!-- ===== View: 認証済み管理者向け予定一覧（読み取り専用） ===== -->
+        <section id="view-admin-safe" data-view hidden>
+            <div class="row-space">
+                <div class="sectionTitle">予定登録・編集（管理者）</div>
+                <button
+                    id="btnAdminSafeBack"
+                    class="btn btn-ghost btn-sm"
+                    type="button"
+                >
+                    トップに戻る
+                </button>
+            </div>
+            <div class="card">
+                <div class="adminSafeStatus">
+                    <div>
+                        <div class="sectionTitle">現在登録中のイベント一覧</div>
+                        <div class="small muted">タップすると詳細を確認できます</div>
+                    </div>
+                    <button
+                        id="btnAdminSafeReload"
+                        class="btn btn-ghost btn-sm btn-compact"
+                        type="button"
+                    >
+                        再取得
+                    </button>
+                </div>
+                <div class="adminSafeReadOnlyNotice">
+                    現在は閲覧のみです。新規登録・編集・削除は安全な保存APIの準備後に有効化します。
+                </div>
+                <div
+                    id="adminSafeScheduleMessage"
+                    class="muted"
+                    role="status"
+                    aria-live="polite"
+                    style="margin-top:12px;"
+                ></div>
+                <div
+                    id="adminSafeScheduleList"
+                    class="adminSafeScheduleList"
+                    style="margin-top:12px;"
+                ></div>
+            </div>
+        </section>
+
+    <!-- ===== View: 予定登録（旧管理画面・stagingでは非表示） ===== -->
         <section id="view-admin" data-view>
             <div class="row-space">
                 <div class="sectionTitle">予定登録（管理者）</div>
@@ -5890,7 +5934,12 @@
     }
 /* ===== 初期化 ===== */
     function showStagingAuthenticatedView_(viewId){
-        const allowedViewIds = new Set(["view-home", "view-form", "view-register"]);
+        const allowedViewIds = new Set([
+            "view-home",
+            "view-form",
+            "view-register",
+            "view-admin-safe",
+        ]);
         if (!allowedViewIds.has(viewId)) return false;
         document.querySelectorAll("[data-view]").forEach(function(view){
             const active = view.id === viewId;
@@ -5901,6 +5950,163 @@
         if (legalFooter) legalFooter.style.display = viewId === "view-home" ? "" : "none";
         window.scrollTo({ top:0, behavior:"auto" });
         return true;
+    }
+
+    function appendAdminSafeScheduleRow_(container, label, value){
+        const normalized = String(value || "").trim();
+        if (!normalized) return;
+        const row = document.createElement("div");
+        row.className = "adminSafeScheduleRow";
+        const labelElement = document.createElement("div");
+        labelElement.className = "adminSafeScheduleLabel";
+        labelElement.textContent = label;
+        const valueElement = document.createElement("div");
+        valueElement.textContent = normalized;
+        row.appendChild(labelElement);
+        row.appendChild(valueElement);
+        container.appendChild(row);
+    }
+
+    function formatAdminSafeTargetGroup_(value){
+        const labels = {
+            adult: "大人",
+            child: "子ども",
+            both: "両方",
+        };
+        const normalized = String(value || "").trim();
+        return labels[normalized] || normalized;
+    }
+
+    function formatAdminSafeStatus_(value){
+        const labels = {
+            active: "有効",
+            inactive: "無効",
+        };
+        const normalized = String(value || "").trim();
+        return labels[normalized] || normalized;
+    }
+
+    function renderStagingAdminSchedules_(model){
+        const list = document.getElementById("adminSafeScheduleList");
+        const message = document.getElementById("adminSafeScheduleMessage");
+        if (!list || !message) return;
+        list.textContent = "";
+        const schedules = Array.isArray(model && model.schedules)
+            ? model.schedules
+            : [];
+        if (schedules.length === 0) {
+            message.textContent = "登録されている予定はありません。";
+            return;
+        }
+        message.textContent = model.hasMore
+            ? `直近${schedules.length}件を表示しています。続きは今後のページ送り対応後に確認できます。`
+            : `${schedules.length}件の予定を表示しています。`;
+
+        schedules.forEach(function(schedule){
+            const details = document.createElement("details");
+            details.className = "card adminSafeScheduleCard";
+            const summary = document.createElement("summary");
+            const title = document.createElement("div");
+            title.className = "adminSafeScheduleTitle";
+            title.textContent = `${window.LineAuthSession.formatYmdJapanese(schedule.date)}　${schedule.title}`;
+            const meta = document.createElement("div");
+            meta.className = "adminSafeScheduleMeta";
+            const targetGroupLabel = formatAdminSafeTargetGroup_(
+                schedule.targetGroup,
+            );
+            const metaParts = [
+                schedule.time,
+                schedule.place,
+                schedule.kind,
+                targetGroupLabel,
+            ].filter(Boolean);
+            meta.textContent = metaParts.join("／") || "詳細情報なし";
+            summary.appendChild(title);
+            summary.appendChild(meta);
+
+            const body = document.createElement("div");
+            body.className = "adminSafeScheduleBody";
+            appendAdminSafeScheduleRow_(body, "種別", schedule.kind);
+            appendAdminSafeScheduleRow_(body, "対象区分", targetGroupLabel);
+            appendAdminSafeScheduleRow_(body, "開始時間", schedule.time);
+            appendAdminSafeScheduleRow_(body, "場所", schedule.place);
+            appendAdminSafeScheduleRow_(body, "集合時間", schedule.callTime);
+            appendAdminSafeScheduleRow_(body, "集合場所", schedule.callPlace);
+            appendAdminSafeScheduleRow_(
+                body,
+                "出欠回答",
+                schedule.needAttendance === "Y" ? "必要" :
+                    schedule.needAttendance === "N" ? "不要" : schedule.needAttendance,
+            );
+            appendAdminSafeScheduleRow_(
+                body,
+                "公開",
+                schedule.publishFlag === "Y" ? "公開" :
+                    schedule.publishFlag === "N" ? "非公開" : schedule.publishFlag,
+            );
+            appendAdminSafeScheduleRow_(
+                body,
+                "状態",
+                formatAdminSafeStatus_(schedule.status),
+            );
+            appendAdminSafeScheduleRow_(
+                body,
+                "回答期限",
+                schedule.deadlineDate
+                    ? window.LineAuthSession.formatYmdJapanese(schedule.deadlineDate)
+                    : "",
+            );
+            appendAdminSafeScheduleRow_(body, "備考", schedule.note);
+            appendAdminSafeScheduleRow_(body, "通知件名", schedule.subject);
+            appendAdminSafeScheduleRow_(body, "通知本文", schedule.bodyTemplate);
+            appendAdminSafeScheduleRow_(body, "更新日時", schedule.updatedAt);
+            details.appendChild(summary);
+            details.appendChild(body);
+            list.appendChild(details);
+        });
+    }
+
+    async function loadStagingAdminSchedules_(){
+        const message = document.getElementById("adminSafeScheduleMessage");
+        const list = document.getElementById("adminSafeScheduleList");
+        const reload = document.getElementById("btnAdminSafeReload");
+        const menuButton = document.getElementById("btnAdminMenuSchedules");
+        if (!window.LineAuthSession || !message || !list) return;
+        message.textContent = "管理者権限と予定情報を安全に確認しています…";
+        list.textContent = "";
+        if (reload) reload.disabled = true;
+        if (menuButton) menuButton.disabled = true;
+        try {
+            const model = await window.LineAuthSession.startAuthenticatedAdminSchedules({
+                liff: window.liff,
+                dependencies: { workerBaseUrl: D1_BASE },
+            });
+            renderStagingAdminSchedules_(model);
+        } catch (_) {
+            message.textContent = "予定一覧を取得できませんでした。自動再試行はしていません。トップへ戻ってから再度お試しください。";
+        } finally {
+            if (reload) reload.disabled = false;
+            if (menuButton) menuButton.disabled = false;
+        }
+    }
+
+    function bindStagingAdminReadOnly_(){
+        const menuButton = document.getElementById("btnAdminMenuSchedules");
+        const reload = document.getElementById("btnAdminSafeReload");
+        const back = document.getElementById("btnAdminSafeBack");
+        if (menuButton) {
+            menuButton.onclick = function(){
+                if (menuButton.disabled) return;
+                if (!showStagingAuthenticatedView_("view-admin-safe")) return;
+                loadStagingAdminSchedules_();
+            };
+        }
+        if (reload) reload.onclick = loadStagingAdminSchedules_;
+        if (back) {
+            back.onclick = function(){
+                showStagingAuthenticatedView_("view-home");
+            };
+        }
     }
 
     function clearAuthenticatedProductionHome_(){
@@ -6134,7 +6340,7 @@
         const editNames = document.getElementById("btnEditNames");
         const homeEvents = document.getElementById("cardEventsActive");
         const backFromForm = document.getElementById("btnBackFromForm");
-        const adminAccessCard = document.getElementById("stagingAdminAccessCard");
+        const adminMenu = document.getElementById("adminMenu");
         const adminAuthorized = !!(
             snapshot &&
             snapshot.adminAccess &&
@@ -6203,9 +6409,12 @@
             homeEvents.hidden = true;
             homeEvents.style.display = "none";
         }
-        if (adminAccessCard) {
-            adminAccessCard.hidden = !adminAuthorized;
+        if (adminMenu) {
+            adminMenu.hidden = !adminAuthorized;
+            adminMenu.style.display = adminAuthorized ? "" : "none";
+            if (!adminAuthorized) adminMenu.open = false;
         }
+        bindStagingAdminReadOnly_();
 
         const feedback = document.getElementById("feedbackFab");
         if (feedback) {
@@ -6277,7 +6486,10 @@
             effectiveStatus,
             snapshot && snapshot.summary,
         );
-        if (card) card.style.display = "";
+        if (card) {
+            card.style.display =
+                effectiveStatus === "registered_read_only" ? "none" : "";
+        }
         if (title) title.textContent = copy.title;
         if (message) {
             message.textContent = copy.message;

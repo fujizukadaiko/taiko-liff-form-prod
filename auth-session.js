@@ -9,6 +9,8 @@
     "/line/attendance/submit-authenticated";
   const AUTHENTICATED_MEMBER_SUBMIT_PATH =
     "/line/members/submit-authenticated";
+  const AUTHENTICATED_ADMIN_SCHEDULES_PATH =
+    "/line/admin/schedules-authenticated";
   const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -591,6 +593,211 @@
       dependencies,
     );
     return extractHomeSummary(body);
+  }
+
+  const ADMIN_SCHEDULE_FIELDS = new Set([
+    "eventKey",
+    "date",
+    "title",
+    "kind",
+    "targetGroup",
+    "time",
+    "place",
+    "callTime",
+    "callPlace",
+    "needAttendance",
+    "pushFlag",
+    "deadlineDate",
+    "firstPushAt",
+    "lastRemindAt",
+    "publishFlag",
+    "status",
+    "subject",
+    "bodyTemplate",
+    "note",
+    "updatedAt",
+  ]);
+
+  function extractAdminSchedules_(body) {
+    if (
+      body.ok !== true
+      || body.status !== "ok"
+      || !Array.isArray(body.schedules)
+      || body.schedules.length > 200
+      || typeof body.hasMore !== "boolean"
+      || Object.keys(body).length !== 4
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_schedules",
+        200,
+      );
+    }
+
+    const eventKeys = new Set();
+    const schedules = body.schedules.map(function (schedule) {
+      if (
+        !isPlainObject(schedule)
+        || Object.keys(schedule).length !== ADMIN_SCHEDULE_FIELDS.size
+        || Object.keys(schedule).some(function (key) {
+          return !ADMIN_SCHEDULE_FIELDS.has(key);
+        })
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_schedule",
+          200,
+        );
+      }
+      const eventKey = readResponseString(schedule, "eventKey", {
+        required: true,
+        maxLength: 128,
+        code: "invalid_admin_schedule",
+      });
+      if (eventKeys.has(eventKey)) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "duplicate_admin_schedule",
+          200,
+        );
+      }
+      eventKeys.add(eventKey);
+      const date = readResponseString(schedule, "date", {
+        required: true,
+        maxLength: 8,
+        code: "invalid_admin_schedule",
+      });
+      parseYmd(date, "invalid_admin_schedule");
+      const time = validateTime(readResponseString(schedule, "time", {
+        nullable: true,
+        maxLength: 5,
+        code: "invalid_admin_schedule",
+      }));
+      const callTime = validateTime(readResponseString(schedule, "callTime", {
+        nullable: true,
+        maxLength: 5,
+        code: "invalid_admin_schedule",
+      }));
+      const deadlineDate = readResponseString(schedule, "deadlineDate", {
+        nullable: true,
+        maxLength: 8,
+        code: "invalid_admin_schedule",
+      });
+      if (deadlineDate) parseYmd(deadlineDate, "invalid_admin_schedule");
+
+      return {
+        eventKey,
+        date,
+        title: readResponseString(schedule, "title", {
+          required: true,
+          maxLength: 200,
+          code: "invalid_admin_schedule",
+        }),
+        kind: readResponseString(schedule, "kind", {
+          nullable: true,
+          maxLength: 80,
+          code: "invalid_admin_schedule",
+        }),
+        targetGroup: readResponseString(schedule, "targetGroup", {
+          nullable: true,
+          maxLength: 40,
+          code: "invalid_admin_schedule",
+        }),
+        time,
+        place: readResponseString(schedule, "place", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_admin_schedule",
+        }),
+        callTime,
+        callPlace: readResponseString(schedule, "callPlace", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_admin_schedule",
+        }),
+        needAttendance: readResponseString(schedule, "needAttendance", {
+          nullable: true,
+          maxLength: 1,
+          code: "invalid_admin_schedule",
+        }),
+        pushFlag: readResponseString(schedule, "pushFlag", {
+          nullable: true,
+          maxLength: 1,
+          code: "invalid_admin_schedule",
+        }),
+        deadlineDate,
+        firstPushAt: readResponseString(schedule, "firstPushAt", {
+          nullable: true,
+          maxLength: 64,
+          code: "invalid_admin_schedule",
+        }),
+        lastRemindAt: readResponseString(schedule, "lastRemindAt", {
+          nullable: true,
+          maxLength: 64,
+          code: "invalid_admin_schedule",
+        }),
+        publishFlag: readResponseString(schedule, "publishFlag", {
+          nullable: true,
+          maxLength: 16,
+          code: "invalid_admin_schedule",
+        }),
+        status: readResponseString(schedule, "status", {
+          nullable: true,
+          maxLength: 40,
+          code: "invalid_admin_schedule",
+        }),
+        subject: readResponseString(schedule, "subject", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_admin_schedule",
+        }),
+        bodyTemplate: readResponseString(schedule, "bodyTemplate", {
+          nullable: true,
+          maxLength: 4000,
+          code: "invalid_admin_schedule",
+        }),
+        note: readResponseString(schedule, "note", {
+          nullable: true,
+          maxLength: 2000,
+          code: "invalid_admin_schedule",
+        }),
+        updatedAt: readResponseString(schedule, "updatedAt", {
+          nullable: true,
+          maxLength: 64,
+          code: "invalid_admin_schedule",
+        }),
+      };
+    });
+
+    return { schedules, hasMore: body.hasMore };
+  }
+
+  async function fetchAdminSchedules_(idToken, dependencies) {
+    const body = await authenticatedFetch_(
+      AUTHENTICATED_ADMIN_SCHEDULES_PATH,
+      { method: "GET" },
+      idToken,
+      dependencies,
+    );
+    return extractAdminSchedules_(body);
+  }
+
+  async function startAuthenticatedAdminSchedules(options) {
+    const opts = options || {};
+    let idToken = "";
+    try {
+      if (!opts.liff || typeof opts.liff.getIDToken !== "function") {
+        throw makeError(
+          AUTH_STATES.UNAUTHENTICATED,
+          "liff_unavailable",
+          0,
+        );
+      }
+      idToken = validateIdToken(opts.liff.getIDToken());
+      return await fetchAdminSchedules_(idToken, opts.dependencies);
+    } finally {
+      idToken = "";
+    }
   }
 
   function extractAttendanceSummary(body, home) {
@@ -2378,6 +2585,7 @@
   return {
     AUTH_STATES,
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
+    AUTHENTICATED_ADMIN_SCHEDULES_PATH,
     AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
@@ -2392,6 +2600,7 @@
     classifyMemberSubmitError_,
     createAttendanceDraftState_,
     fetchAttendanceSummary_,
+    fetchAdminSchedules_,
     fetchHomeSummary_,
     formatYmdJapanese,
     getAuthUiCopy,
@@ -2407,6 +2616,7 @@
     submitAuthenticatedAttendancePayload_,
     submitAuthenticatedMemberProfile_,
     startStagingAuthenticatedReadOnly,
+    startAuthenticatedAdminSchedules,
     startStagingLineAuthCheck,
     verifyLineSession_,
   };
