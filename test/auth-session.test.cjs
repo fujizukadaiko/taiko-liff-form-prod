@@ -6,6 +6,7 @@ const test = require("node:test");
 const auth = require("../auth-session.js");
 
 const TOKEN = "header.payload.signature";
+const TEST_WORKER_BASE_URL = "https://staging-worker.example.test";
 
 function jsonResponse(body, status = 200, contentType = "application/json") {
   return {
@@ -36,6 +37,7 @@ function makeLiff(overrides = {}) {
 function fetchDependencies(fetchImpl, extra = {}) {
   return {
     fetchImpl,
+    workerBaseUrl: TEST_WORKER_BASE_URL,
     AbortControllerImpl: AbortController,
     setTimeoutImpl: setTimeout,
     clearTimeoutImpl: clearTimeout,
@@ -299,13 +301,13 @@ test("登録済み本人の読み取りはstaging Workerへ安全な正式reques
   assert.equal(requests.length, 2);
 
   const home = requests[0];
-  assert.equal(home.url, `${auth.STAGING_WORKER_BASE_URL}/line/home-summary`);
+  assert.equal(home.url, `${TEST_WORKER_BASE_URL}/line/home-summary`);
   assert.equal(home.options.method, "GET");
   assert.equal(home.options.body, undefined);
   assert.equal(new URL(home.url).search, "");
 
   const attendance = requests[1];
-  assert.equal(attendance.url, `${auth.STAGING_WORKER_BASE_URL}/line/attendance/all`);
+  assert.equal(attendance.url, `${TEST_WORKER_BASE_URL}/line/attendance/all`);
   assert.equal(attendance.options.method, "POST");
   assert.equal(attendance.options.headers["Content-Type"], "application/json");
   assert.equal(attendance.options.body, "{}");
@@ -318,6 +320,28 @@ test("登録済み本人の読み取りはstaging Workerへ安全な正式reques
     const serialized = `${request.url}\n${String(request.options.body || "")}`;
     assert.doesNotMatch(serialized, /lineId|line_id|lineUserId|memberId|memberIds/);
   }
+});
+
+test("Worker接続先の注入がない場合と別Originへの送信をfail closedにする", async () => {
+  let fetchCount = 0;
+  const fetchImpl = async () => {
+    fetchCount += 1;
+    return jsonResponse({ ok: true });
+  };
+
+  await assert.rejects(
+    auth.authenticatedFetch_("/auth/session", {}, TOKEN, {
+      fetchImpl,
+    }),
+    (error) => error.code === "invalid_worker_base_url",
+  );
+  await assert.rejects(
+    auth.authenticatedFetch_("https://other.example.test/auth/session", {}, TOKEN, {
+      ...fetchDependencies(fetchImpl),
+    }),
+    (error) => error.code === "invalid_worker_target",
+  );
+  assert.equal(fetchCount, 0);
 });
 
 test("本人向け予定を全件保持し、日付・時刻順の読み取り専用モデルへ変換する", async () => {
@@ -997,7 +1021,7 @@ test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだ�
   assert.equal(requests.length, 2);
   assert.equal(
     requests[0].url,
-    `${auth.STAGING_WORKER_BASE_URL}/line/attendance/submit-authenticated`,
+    `${TEST_WORKER_BASE_URL}/line/attendance/submit-authenticated`,
   );
   assert.equal(requests[0].options.method, "POST");
   assert.equal(requests[0].options.headers.Authorization, "Bearer fresh.token.value");
@@ -1007,7 +1031,7 @@ test("保存時に現在のLIFF IDトークンを取得し認証済みrouteだ�
   assert.equal(requests[0].options.credentials, "omit");
   assert.equal(Object.hasOwn(requests[0].options.headers, "Origin"), false);
   assert.deepEqual(JSON.parse(requests[0].options.body), payload);
-  assert.equal(requests[1].url, `${auth.STAGING_WORKER_BASE_URL}/line/attendance/all`);
+  assert.equal(requests[1].url, `${TEST_WORKER_BASE_URL}/line/attendance/all`);
   assert.equal(requests[1].options.method, "POST");
   assert.equal(requests[1].options.body, "{}");
   assert.equal(requests[1].options.headers.Authorization, "Bearer fresh.token.value");
@@ -1522,7 +1546,7 @@ test("/auth/sessionは診断用として安全な共通fetchを再利用する",
     return jsonResponse({ ok: true, authenticated: true });
   }));
   assert.deepEqual(result, { ok: true, authenticated: true });
-  assert.equal(captured.url, `${auth.STAGING_WORKER_BASE_URL}/auth/session`);
+  assert.equal(captured.url, `${TEST_WORKER_BASE_URL}/auth/session`);
   assert.equal(captured.options.headers.Authorization, `Bearer ${TOKEN}`);
 });
 

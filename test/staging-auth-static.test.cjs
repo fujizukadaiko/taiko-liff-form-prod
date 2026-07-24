@@ -8,14 +8,36 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const authSource = fs.readFileSync(path.join(root, "auth-session.js"), "utf8");
+const envSource = fs.readFileSync(path.join(root, "env-config.js"), "utf8");
 
 test("staging Workerだけを接続先にする", () => {
   const staging = /https:\/\/taiko-worker-plain-staging\.fujizukadaiko\.workers\.dev/;
   const production = /https:\/\/taiko-worker-plain\.fujizukadaiko\.workers\.dev/;
-  assert.match(html, staging);
-  assert.match(authSource, staging);
+  assert.match(envSource, staging);
+  assert.doesNotMatch(html, staging);
+  assert.doesNotMatch(authSource, staging);
+  assert.doesNotMatch(envSource, production);
   assert.doesNotMatch(html, production);
   assert.doesNotMatch(authSource, production);
+});
+
+test("環境設定は認証モジュールより先に読み込み、接続先を引数注入する", () => {
+  const envScript = html.indexOf('<script src="./env-config.js"></script>');
+  const authScript = html.indexOf('<script src="./auth-session.js"></script>');
+  assert.ok(envScript >= 0 && authScript > envScript);
+  assert.match(html, /workerBaseUrl:\s*D1_BASE/);
+  assert.match(authSource, /dependencies\?\.workerBaseUrl/);
+  assert.match(authSource, /invalid_worker_base_url/);
+});
+
+test("staging表示とhostname不一致時のfail closedを維持する", () => {
+  assert.match(html, /<title>\[STAGING\] 藤塚太鼓 出欠・予定<\/title>/);
+  assert.match(html, /id="environmentBanner"[^>]*>[\s\S]*STAGING／テスト環境/);
+  assert.match(html, /class="saveEnvironmentNotice"[\s\S]*本番データには反映されません/);
+  assert.match(html, /if \(!APP_STARTUP_ALLOWED\) \{\s*renderEnvironmentConfigFailure_\(\);\s*return;/);
+  assert.match(html, /resolveRuntimeConfig\(window\.location\)/);
+  assert.match(envSource, /showEnvironmentBanner:\s*true/);
+  assert.match(envSource, /page_hostname_mismatch/);
 });
 
 test("本人認証済み読み取り専用モードは従来初期化へ進まない", () => {
