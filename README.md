@@ -13,6 +13,18 @@ stagingフロントは現在、LINE IDトークンで認証した本人のデー
 
 自動retryは行わず、network errorは保存結果不明として扱います。legacy routeやGASへのfallbackはありません。Workerの書き込みゲートは通常未設定で、productionへも未反映です。
 
+管理者本人にはproduction形式の管理者メニューを表示します。現在有効なのは
+「予定登録/編集（閲覧のみ）」だけで、ボタン操作時に現在のLIFF IDトークンを取得し、
+Workerの認証済み管理者予定一覧routeへ接続します。WorkerはIDトークンを再検証し、
+D1の有効管理者ミラーを再照合します。
+
+予定一覧は新しい読み取り専用viewへ安全なDOMで表示します。旧管理画面、
+query parameterの`lineId`、旧GAS fallbackは使用しません。新規登録・編集・削除と、
+出欠結果、配車、通知、サマリ、feedbackは「準備中」として操作不能です。
+通常の認証成功時は試験用の状態カードを表示せず、production相当のhome shellを
+そのまま表示します。未登録・認証失敗・通信失敗・レスポンス不正時だけ、
+安全な案内カードを表示します。stagingバナーとバージョン表示は常時維持します。
+
 ## 環境設定
 
 staging固有の公開設定は`env-config.js`へ分離しています。設定には環境名、フロントバージョン、LIFF、Worker、GAS、期待するPages hostname、環境バナー表示を含みます。
