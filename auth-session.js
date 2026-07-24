@@ -7,6 +7,9 @@
 
   const AUTHENTICATED_ATTENDANCE_SUBMIT_PATH =
     "/line/attendance/submit-authenticated";
+  const AUTHENTICATED_MEMBER_SUBMIT_PATH =
+    "/line/members/submit-authenticated";
+  const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
   const AUTH_STATES = Object.freeze({
@@ -433,10 +436,30 @@
     if (!members || !Array.isArray(events)) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
     }
-    if (!body.registered && members.length > 0) {
+    const memberProfileValue = isPlainObject(body.member) ? body.member : {};
+    const inputName = readResponseString(memberProfileValue, "inputName", {
+      nullable: true,
+      maxLength: 200,
+      code: "invalid_home_summary",
+    });
+    if (
+      typeof memberProfileValue.notify !== "boolean"
+      || typeof memberProfileValue.viewerOnly !== "boolean"
+    ) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
     }
-    if (body.registered && members.length === 0) {
+    if (!body.registered && (
+      members.length > 0
+      || inputName
+      || memberProfileValue.notify
+      || memberProfileValue.viewerOnly
+    )) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
+    }
+    if (body.registered && (
+      !inputName
+      || memberProfileValue.viewerOnly !== (members.length === 0)
+    )) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
     }
 
@@ -536,6 +559,14 @@
     return {
       registered: body.registered,
       members: normalizedMembers,
+      memberProfile: {
+        inputName,
+        notify: memberProfileValue.notify,
+        viewerOnly: memberProfileValue.viewerOnly,
+        performers: normalizedMembers.map(function (member) {
+          return { ...member };
+        }),
+      },
       events: normalizedEvents,
       memberCount: normalizedMembers.length,
       eventCount: normalizedEvents.length,
@@ -697,6 +728,14 @@
     return {
       events,
       members: home.members.map((member) => ({ performerName: member.performerName })),
+      memberProfile: {
+        inputName: home.memberProfile.inputName,
+        notify: home.memberProfile.notify,
+        viewerOnly: home.memberProfile.viewerOnly,
+        performers: home.memberProfile.performers.map(function (member) {
+          return { ...member };
+        }),
+      },
       memberCount: home.memberCount,
       eventCount: events.length,
       attendanceCount: attendance.attendanceCount,
@@ -1450,6 +1489,178 @@
     }
   }
 
+  function normalizeMemberName_(value, maxLength, code) {
+    if (typeof value !== "string") {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, code, 0);
+    }
+    const normalized = value
+      .replace(/\u3000/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!normalized || normalized.length > maxLength) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, code, 0);
+    }
+    return normalized;
+  }
+
+  function createMemberRequestId_(dependencies) {
+    const createRequestId = dependencies && dependencies.createRequestId;
+    const requestId = typeof createRequestId === "function"
+      ? createRequestId()
+      : root.crypto && typeof root.crypto.randomUUID === "function"
+        ? root.crypto.randomUUID()
+        : "";
+    if (typeof requestId !== "string" || !REQUEST_ID_PATTERN.test(requestId)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "request_id_unavailable", 0);
+    }
+    return requestId;
+  }
+
+  function buildAuthenticatedMemberPayload_(input, dependencies) {
+    if (!isPlainObject(input)) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_member_input", 0);
+    }
+    const keys = Object.keys(input);
+    if (
+      !keys.every((key) => ["mode", "inputName", "notify", "performers"].includes(key))
+      || keys.length !== 4
+      || !["create", "replace"].includes(input.mode)
+      || typeof input.notify !== "boolean"
+      || !Array.isArray(input.performers)
+      || input.performers.length > 10
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_member_input", 0);
+    }
+    const inputName = normalizeMemberName_(
+      input.inputName,
+      200,
+      "invalid_input_name",
+    );
+    const seen = new Set();
+    const performers = input.performers.map(function (performer) {
+      if (
+        !isPlainObject(performer)
+        || Object.keys(performer).length !== 2
+        || !Object.keys(performer).every((key) =>
+          ["performerName", "segment"].includes(key)
+        )
+      ) {
+        throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_performer", 0);
+      }
+      const performerName = normalizeMemberName_(
+        performer.performerName,
+        200,
+        "invalid_performer",
+      );
+      if (
+        seen.has(performerName)
+        || typeof performer.segment !== "string"
+        || !MEMBER_SEGMENTS.has(performer.segment)
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          seen.has(performerName) ? "duplicate_performer" : "invalid_segment",
+          0,
+        );
+      }
+      seen.add(performerName);
+      return { performerName, segment: performer.segment };
+    });
+    return {
+      requestId: createMemberRequestId_(dependencies),
+      mode: input.mode,
+      inputName,
+      notify: input.notify,
+      performers,
+    };
+  }
+
+  function validateMemberSubmitSuccess_(body, payload) {
+    if (
+      !isPlainObject(body)
+      || body.ok !== true
+      || body.status !== "ok"
+      || body.requestId !== payload.requestId
+      || body.mode !== payload.mode
+      || body.memberCount !== payload.performers.length
+      || body.viewerOnly !== (payload.performers.length === 0)
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_member_submit_response", 200);
+    }
+  }
+
+  function confirmSubmittedMember_(home, payload) {
+    if (
+      !home
+      || home.registered !== true
+      || !home.memberProfile
+      || home.memberProfile.inputName !== payload.inputName
+      || home.memberProfile.notify !== payload.notify
+      || home.memberProfile.viewerOnly !== (payload.performers.length === 0)
+      || home.members.length !== payload.performers.length
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "member_confirmation_failed", 200);
+    }
+    const confirmed = new Map(home.members.map(function (member) {
+      return [member.performerName, member.segment];
+    }));
+    if (payload.performers.some(function (performer) {
+      return confirmed.get(performer.performerName) !== performer.segment;
+    })) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, "member_confirmation_failed", 200);
+    }
+    return home.memberProfile;
+  }
+
+  async function submitAuthenticatedMemberProfile_(input, options) {
+    const opts = options || {};
+    const payload = buildAuthenticatedMemberPayload_(input, opts.dependencies);
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_MEMBER_SUBMIT_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      validateMemberSubmitSuccess_(body, payload);
+      const home = await fetchHomeSummary_(idToken, opts.dependencies);
+      return {
+        profile: confirmSubmittedMember_(home, payload),
+        registered: true,
+      };
+    } finally {
+      idToken = "";
+    }
+  }
+
+  function classifyMemberSubmitError_(error) {
+    const status = error instanceof AuthSessionError ? error.status : 0;
+    const code = error instanceof AuthSessionError ? error.code : "";
+    if (
+      error instanceof AuthSessionError
+      && error.type === AUTH_STATES.UNAUTHENTICATED
+    ) return "unauthenticated";
+    if (status === 403 && code === "staging_member_write_disabled") {
+      return "write_disabled";
+    }
+    if (status === 409 && code === "already_registered") return "already_registered";
+    if (status === 409 && code === "member_not_registered") return "not_registered";
+    if (status === 409 && code === "idempotency_conflict") return "conflict";
+    if (
+      error instanceof AuthSessionError
+      && error.type === AUTH_STATES.NETWORK_ERROR
+    ) return "result_unknown";
+    if (code === "member_confirmation_failed") return "confirmation_failed";
+    return "failed";
+  }
+
   function classifyAttendanceSubmitError_(error) {
     const status = error instanceof AuthSessionError ? error.status : 0;
     const code = error instanceof AuthSessionError ? error.code : "";
@@ -2099,6 +2310,7 @@
       if (!home.registered) {
         const result = {
           status: AUTH_STATES.UNREGISTERED,
+          memberProfile: home.memberProfile,
           summary: {
             memberCount: home.memberCount,
             eventCount: home.eventCount,
@@ -2126,6 +2338,7 @@
       const viewModel = buildReadOnlyScheduleViewModel_(home, attendance);
       const result = {
         status: AUTH_STATES.REGISTERED_READ_ONLY,
+        memberProfile: viewModel.memberProfile,
         summary: {
           memberCount: viewModel.memberCount,
           eventCount: viewModel.eventCount,
@@ -2152,15 +2365,18 @@
   return {
     AUTH_STATES,
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
+    AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
     applyConfirmedAttendanceCommentDraft_,
     authenticatedFetch_,
     buildAuthenticatedAttendanceEventPayload_,
     buildAuthenticatedAttendanceDraftPayloads_,
+    buildAuthenticatedMemberPayload_,
     buildProductionHomeViewModel_,
     buildReadOnlyScheduleViewModel_,
     classifyAttendanceSubmitError_,
+    classifyMemberSubmitError_,
     createAttendanceDraftState_,
     fetchAttendanceSummary_,
     fetchHomeSummary_,
@@ -2176,6 +2392,7 @@
     setAttendanceDraftSelection_,
     summarizeAttendanceDraft_,
     submitAuthenticatedAttendancePayload_,
+    submitAuthenticatedMemberProfile_,
     startStagingAuthenticatedReadOnly,
     startStagingLineAuthCheck,
     verifyLineSession_,

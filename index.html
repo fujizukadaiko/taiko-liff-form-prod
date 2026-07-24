@@ -3608,7 +3608,6 @@
                     <p class="muted">安全な認証・保存APIの準備が完了するまで、旧システムには接続しません。</p>
                     <ul class="stagingUnavailableList">
                         <li>予定表の絞り込み表示</li>
-                        <li>初回登録・メンバー情報変更</li>
                         <li>管理・配車・通知・ご意見BOX</li>
                     </ul>
                 </aside>
@@ -3740,7 +3739,7 @@
 
                 <!-- ※注意書き：タイトル直下へ移動 -->
                 <div id="regNote" class="small muted">
-                ※ あなた自身が演奏する場合は、演奏者としてあなたの名前も追加してください。
+                ※ あなた自身が演奏する場合は、演奏者としてあなたの名前も追加してください。演奏者を0人にすると閲覧専用になります。通知設定とは別に管理されます。
                 </div>
 
                 <!-- 演奏者入力リスト -->
@@ -3753,6 +3752,7 @@
                 </button>
             </div>
 
+            <div class="saveEnvironmentNotice">STAGING／テスト環境の登録情報を変更します。本番データには反映されません。</div>
             <div id="regLog" class="muted" style="margin-top:8px;"></div>
 
             <div id="regOverlay" class="overlay submitting-overlay" style="display:none;">
@@ -5208,6 +5208,7 @@
     reportMeta: [],          // 管理レポート用：軽量メタ一覧（meta=1）
     reportDetailMap: {},     // { [eventId]: 詳細レスポンス } のキャッシュ
     authenticatedReadOnlyStatus: "loading", // staging読み取り専用。Tokenは保持しない。
+    authenticatedMemberSnapshot: null, // Tokenや本人IDを含まない登録表示用snapshot。
     };
 
     let registerMode = "create"; // "create" | "edit"
@@ -5875,7 +5876,7 @@
     }
 /* ===== 初期化 ===== */
     function showStagingAuthenticatedView_(viewId){
-        const allowedViewIds = new Set(["view-home", "view-form"]);
+        const allowedViewIds = new Set(["view-home", "view-form", "view-register"]);
         if (!allowedViewIds.has(viewId)) return false;
         document.querySelectorAll("[data-view]").forEach(function(view){
             const active = view.id === viewId;
@@ -5918,7 +5919,179 @@
         card.style.display = "";
     }
 
-    function configureStagingProductionShell_(status){
+    function addStagingMemberPerformerField_(performer){
+        const list = document.getElementById("perfList");
+        if (!list || list.children.length >= 10) return;
+        const value = performer && typeof performer.performerName === "string"
+            ? performer.performerName
+            : "";
+        const segmentValue = performer && performer.segment === "大人の部"
+            ? "大人の部"
+            : "子どもの部";
+        const row = document.createElement("div");
+        row.className = "perfRow";
+
+        const label = document.createElement("label");
+        label.className = "perfLabel";
+        label.textContent = "演奏者名";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "regPerf";
+        input.maxLength = 200;
+        input.placeholder = "例：藤塚 太郎";
+        input.value = value;
+        const select = document.createElement("select");
+        select.className = "regPerfSeg selectBtn";
+        ["子どもの部", "大人の部"].forEach(function(segment){
+            const option = document.createElement("option");
+            option.value = segment;
+            option.textContent = segment;
+            option.selected = segment === segmentValue;
+            select.appendChild(option);
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "btn btn-remove btn-sm";
+        remove.textContent = "削除";
+        remove.setAttribute("aria-label", "この演奏者を削除");
+        remove.addEventListener("click", function(){
+            row.remove();
+        });
+        row.append(label, input, select, remove);
+        list.appendChild(row);
+    }
+
+    function openStagingMemberForm_(mode){
+        const snapshot = state.authenticatedMemberSnapshot;
+        const profile = snapshot && snapshot.memberProfile
+            ? snapshot.memberProfile
+            : { inputName: "", notify: true, viewerOnly: false, performers: [] };
+        registerMode = mode;
+        const title = document.getElementById("regTitle");
+        const inputName = document.getElementById("regInputName");
+        const notify = document.getElementById("regNotify");
+        const list = document.getElementById("perfList");
+        const submit = document.getElementById("btnRegister");
+        const log = document.getElementById("regLog");
+        if (!title || !inputName || !notify || !list || !submit || !log) return;
+
+        title.textContent = mode === "create"
+            ? "初回登録（入力者 & 演奏者）"
+            : "登録情報の変更（入力者 & 演奏者）";
+        inputName.value = profile.inputName || "";
+        notify.checked = profile.notify === true;
+        list.textContent = "";
+        (profile.performers || []).forEach(addStagingMemberPerformerField_);
+        if ((profile.performers || []).length === 0) {
+            addStagingMemberPerformerField_();
+        }
+        submit.disabled = false;
+        submit.textContent = mode === "create" ? "登録する" : "保存";
+        submit.dataset.resultUnknown = "";
+        log.textContent = "";
+        showStagingAuthenticatedView_("view-register");
+    }
+
+    function collectStagingMemberForm_(){
+        const rows = Array.from(document.querySelectorAll("#perfList .perfRow"));
+        const performers = rows.map(function(row){
+            const performerName = String(
+                row.querySelector(".regPerf")?.value || "",
+            ).trim();
+            if (!performerName) return null;
+            return {
+                performerName,
+                segment: String(
+                    row.querySelector(".regPerfSeg")?.value || "",
+                ),
+            };
+        }).filter(Boolean);
+        return {
+            mode: registerMode,
+            inputName: String(
+                document.getElementById("regInputName")?.value || "",
+            ),
+            notify: document.getElementById("regNotify")?.checked === true,
+            performers,
+        };
+    }
+
+    function memberSubmitMessage_(kind){
+        const messages = {
+            write_disabled: "現在、テスト環境の登録・変更機能は停止しています。入力内容は保存されていません。",
+            result_unknown: "通信が完了したか確認できません。自動再送はしていません。テストLIFFを閉じて開き直し、現在の登録内容を確認してください。",
+            confirmation_failed: "保存後の再確認が一致しませんでした。自動再送はしていません。テストLIFFを開き直して確認してください。",
+            already_registered: "すでに登録されています。テストLIFFを開き直して「登録情報の変更」から操作してください。",
+            not_registered: "登録状態が変わりました。テストLIFFを開き直して確認してください。",
+            conflict: "同じ操作の確認情報が一致しません。テストLIFFを開き直して確認してください。",
+            unauthenticated: "LINEでの本人確認を完了できませんでした。テストLIFFを開き直してください。",
+            failed: "登録情報を保存できませんでした。入力内容は保存されたと判断していません。",
+        };
+        return messages[kind] || messages.failed;
+    }
+
+    async function submitStagingMemberForm_(){
+        const submit = document.getElementById("btnRegister");
+        const log = document.getElementById("regLog");
+        const overlay = document.getElementById("regOverlay");
+        if (!submit || !log || !window.LineAuthSession) return;
+        if (submit.dataset.resultUnknown === "1") return;
+
+        submit.disabled = true;
+        submit.textContent = registerMode === "create" ? "登録中…" : "保存中…";
+        log.textContent = "";
+        if (overlay) overlay.style.display = "";
+        try {
+            await window.LineAuthSession.submitAuthenticatedMemberProfile_(
+                collectStagingMemberForm_(),
+                {
+                    liff: window.liff,
+                    dependencies: { workerBaseUrl: D1_BASE },
+                },
+            );
+            log.textContent = registerMode === "create"
+                ? "初回登録が完了しました。"
+                : "登録情報を保存しました。";
+            showStagingAuthenticatedView_("view-home");
+            await initStagingAuthenticatedReadOnly_();
+        } catch (error) {
+            const kind = window.LineAuthSession.classifyMemberSubmitError_(error);
+            log.textContent = memberSubmitMessage_(kind);
+            if (kind === "result_unknown" || kind === "confirmation_failed") {
+                submit.dataset.resultUnknown = "1";
+                submit.textContent = "再読み込みして確認してください";
+                return;
+            }
+        } finally {
+            if (overlay) overlay.style.display = "none";
+            if (submit.dataset.resultUnknown !== "1") {
+                submit.disabled = false;
+                submit.textContent = registerMode === "create" ? "登録する" : "保存";
+            }
+        }
+    }
+
+    function bindStagingMemberForm_(){
+        const add = document.getElementById("btnAddPerf");
+        const submit = document.getElementById("btnRegister");
+        const back = document.getElementById("btnBackFromReg");
+        if (add && !add.__stagingMemberBound) {
+            add.onclick = function(){ addStagingMemberPerformerField_(); };
+            add.__stagingMemberBound = true;
+        }
+        if (submit && !submit.__stagingMemberBound) {
+            submit.onclick = submitStagingMemberForm_;
+            submit.__stagingMemberBound = true;
+        }
+        if (back && !back.__stagingMemberBound) {
+            back.onclick = function(){
+                showStagingAuthenticatedView_("view-home");
+            };
+            back.__stagingMemberBound = true;
+        }
+    }
+
+    function configureStagingProductionShell_(status, snapshot){
         const homeView = document.getElementById("view-home");
         if (homeView) {
             Array.from(homeView.children).forEach(function(element){
@@ -5931,6 +6104,9 @@
         });
 
         const registered = status === "registered_read_only";
+        const unregistered = status === "unregistered";
+        const profile = snapshot && snapshot.memberProfile;
+        const viewerOnly = registered && profile && profile.viewerOnly === true;
         const hello = document.getElementById("hello");
         const primary = document.getElementById("btnPrimary");
         const schedules = document.getElementById("btnSchedules");
@@ -5951,18 +6127,30 @@
         }
 
         setHomePrimaryButton(
-            registered ? "出欠を確認・回答" : "現在利用できません",
-            !registered,
+            unregistered
+                ? "初回登録"
+                : viewerOnly
+                    ? "登録情報を変更"
+                    : registered
+                        ? "出欠を確認・回答"
+                        : "現在利用できません",
+            !registered && !unregistered,
         );
         if (primary) {
-            primary.setAttribute("aria-controls", "view-form");
-            if (!primary.__stagingShellBound) {
-                primary.addEventListener("click", function(){
-                    if (primary.disabled) return;
+            primary.setAttribute(
+                "aria-controls",
+                unregistered || viewerOnly ? "view-register" : "view-form",
+            );
+            primary.onclick = function(){
+                if (primary.disabled) return;
+                if (unregistered) {
+                    openStagingMemberForm_("create");
+                } else if (viewerOnly) {
+                    openStagingMemberForm_("replace");
+                } else {
                     showStagingAuthenticatedView_("view-form");
-                });
-                primary.__stagingShellBound = true;
-            }
+                }
+            };
         }
         if (backFromForm && !backFromForm.__stagingShellBound) {
             backFromForm.addEventListener("click", function(){
@@ -5975,8 +6163,14 @@
             schedules.setAttribute("aria-disabled", "true");
         }
         if (editNames) {
-            editNames.disabled = true;
-            editNames.setAttribute("aria-disabled", "true");
+            editNames.disabled = !registered;
+            editNames.setAttribute("aria-disabled", String(!registered));
+            editNames.querySelector("span:last-child").textContent =
+                registered ? "登録情報を変更" : "登録情報の変更";
+            editNames.onclick = function(){
+                if (!registered) return;
+                openStagingMemberForm_("replace");
+            };
         }
         if (homeEvents && !registered) {
             homeEvents.hidden = true;
@@ -6061,7 +6255,9 @@
         }
 
         // production相当のhome shellを表示し、安全と明示した要素だけを許可する。
-        configureStagingProductionShell_(effectiveStatus);
+        state.authenticatedMemberSnapshot = snapshot || null;
+        bindStagingMemberForm_();
+        configureStagingProductionShell_(effectiveStatus, snapshot);
     }
 
     function renderEnvironmentConfigFailure_(){
