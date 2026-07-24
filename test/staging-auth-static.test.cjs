@@ -158,6 +158,32 @@ test("安全shellはhome・認証済み出欠・認証済み登録viewだけを�
   assert.match(viewSwitch, /自動再送はしていません/);
 });
 
+test("会員保存の再取得確認後にホームで成功結果を表示する", () => {
+  const submitStart = html.indexOf("async function submitStagingMemberForm_");
+  const submitEnd = html.indexOf("\n    function bindStagingMemberForm_", submitStart);
+  const submitFlow = html.slice(submitStart, submitEnd);
+  const confirmation = submitFlow.indexOf(
+    "await initStagingAuthenticatedReadOnly_();",
+  );
+  const snackbar = submitFlow.indexOf(
+    "window.showSnackbar(successMessage",
+  );
+
+  assert.ok(submitStart >= 0 && submitEnd > submitStart);
+  assert.match(
+    submitFlow,
+    /const successMessage = registerMode === "create"[\s\S]*"初回登録が完了しました。"[\s\S]*"登録情報を保存しました。"/,
+  );
+  assert.ok(
+    confirmation >= 0 && snackbar > confirmation,
+    "保存後の再取得・一致確認が完了してから成功表示する必要がある",
+  );
+  assert.match(
+    submitFlow,
+    /window\.showSnackbar\(successMessage,\s*\{\s*variant: "success",\s*duration: 5000/,
+  );
+});
+
 test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続する", () => {
   assert.match(
     html,
