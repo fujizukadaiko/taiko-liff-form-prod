@@ -327,7 +327,7 @@ test("カスタム通知とご意見BOXは認証モジュールだけへ接続�
     flow,
     /API_ENDPOINT|GAS_ENDPOINT|D1_ORIGIN|no-cors|getDecodedIDToken|lineId|memberId|extraLineIds|senderLineId|fetch\(|innerHTML|localStorage|sessionStorage/,
   );
-  assert.match(envSource, /frontVersion:\s*"Front v7\.1\.0"/);
+  assert.match(envSource, /frontVersion:\s*"Front v7\.1\.1"/);
 });
 
 test("配車補助は認証済みAPIと安全なDOMだけを使い入力を画面内に保持する", () => {
@@ -515,6 +515,61 @@ test("実LIFF回帰指摘のproduction同等表示を安全経路で反映する
   assert.doesNotMatch(
     feedback,
     /innerHTML|lineId|memberId|fetch\(|localStorage|sessionStorage/,
+  );
+});
+
+test("実端末確認後の予定色・注意枠・通知幅と連動・登録注意位置を修正する", () => {
+  const scheduleStart = html.indexOf(
+    "function renderStagingMemberSchedules_",
+  );
+  const scheduleEnd = html.indexOf(
+    "\n    function bindStagingMemberSchedules_",
+    scheduleStart,
+  );
+  const schedules = html.slice(scheduleStart, scheduleEnd);
+  assert.match(schedules, /box\.className = "muted"/);
+
+  assert.doesNotMatch(html, /\.attendanceDraftNotice\s*\{/);
+  assert.match(
+    html,
+    /id="attendanceDraftPanel"[^>]*>[\s\S]*class="saveEnvironmentNotice"/,
+  );
+  assert.match(
+    html,
+    /\.saveEnvironmentNotice\s*\{[\s\S]*font-size:12px;[\s\S]*line-height:1\.5/,
+  );
+
+  assert.match(
+    html,
+    /#cp_extra\s*\{[\s\S]*width:100%;[\s\S]*min-width:0;[\s\S]*max-width:100%/,
+  );
+  assert.match(
+    html,
+    /#cp_extra_row\s*\{[\s\S]*grid-template-columns:minmax\(0,1fr\) minmax\(0,180px\);[\s\S]*min-width:0;[\s\S]*max-width:100%/,
+  );
+  assert.match(
+    html,
+    /input\.onchange = function\(\)\{\s*refreshCustomNotificationPreview_\(\);\s*\}/,
+  );
+  assert.doesNotMatch(
+    html,
+    /input\.onchange = refreshCustomNotificationPreview_/,
+  );
+
+  const registerStart = html.indexOf('<section id="view-register"');
+  const registerEnd = html.indexOf(
+    '<section id="view-schedules"',
+    registerStart,
+  );
+  const register = html.slice(registerStart, registerEnd);
+  assert.ok(registerStart >= 0 && registerEnd > registerStart);
+  assert.ok(
+    register.indexOf('class="saveEnvironmentNotice"')
+      < register.indexOf('<div class="card">'),
+  );
+  assert.ok(
+    register.indexOf('class="saveEnvironmentNotice"')
+      < register.indexOf('id="btnRegister"'),
   );
 });
 

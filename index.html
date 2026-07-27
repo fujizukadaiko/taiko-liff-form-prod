@@ -1210,15 +1210,6 @@
             font-size:13px;
             font-weight:700;
         }
-        .attendanceDraftNotice{
-            margin:10px 0 0;
-            padding:10px;
-            border:1px solid #d8c7a8;
-            border-radius:10px;
-            background:#fffaf0;
-            font-size:14px;
-            line-height:1.6;
-        }
         .saveEnvironmentNotice{
             margin:0 0 8px;
             padding:6px 8px;
@@ -1227,6 +1218,11 @@
             color:#173f60;
             background:#eef7ff;
             font-weight:800;
+            font-size:12px;
+            line-height:1.5;
+        }
+        #view-register > .saveEnvironmentNotice{
+            margin:0 0 12px;
         }
         .attendanceDraftSummary{
             display:grid;
@@ -2510,6 +2506,10 @@
         }
 
         #cp_extra{
+            box-sizing:border-box;
+            width:100%;
+            min-width:0;
+            max-width:100%;
             font-size:14px;
             line-height:1.4;
             border-radius:10px !important;
@@ -2599,8 +2599,10 @@
         /* cp_extra_row：固定幅に変更 */
         #cp_extra_row{
             display:grid;
-            grid-template-columns: 1fr 180px;
+            grid-template-columns:minmax(0,1fr) minmax(0,180px);
             gap:8px;
+            min-width:0;
+            max-width:100%;
         }
         #cp_extra_row .row-att-note{
             grid-column:1 / -1;
@@ -3557,7 +3559,7 @@
 
             <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
                 <h2 id="readOnlyScheduleHeading" class="sectionTitle">回答する公演を選択</h2>
-                <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
+                <div id="attendanceDraftPanel" aria-live="polite" hidden>
                     <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
                 </div>
                 <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
@@ -3599,6 +3601,8 @@
                 トップに戻る
                 </button>
             </div>
+
+            <div class="saveEnvironmentNotice">STAGING／テスト環境の登録情報を変更します。本番データには反映されません。</div>
 
             <div class="card">
                 <label for="regInputName">入力者氏名（あなたの名前）</label>
@@ -3650,7 +3654,6 @@
                 </button>
             </div>
 
-            <div class="saveEnvironmentNotice">STAGING／テスト環境の登録情報を変更します。本番データには反映されません。</div>
             <div id="regLog" class="muted" style="margin-top:8px;"></div>
 
             <div id="regOverlay" class="overlay submitting-overlay" style="display:none;">
@@ -7356,7 +7359,11 @@
             refreshCustomNotificationPreview_();
         };
         document.querySelectorAll("#view-custom-push .cp_stat").forEach(
-            function(input){ input.onchange = refreshCustomNotificationPreview_; },
+            function(input){
+                input.onchange = function(){
+                    refreshCustomNotificationPreview_();
+                };
+            },
         );
         if (extra) {
             const updateManual = function(){
@@ -8130,7 +8137,7 @@
                     || a.title.localeCompare(b.title, "ja");
             });
         box.textContent = "";
-        box.className = "";
+        box.className = "muted";
         if (!schedules.length) {
             const empty = document.createElement("div");
             empty.className = "listEmpty";
