@@ -2691,149 +2691,14 @@
         gap: 8px;
         }
     
-    /* ===== Summary ===== */
-        #summaryFreeQuotaBox .kv { display: grid; gap: 6px; }
-        #summaryFreeQuotaBox .kvRow { display:flex; justify-content:space-between; padding:6px 8px; border:1px solid #ddd; border-radius:8px; }
-        #summaryFreeQuotaBox .kvKey { color:#666; font-size:13px; }
-        #summaryFreeQuotaBox .kvVal { font-weight:600; }
-
-        .summaryCard .kpi { display:inline-block; min-width:120px; padding:8px 10px; margin:4px; border:1px solid #eee; border-radius:8px; }
-        .summaryCard .kpiLabel { font-size:12px; color:#666; }
-        .summaryCard .kpiValue { font-size:20px; font-weight:700; }
-        .summaryCard .num { text-align:right; font-variant-numeric: tabular-nums; }
-        .summaryCard .ok { color:#0a7; }
-        .summaryCard .ng { color:#c33; }
-        .summaryCard .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size:12px; }
-        .summaryCard .summaryHeader { font-weight:700; margin:6px 0 8px; }
-        .summaryCard .summarySubHeader { font-weight:700; margin:10px 0 6px; }
         .table.compact th, .table.compact td { padding:4px 6px; }
-
-        /* サマリ見出し行：右端へボタン寄せ */
-        #view-summary .card .row.header {
-        display:flex; align-items:center; gap:8px; margin-bottom:8px;
-        }
-        #view-summary .card .row.header .sectionTitle { flex:1; } /* ← これでボタンが右端へ */
-        
-        /* サマリカードのグリッド */
-        .metricsGrid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 8px;
-        }
-        @media (min-width: 480px){
-        .metricsGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        }
-        @media (min-width: 720px){
-        .metricsGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-        }
-        .metricCard {
-        border: 1px solid #e6e6e6;
-        border-radius: 12px;
-        padding: 14px 12px;
-        background: #fff;
-        }
-        .metricTitle { font-size: 12px; color:#666; margin-bottom: 6px; }
-        .metricValue { font-size: 22px; font-weight: 700; }
-        .tableSm { width:100%; border-collapse: collapse; }
-        .tableSm th, .tableSm td { padding: 8px 6px; border-bottom: 1px solid #eee; }
-        .sectionSub { font-weight:700; font-size:16px; margin:14px 0 6px; }
-        .badgeMuted { font-size:12px; padding:2px 8px; border-radius:9999px; background:#f0f0f7; color:#555; }
         .ok { color:#14a44d; } .ng { color:#d62d20; }
-
-        /* KPI：横4並び（スマホでも崩れないよう少し小さめ） */
-        /* ── ① 4列を“常に”固定 ─────────────────────────── */
-        .summaryKpis{
-        display:grid;
-        grid-template-columns:repeat(4, minmax(0,1fr)); /* ← 常に4列 */
-        gap:6px;                                        /* 余白を少し詰める */
-        margin-top:8px;
-        }
-        
-        /* ── ② 子要素はグリッド前提のコンパクト化 ───────────── */
-        .summaryKpis .kpi{
-        display:block;
-        width:100%;
-        min-width:0;
-        margin:0;                 /* gap 管理 */
-        padding:8px 6px;          /* 余白を縮める */
-        min-height:52px;          /* ボックス高さ控えめ */
-        border:1px solid #e6e6e6;
-        border-radius:10px;
-        background:#fff;
-        }
-        .summaryKpis .kpi .kpiLabel{
-        font-size:10px;           /* ラベルを小さく */
-        line-height:1.1;
-        letter-spacing:.01em;
-        }
-        .summaryKpis .kpi .kpiValue{
-        font-size:16px;           /* 数字も少し小さく */
-        line-height:1.05;
-        font-weight:700;
-        font-variant-numeric: tabular-nums;
-        }
-        
-        /* ── ③ 極小端末(幅≤360px)はさらに詰める保険 ──────── */
-        @media (max-width:360px){
-        .summaryKpis{ gap:4px; }
-        .summaryKpis .kpi{ padding:6px 4px; min-height:48px; }
-        .summaryKpis .kpi .kpiLabel{ font-size:9px; }
-        .summaryKpis .kpi .kpiValue{ font-size:15px; }
-        }
         .table.compact.smalltext { font-size: 13px; }
         .table.compact.smalltext th, 
         .table.compact.smalltext td { padding: 6px 8px; }
-        .table.compact.history td, .table.compact.history th{
-        font-size: 0.9rem; line-height:1.2;
-        }
-        .table.compact.history .nowrap { white-space: nowrap; }
-        #view-summary table.table.compact.history.verysmall td,
-        #view-summary table.table.compact.history.verysmall th {
-        font-size: 11px !important;
-        line-height: 1.1 !important;
-        padding: 3px 5px !important;
-        }
 
         /* ヘッダーのタイトル */
         .pageTitle{ font-weight:700; font-size:18px; }
-
-            .kpi{ border:1px solid #e6e6e6; border-radius:12px; padding:12px; background:#fff; }
-            .kpiLabel{ font-size:12px; color:#666; margin-bottom:6px; }
-            .kpiValue{ font-size:22px; font-weight:700; }
-        /* タブボタンの下に余白を追加 */
-        #view-summary .card .tabsRow { margin-bottom: 12px; }  /* ← クラス名を付ける（下でJSから設定） */
-        
-        /* ===== サマリ（当月配信）ブロック ===== */
-        .summaryBlock {
-        border: 1px solid #e5e5f0;
-        border-radius: 12px;
-        padding: 12px 12px 10px;
-        background: #fff;
-        margin-bottom: 14px;
-        }
-        
-        /* 履歴ブロック */
-        .summaryBlock.historyBlock {
-        border: 1px solid #e5e5f0;
-        border-radius: 12px;
-        padding: 12px 12px 10px;
-        background: #fff;
-        margin-bottom: 12px;
-        }
-        
-        /* テーブルと再取得ボタンの間に余白 */
-        #btnSummaryReload {
-        margin-top: 10px;
-        }
-
-        /* サマリ本体を薄い枠で囲む */
-        .summaryCard .summaryBody {
-        border: 1px solid #e9e9f2;
-        border-radius: 12px;
-        padding: 12px;
-        background: #fff;
-        margin-top: 8px;
-        }
     
     /* ===== Feedback FAB ===== */
         #feedbackFab.fab{
@@ -3594,17 +3459,14 @@
                     <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" type="button">
                         配車補助
                     </button>
-                    <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
-                        カスタム通知（準備中）
+                    <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" type="button">
+                        カスタム通知
                     </button>
-                    <button id="btnSummary" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
-                        サマリ（準備中）
-                    </button>
-                    <button id="btnFeedback" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
-                        ご意見BOX（準備中）
+                    <button id="btnFeedback" class="btn btn-outline btn-sm btn-compact" type="button">
+                        ご意見BOX
                     </button>
                 </div>
-                <div class="small muted" style="margin-top:6px;">※ 管理者権限をサーバーで再確認して接続します。準備中の機能は操作できません。</div>
+                <div class="small muted" style="margin-top:6px;">※ 管理者権限をサーバーで再確認して接続します。</div>
                 </div>
             </details>
 
@@ -4544,77 +4406,10 @@
                     <button id="cp_reset" class="btn btn-ghost" type="button">リセット</button>
                     <button id="cp_send"  class="btn btn-primary" type="button">送信する</button>
                 </div>
+                <div id="cp_status" class="small muted" role="status" aria-live="polite" style="margin-top:10px;">
+                    宛先と本文を確認してから送信してください。
+                </div>
             </div><!-- /card -->
-        </section>
-
-
-
-    <!-- ===== View: サマリ（管理者）===== -->
-        <section id="view-summary" data-view>
-            <!-- 見出し行：左=タイトル / 右=トップに戻る -->
-            <div
-                class="summaryHeaderRow"
-                style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"
-            >
-                <div class="pageTitle" style="margin:0;">サマリ</div>
-                <button
-                id="btnSummaryToTop"
-                class="btn btn-outline btn-sm btn-compact"
-                type="button"
-                data-view-target="view-home"
-                >
-                トップに戻る
-                </button>
-            </div>
-
-            <!-- タブ風ボタン + コンテンツ -->
-            <div class="card">
-                <!-- タブ風ボタン -->
-                <div class="row" style="gap:8px;margin-bottom:8px;">
-                <button
-                    id="btnSummaryFreeQuota"
-                    class="btn btn-primary btn-sm btn-compact"
-                    type="button"
-                >
-                    無料枠確認
-                </button>
-                <button
-                    id="btnSummaryPushStats"
-                    class="btn btn-outline btn-sm btn-compact"
-                    type="button"
-                >
-                    配信履歴
-                </button>
-            </div>
-
-            <!-- 無料枠 -->
-            <div id="summaryFreeQuotaBox" class="summaryCard">
-                <div class="small muted">読み込み待機中…</div>
-            </div>
-
-            <!-- 配信履歴 -->
-            <div id="summaryPushStatsBox" class="summaryCard" style="display:none;">
-                <div class="small muted">読み込み待機中…</div>
-            </div>
-
-            <!-- 再取得ボタン -->
-            <div class="row" style="gap:8px;margin-top:10px;">
-                <button
-                    id="btnSummaryReload"
-                    class="btn btn-outline btn-sm btn-compact"
-                    type="button"
-                >
-                    再取得
-                </button>
-            </div>
-
-            <!-- 説明文 -->
-            <div class="small muted" style="margin-top:6px;">
-                ※ 「無料枠確認」は<strong>このシステム（Messaging API経由）</strong>で送信した今月の利用状況を表示します。<br>
-                ※ Official Accountアプリからの手動配信や、あいさつ／自動応答メッセージは<strong>含まれません</strong>。<br>
-                ※ 「配信履歴」は Pushlog / PushDetail をもとに当月の集計を表示します。
-            </div>
-        </div>
         </section>
 
     <!-- ===== View: ご意見BOX（管理者）===== -->
@@ -5427,6 +5222,8 @@
     authenticatedAdminCarpool: null, // 配車候補と画面内の計算元。保存しない。
     authenticatedAdminAuthorized: false,
     authenticatedAdminEdit: null,
+    authenticatedCustomNotificationPreview: null,
+    authenticatedCustomNotificationPreviewGeneration: 0,
     };
 
     let registerMode = "create"; // "create" | "edit"
@@ -6101,6 +5898,8 @@
             "view-admin-safe",
             "view-admin-report",
             "view-admin-carpool",
+            "view-custom-push",
+            "view-feedback",
         ]);
         if (!allowedViewIds.has(viewId)) return false;
         document.querySelectorAll("[data-view]").forEach(function(view){
@@ -7173,10 +6972,463 @@
         }
     }
 
+    function stagingAuthenticatedApiOptions_(){
+        return {
+            liff: window.liff,
+            dependencies: { workerBaseUrl: D1_BASE },
+        };
+    }
+
+    function customNotificationSelection_(){
+        const event = document.getElementById("cp_event");
+        const extra = document.getElementById("cp_extra");
+        return {
+            eventKey: event && event.value !== "manual" ? event.value : "",
+            statuses: Array.from(
+                document.querySelectorAll("#view-custom-push .cp_stat:checked"),
+            ).map(function(input){ return input.value; }),
+            extraRecipientRefs: extra
+                ? Array.from(extra.selectedOptions)
+                    .map(function(option){ return option.value; })
+                    .filter(Boolean)
+                : [],
+        };
+    }
+
+    function setCustomNotificationStatus_(message, isError){
+        const status = document.getElementById("cp_status");
+        if (!status) return;
+        status.textContent = message;
+        status.className = isError ? "small err" : "small muted";
+    }
+
+    function renderCustomNotificationPreview_(preview, selectedRefs){
+        const automatic = document.getElementById("cp_auto");
+        const manual = document.getElementById("cp_manual");
+        const extra = document.getElementById("cp_extra");
+        if (automatic) {
+            automatic.textContent = preview.automaticRecipients.length
+                ? preview.automaticRecipients.map(function(item){
+                    return item.displayName;
+                }).join("、")
+                : "（該当なし）";
+        }
+        if (extra) {
+            extra.textContent = "";
+            preview.manualCandidates.forEach(function(candidate){
+                const option = document.createElement("option");
+                option.value = candidate.recipientRef;
+                option.textContent = candidate.performerNames.length
+                    ? candidate.displayName + "（" + candidate.performerNames.join("・") + "）"
+                    : candidate.displayName;
+                option.selected = selectedRefs.has(candidate.recipientRef);
+                extra.appendChild(option);
+            });
+        }
+        if (manual) {
+            const selectedNames = preview.manualCandidates
+                .filter(function(candidate){
+                    return selectedRefs.has(candidate.recipientRef);
+                })
+                .map(function(candidate){ return candidate.displayName; });
+            manual.textContent = selectedNames.length
+                ? selectedNames.join("、")
+                : "（未選択）";
+        }
+        setCustomNotificationStatus_(
+            "現在の選択では" + preview.recipientCount + "件が送信対象です。",
+            false,
+        );
+        state.authenticatedCustomNotificationPreview = preview;
+    }
+
+    async function refreshCustomNotificationPreview_(selectionOverride){
+        const generation =
+            state.authenticatedCustomNotificationPreviewGeneration + 1;
+        state.authenticatedCustomNotificationPreviewGeneration = generation;
+        const extra = document.getElementById("cp_extra");
+        const selectedRefs = new Set(
+            extra
+                ? Array.from(extra.selectedOptions)
+                    .map(function(option){ return option.value; })
+                    .filter(Boolean)
+                : [],
+        );
+        const selection = selectionOverride || customNotificationSelection_();
+        setCustomNotificationStatus_("宛先を安全に再確認しています…", false);
+        try {
+            const preview = await window.LineAuthSession
+                .previewAuthenticatedCustomNotification_(
+                    selection,
+                    stagingAuthenticatedApiOptions_(),
+                );
+            if (
+                generation
+                !== state.authenticatedCustomNotificationPreviewGeneration
+            ) return null;
+            renderCustomNotificationPreview_(preview, selectedRefs);
+            return preview;
+        } catch (_) {
+            if (
+                generation
+                !== state.authenticatedCustomNotificationPreviewGeneration
+            ) return null;
+            state.authenticatedCustomNotificationPreview = null;
+            setCustomNotificationStatus_(
+                "宛先を確認できませんでした。自動再試行はしていません。",
+                true,
+            );
+            return null;
+        }
+    }
+
+    async function openCustomNotification_(){
+        if (!state.authenticatedAdminAuthorized) return;
+        if (!showStagingAuthenticatedView_("view-custom-push")) return;
+        const event = document.getElementById("cp_event");
+        const group = document.getElementById("opt-events");
+        if (!event || !group) return;
+        setCustomNotificationStatus_("予定と宛先を読み込んでいます…", false);
+        try {
+            const model = state.authenticatedAdminSchedules
+                || await window.LineAuthSession.startAuthenticatedAdminSchedules(
+                    stagingAuthenticatedApiOptions_(),
+                );
+            state.authenticatedAdminSchedules = model;
+            group.textContent = "";
+            model.schedules.forEach(function(schedule){
+                const option = document.createElement("option");
+                option.value = schedule.eventKey;
+                option.textContent = adminReportEventLabel_(schedule);
+                group.appendChild(option);
+            });
+            await refreshCustomNotificationPreview_();
+        } catch (_) {
+            setCustomNotificationStatus_(
+                "予定を取得できませんでした。自動再試行はしていません。",
+                true,
+            );
+        }
+    }
+
+    function resetCustomNotification_(){
+        const event = document.getElementById("cp_event");
+        const extra = document.getElementById("cp_extra");
+        const body = document.getElementById("cp_body");
+        if (event) event.value = "manual";
+        document.querySelectorAll("#view-custom-push .cp_stat").forEach(
+            function(input){ input.checked = false; input.disabled = true; },
+        );
+        if (extra) {
+            Array.from(extra.options).forEach(function(option){
+                option.selected = false;
+            });
+        }
+        if (body) body.value = "";
+        const count = document.getElementById("cp_count");
+        if (count) count.textContent = "0 / 2000";
+        refreshCustomNotificationPreview_();
+    }
+
+    async function submitCustomNotification_(){
+        const button = document.getElementById("cp_send");
+        const body = String(document.getElementById("cp_body")?.value || "").trim();
+        if (!body) {
+            setCustomNotificationStatus_("本文を入力してください。", true);
+            return;
+        }
+        button.disabled = true;
+        try {
+            const selection = customNotificationSelection_();
+            const preview = await refreshCustomNotificationPreview_(selection);
+            if (!preview || preview.recipientCount < 1) {
+                setCustomNotificationStatus_(
+                    "送信対象を1件以上選択してください。",
+                    true,
+                );
+                return;
+            }
+            if (!window.confirm(
+                preview.recipientCount
+                + "件を対象に通知を送信待ちへ登録します。よろしいですか？",
+            )) return;
+            setCustomNotificationStatus_("送信待ちへ登録しています…", false);
+            const result = await window.LineAuthSession
+                .submitAuthenticatedCustomNotification_(
+                    {
+                        ...selection,
+                        message: body,
+                    },
+                    stagingAuthenticatedApiOptions_(),
+                );
+            setCustomNotificationStatus_(
+                result.recipientCount
+                    + "件の通知を送信待ちへ登録しました。実送信結果とは異なります。",
+                false,
+            );
+        } catch (error) {
+            const unknown = error && ["timeout", "network_error"].includes(error.code);
+            setCustomNotificationStatus_(
+                unknown
+                    ? "登録結果を確認できません。自動再送はしません。管理者に確認してください。"
+                    : "通知を送信待ちへ登録できませんでした。",
+                true,
+            );
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    function bindCustomNotificationSafe_(){
+        const event = document.getElementById("cp_event");
+        const extra = document.getElementById("cp_extra");
+        const body = document.getElementById("cp_body");
+        const template = document.getElementById("cp_tpl");
+        if (event) event.onchange = function(){
+            const manual = event.value === "manual";
+            document.querySelectorAll("#view-custom-push .cp_stat").forEach(
+                function(input){
+                    input.disabled = manual;
+                    if (manual) input.checked = false;
+                },
+            );
+            refreshCustomNotificationPreview_();
+        };
+        document.querySelectorAll("#view-custom-push .cp_stat").forEach(
+            function(input){ input.onchange = refreshCustomNotificationPreview_; },
+        );
+        if (extra) extra.onchange = refreshCustomNotificationPreview_;
+        if (body) body.oninput = function(){
+            document.getElementById("cp_count").textContent =
+                String(body.value.length) + " / 2000";
+        };
+        if (template) template.onchange = function(){
+            const templates = {
+                "雨天中止": "本日の予定は雨天のため中止します。",
+                "時間変更": "予定時刻が変更になりました。詳細をご確認ください。",
+            };
+            if (templates[template.value] && body) {
+                body.value = templates[template.value];
+                body.oninput();
+            }
+        };
+        document.getElementById("cp_reset").onclick = resetCustomNotification_;
+        document.getElementById("cp_send").onclick = submitCustomNotification_;
+        document.getElementById("btnCustomBack").onclick = function(){
+            showStagingAuthenticatedView_("view-home");
+        };
+    }
+
+    function setFeedbackModalOpen_(open){
+        const modal = document.getElementById("feedbackModal");
+        if (modal) modal.hidden = !open;
+    }
+
+    async function submitFeedbackSafe_(){
+        const button = document.getElementById("fbSendBtn");
+        const message = String(document.getElementById("fbMessage")?.value || "");
+        const category = String(document.getElementById("fbCategory")?.value || "その他");
+        if (!message.trim()) {
+            window.showSnackbar("メッセージを入力してください。", { variant:"error" });
+            return;
+        }
+        button.disabled = true;
+        button.textContent = "送信中…";
+        try {
+            await window.LineAuthSession.submitAuthenticatedFeedback_(
+                { category:category, message:message },
+                stagingAuthenticatedApiOptions_(),
+            );
+            document.getElementById("fbMessage").value = "";
+            document.getElementById("fbCount").textContent = "0";
+            setFeedbackModalOpen_(false);
+            window.showSnackbar("送信しました。ご協力ありがとうございます。", {
+                variant:"success",
+                duration:4000,
+            });
+        } catch (error) {
+            const unknown = error && ["timeout", "network_error"].includes(error.code);
+            window.showSnackbar(
+                unknown
+                    ? "送信結果を確認できません。自動再送はしていません。"
+                    : "送信できませんでした。",
+                { variant:"error", duration:5000 },
+            );
+        } finally {
+            button.disabled = false;
+            button.textContent = "送信";
+        }
+    }
+
+    function renderAdminFeedbackSafe_(model){
+        const box = document.getElementById("feedbackListBox");
+        box.textContent = "";
+        if (!model.items.length) {
+            const empty = document.createElement("div");
+            empty.className = "small muted";
+            empty.textContent = "ご意見はまだありません。";
+            box.appendChild(empty);
+            return;
+        }
+        const groups = new Map();
+        model.items.forEach(function(item){
+            if (!groups.has(item.category)) groups.set(item.category, []);
+            groups.get(item.category).push(item);
+        });
+        ["要望", "不具合", "デザイン", "その他"].forEach(function(category){
+            const items = groups.get(category);
+            if (!items || !items.length) return;
+            const details = document.createElement("details");
+            details.className = "fb-cat card";
+            const summary = document.createElement("summary");
+            summary.className = "fb-cat-head";
+            const title = document.createElement("span");
+            title.className = "sectionTitle";
+            title.textContent = category;
+            const count = document.createElement("span");
+            count.className = "fb-count";
+            count.textContent = items.length + "件";
+            summary.append(title, count);
+            details.appendChild(summary);
+            items.forEach(function(item){
+                const row = document.createElement("div");
+                row.className = "fb-row";
+                const head = document.createElement("div");
+                head.className = "fb-row-head";
+                const name = document.createElement("span");
+                name.className = "name";
+                name.textContent = item.name || "（登録名なし）";
+                const date = document.createElement("span");
+                date.className = "date";
+                date.textContent = item.at;
+                head.append(name, date);
+                const body = document.createElement("div");
+                body.className = "fb-row-body";
+                const message = document.createElement("div");
+                message.className = "fb-msg";
+                message.textContent = item.message;
+                const wrap = document.createElement("div");
+                wrap.className = "fb-status-wrap";
+                const select = document.createElement("select");
+                select.className = "fb-status";
+                select.dataset.feedbackId = item.feedbackId;
+                select.dataset.currentStatus = item.status;
+                select.dataset.expectedUpdatedAt = item.updatedAt;
+                ["未対応", "対応中", "保留", "完了", "却下"].forEach(
+                    function(status){
+                        const option = document.createElement("option");
+                        option.value = status;
+                        option.textContent = status;
+                        option.selected = status === item.status;
+                        select.appendChild(option);
+                    },
+                );
+                select.onchange = function(){
+                    select.classList.toggle(
+                        "is-dirty",
+                        select.value !== select.dataset.currentStatus,
+                    );
+                };
+                wrap.appendChild(select);
+                body.append(message, wrap);
+                row.append(head, body);
+                details.appendChild(row);
+            });
+            box.appendChild(details);
+        });
+    }
+
+    async function loadAdminFeedbackSafe_(){
+        const box = document.getElementById("feedbackListBox");
+        box.textContent = "読み込み中…";
+        try {
+            const model = await window.LineAuthSession
+                .loadAuthenticatedAdminFeedback_(
+                    stagingAuthenticatedApiOptions_(),
+                );
+            state.authenticatedAdminFeedback = model;
+            renderAdminFeedbackSafe_(model);
+        } catch (_) {
+            box.textContent =
+                "取得できませんでした。自動再試行はしていません。";
+        }
+    }
+
+    async function saveAdminFeedbackSafe_(){
+        const button = document.getElementById("fbSave");
+        const targets = Array.from(
+            document.querySelectorAll("#feedbackListBox .fb-status.is-dirty"),
+        );
+        if (!targets.length) {
+            window.showSnackbar("変更された項目はありません。");
+            return;
+        }
+        button.disabled = true;
+        let unknown = false;
+        let failed = false;
+        for (const select of targets) {
+            try {
+                await window.LineAuthSession
+                    .updateAuthenticatedAdminFeedbackStatus_(
+                        {
+                            feedbackId:select.dataset.feedbackId,
+                            status:select.value,
+                            expectedUpdatedAt:select.dataset.expectedUpdatedAt,
+                        },
+                        stagingAuthenticatedApiOptions_(),
+                    );
+            } catch (error) {
+                failed = true;
+                if (error && ["timeout", "network_error"].includes(error.code)) {
+                    unknown = true;
+                }
+                break;
+            }
+        }
+        if (!failed) {
+            await loadAdminFeedbackSafe_();
+            window.showSnackbar("ステータスを保存しました。", {
+                variant:"success",
+            });
+        } else {
+            window.showSnackbar(
+                unknown
+                    ? "保存結果を確認できません。自動再送はしていません。"
+                    : "ステータスを保存できませんでした。",
+                { variant:"error", duration:5000 },
+            );
+        }
+        button.disabled = false;
+    }
+
+    function bindFeedbackSafe_(){
+        const fab = document.getElementById("feedbackFab");
+        const message = document.getElementById("fbMessage");
+        if (fab) fab.onclick = function(){ setFeedbackModalOpen_(true); };
+        document.querySelectorAll("#feedbackModal [data-close]").forEach(
+            function(button){
+                button.onclick = function(){ setFeedbackModalOpen_(false); };
+            },
+        );
+        if (message) message.oninput = function(){
+            document.getElementById("fbCount").textContent =
+                String(message.value.length);
+        };
+        document.getElementById("fbSendBtn").onclick = submitFeedbackSafe_;
+        document.getElementById("fbReload").onclick = loadAdminFeedbackSafe_;
+        document.getElementById("fbSave").onclick = saveAdminFeedbackSafe_;
+        document.getElementById("btnFeedbackBack").onclick = function(){
+            showStagingAuthenticatedView_("view-home");
+        };
+    }
+
     function bindStagingAdminSafe_(){
         const menuButton = document.getElementById("btnAdminMenuSchedules");
         const reportButton = document.getElementById("btnAdminMenuReport");
         const carpoolButton = document.getElementById("btnAdminCarpool");
+        const customNotificationButton =
+            document.getElementById("btnAdminCustomPush");
+        const feedbackButton = document.getElementById("btnFeedback");
         const reload = document.getElementById("btnAdminSafeReload");
         const back = document.getElementById("btnAdminSafeBack");
         if (menuButton) {
@@ -7207,6 +7459,16 @@
                 if (!showStagingAuthenticatedView_("view-admin-carpool")) return;
                 resetStagingAdminCarpool_();
                 loadStagingAdminCarpoolEvents_();
+            };
+        }
+        if (customNotificationButton) {
+            customNotificationButton.onclick = openCustomNotification_;
+        }
+        if (feedbackButton) {
+            feedbackButton.onclick = function(){
+                if (!state.authenticatedAdminAuthorized) return;
+                if (!showStagingAuthenticatedView_("view-feedback")) return;
+                loadAdminFeedbackSafe_();
             };
         }
         document.getElementById("repEvent").onchange =
@@ -7564,11 +7826,13 @@
         }
         state.authenticatedAdminAuthorized = adminAuthorized;
         bindStagingAdminSafe_();
+        bindCustomNotificationSafe_();
+        bindFeedbackSafe_();
 
         const feedback = document.getElementById("feedbackFab");
         if (feedback) {
-            feedback.setAttribute("hidden", "");
-            feedback.style.display = "none";
+            feedback.hidden = !registered;
+            feedback.style.display = registered ? "" : "none";
         }
     }
 
@@ -7806,22 +8070,6 @@
         show("#view-custom-push");                 // 画面表示
         window.initCustomPushPage?.();             // 初期化（イベント候補読込・参加のみONなど）
     };
-    
-    // 管理メニュー：サマリ
-    document.getElementById('btnSummary')?.addEventListener('click', () => {
-        if (!state.isAdmin) { alert('管理者のみアクセス可能です'); return; }
-        show('#view-summary');                  // サマリ画面を表示（内部で hidden=false）
-        const v = document.getElementById('view-summary');  
-        window.loadSummaryFreeQuota?.();        // 無料枠の初期表示
-    });
-    
-    // サマリ内ボタン
-    document.getElementById('btnSummaryFreeQuota')
-        ?.addEventListener('click', () => window.loadSummaryFreeQuota?.());
-    document.getElementById('btnSummaryReload')
-        ?.addEventListener('click', () => window.loadSummaryFreeQuota?.());
-    document.getElementById('btnSummaryToTop')
-    ?.addEventListener('click', ()=> show('#view-home'));
     
     // 管理メニュー：ご意見BOX
     document.getElementById('btnFeedback')?.addEventListener('click', async () => {
@@ -12830,180 +13078,6 @@
         });
     })();
 
-/* ===== サマリ ===== */
-    // ========= サマリ：無料枠カードの描画 =========
-    window.renderFreeQuotaCard = function (data) {
-      // data: { status:'ok', kind:'freeQuota', used, limit, remain, followers, followersEffective }
-      const used      = Number(data.used ?? 0);
-      const limit     = Number(data.limit ?? 0);
-      const remain    = Number(data.remain ?? Math.max(0, limit - used));
-      const followers = Number(data.followers ?? data.followersEffective ?? 0);
-    
-      const perBlast  = followers > 0 ? Math.floor(remain / followers) : 0;
-    
-      return `
-        <div class="card" style="margin-top:6px;">
-          <div class="sectionTitle">無料枠 確認</div>
-          <div class="list">
-            <div>当月送信：<b>${used}</b> / <b>${limit}</b>（残り：<b>${remain}</b>通）</div>
-            <div>フォロワー：<b>${followers}</b> 人</div>
-            <div>全体配信あと：<b>${perBlast}</b> 回</div>
-          </div>
-        </div>`;
-    };
-    
-   // ========= サマリ：無料枠の取得＆描画 =========
-    window.loadSummaryFreeQuota = async function () {
-    const box = document.getElementById('summaryFreeQuotaBox');
-    if (!box) {
-        console.warn('#summaryFreeQuotaBox が見つかりません');
-        return;
-    }
-    box.innerHTML = '読み込み中… <span class="spinner"></span>';
-
-    try {
-        // ★ D1_ORIGIN を使って Worker 側の新エンドポイントを叩く
-        const url = new URL('/line/summary/free-quota', D1_ORIGIN);
-        const res = await fetch(url.toString());
-        const r = await res.json();
-        console.log('freeQuota resp (worker):', r);
-
-        if (!r || r.status !== 'ok') {
-        box.innerHTML = `<div class="err">取得に失敗しました：${r?.message || 'unknown'}</div>`;
-        return;
-        }
-
-        box.innerHTML = window.renderFreeQuotaCard(r);
-    } catch (e) {
-        console.error(e);
-        box.innerHTML = `<div class="err">エラー：${e.message || e}</div>`;
-    }
-    };
-    
-    // ===== サマリ：タブ切替共通 =====
-      (function(){
-        const btnFree = document.getElementById('btnSummaryFreeQuota');
-        const btnPush = document.getElementById('btnSummaryPushStats');
-        const boxFree = document.getElementById('summaryFreeQuotaBox');
-        const boxPush = document.getElementById('summaryPushStatsBox');
-      
-        function setActive(tab){ // 'free' | 'push'
-          if (!btnFree || !btnPush || !boxFree || !boxPush) return;
-          const on  = (el)=>{ el.classList.remove('btn-outline'); el.classList.add('btn-primary'); };
-          const off = (el)=>{ el.classList.remove('btn-primary'); el.classList.add('btn-outline'); };
-          if (tab === 'free'){
-            on(btnFree);  off(btnPush);
-            boxFree.style.display = '';
-            boxPush.style.display = 'none';
-          } else {
-            on(btnPush);  off(btnFree);
-            boxFree.style.display = 'none';
-            boxPush.style.display = '';
-          }
-        }
-      
-        window.showSummaryFreeTab = function(){ setActive('free'); };
-        window.showSummaryPushTab = function(){ setActive('push'); };
-      
-        // 画面遷移時（サマリボタン）
-        document.getElementById('btnSummary')?.addEventListener('click', ()=>{
-          if (!state.isAdmin){ alert('管理者のみアクセス可能です'); return; }
-          show('#view-summary');
-          showSummaryFreeTab();           // デフォルトは無料枠タブ
-          window.loadSummaryFreeQuota?.();
-        });
-      
-        // タブクリック
-        btnFree?.addEventListener('click', ()=>{
-          showSummaryFreeTab();
-          window.loadSummaryFreeQuota?.();
-        });
-        btnPush?.addEventListener('click', ()=>{
-          showSummaryPushTab();
-          window.loadSummaryPushStats?.();
-        });
-      
-        // 再取得（アクティブタブに合わせて）
-        document.getElementById('btnSummaryReload')?.addEventListener('click', ()=>{
-          if (boxPush?.style.display !== 'none') {
-            window.loadSummaryPushStats?.();
-          } else {
-            window.loadSummaryFreeQuota?.();
-          }
-        });
-      })();
-      
-    // ===== サマリ：配信履歴（当月） =====
-    window.loadSummaryPushStats = async function(){
-        const box = document.getElementById('summaryPushStatsBox');
-        if (!box) return;
-        box.innerHTML = `取得中… <span class="spinner"></span>`;
-
-        try {
-            // D1 Worker 直叩き
-            const url = new URL("/summary/push-stats", D1_BASE);
-            const res = await fetch(url.toString());
-            const r = await res.json();
-
-            if (r?.status !== 'ok'){
-            box.innerHTML = `<div class="err">エラー: ${h(r?.message||'取得に失敗しました')}</div>`;
-            return;
-            }
-            if (r.empty){
-            box.innerHTML = `<div class="small muted">データがありません</div>`;
-            return;
-            }
-
-            const fmtNum = n => (typeof n==='number' ? n.toLocaleString() : String(n||'0'));
-            const month  = h(r.month || '');
-            const logs   = r.logs || {count:0,totalTargets:0,totalSuccess:0,totalFail:0};
-
-            const kpis = `
-            <div class="summaryKpis">
-                <div class="kpi"><div class="kpiLabel">ログ件数</div><div class="kpiValue">${fmtNum(logs.count)}</div></div>
-                <div class="kpi"><div class="kpiLabel">対象件数</div><div class="kpiValue">${fmtNum(logs.totalTargets)}</div></div>
-                <div class="kpi"><div class="kpiLabel">成功数</div><div class="kpiValue">${fmtNum(logs.totalSuccess)}</div></div>
-                <div class="kpi"><div class="kpiLabel">失敗数</div><div class="kpiValue">${fmtNum(logs.totalFail)}</div></div>
-            </div>`;
-
-            const recent = r.recent || [];
-            const recentRows = recent.map(x=>{
-            const isFail = Number(x.fail) > 0;
-            const resultLabel = isFail
-                ? `<span class="ng">失敗</span>`
-                : `<span class="ok">成功</span>`;
-            return `<tr>
-                <td class="nowrap">${h(x.at||'')}</td>
-                <td>${h(x.type||'')}</td>
-                <td class="mono">${h(x.eventId||'')}</td>
-                <td class="num">${resultLabel}</td>
-            </tr>`;
-            }).join('') || `<tr><td colspan="4" class="muted">直近20件なし</td></tr>`;
-
-            box.innerHTML = `
-            <div class="summaryBlock">
-                <div class="summaryHeader">当月配信サマリ（${month}）</div>
-                <div class="small muted" style="margin: -4px 0 8px;">
-                ※ 本サマリの数値は「このシステム経由の送信」のみを対象としています。
-                </div>
-                ${kpis}
-            </div>
-
-            <div class="summaryBlock historyBlock">
-                <div class="summarySubHeader">履歴（直近20件）</div>
-                <table class="table compact verysmall history">
-                <thead>
-                    <tr><th>日時</th><th>種別</th><th>公演ID</th><th>結果</th></tr>
-                </thead>
-                <tbody>${recentRows}</tbody>
-                </table>
-            </div>
-            `;
-        } catch(err){
-            console.error(err);
-            box.innerHTML = `<div class="err">通信エラー: ${h(err?.message||err)}</div>`;
-        }
-        };
 </script>
  
 <script>
@@ -13279,6 +13353,7 @@
 <script>
 /* ===== フィードバック一覧ビュー（管理） ===== */
     (function () {
+    if (STAGING_AUTHENTICATED_READ_ONLY) return;
     // 戻る / 再読込ボタン
     document.getElementById('btnFeedbackBack')
         ?.addEventListener('click', () => show('#view-home'));

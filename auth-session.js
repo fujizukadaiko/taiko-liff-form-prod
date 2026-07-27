@@ -17,6 +17,16 @@
     "/line/admin/attendance-report-authenticated";
   const AUTHENTICATED_ADMIN_CARPOOL_PATH =
     "/line/admin/carpool-authenticated";
+  const AUTHENTICATED_FEEDBACK_SUBMIT_PATH =
+    "/line/feedback/submit-authenticated";
+  const AUTHENTICATED_ADMIN_FEEDBACK_PATH =
+    "/line/admin/feedback-authenticated";
+  const AUTHENTICATED_ADMIN_FEEDBACK_STATUS_PATH =
+    "/line/admin/feedback/status-authenticated";
+  const AUTHENTICATED_CUSTOM_NOTIFICATION_PREVIEW_PATH =
+    "/line/admin/custom-notifications/preview-authenticated";
+  const AUTHENTICATED_CUSTOM_NOTIFICATION_SUBMIT_PATH =
+    "/line/admin/custom-notifications/submit-authenticated";
   const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -3346,6 +3356,494 @@
     }
   }
 
+  const FEEDBACK_CATEGORIES = new Set([
+    "要望", "不具合", "デザイン", "その他",
+  ]);
+  const FEEDBACK_STATUSES = new Set([
+    "未対応", "対応中", "保留", "完了", "却下",
+  ]);
+  const NOTIFICATION_STATUSES = new Set([
+    "参加", "未定", "未回答", "欠席",
+  ]);
+
+  function withCurrentIdToken_(options, operation) {
+    const opts = options || {};
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      return operation(idToken, opts);
+    } finally {
+      idToken = "";
+    }
+  }
+
+  function normalizeClientText_(value, maxLength, code, required) {
+    if (typeof value !== "string") {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, code, 0);
+    }
+    const normalized = value.replace(/\r\n?/g, "\n").trim();
+    if (
+      (required && !normalized)
+      || normalized.length > maxLength
+      || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(normalized)
+    ) {
+      throw makeError(AUTH_STATES.RESPONSE_ERROR, code, 0);
+    }
+    return normalized;
+  }
+
+  function buildFeedbackSubmitPayload_(input, dependencies) {
+    if (
+      !isPlainObject(input)
+      || Object.keys(input).length !== 2
+      || !Object.keys(input).every((key) =>
+        ["category", "message"].includes(key)
+      )
+      || !FEEDBACK_CATEGORIES.has(input.category)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_feedback_input",
+        0,
+      );
+    }
+    return {
+      requestId: createAuthenticatedRequestId_(dependencies),
+      category: input.category,
+      message: normalizeClientText_(
+        input.message,
+        300,
+        "invalid_feedback_message",
+        true,
+      ).replace(/[ \t]+/g, " "),
+    };
+  }
+
+  async function submitAuthenticatedFeedback_(input, options) {
+    const opts = options || {};
+    const payload = buildFeedbackSubmitPayload_(input, opts.dependencies);
+    return withCurrentIdToken_(opts, async function (idToken) {
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_FEEDBACK_SUBMIT_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      if (
+        !isPlainObject(body)
+        || body.ok !== true
+        || body.status !== "ok"
+        || body.requestId !== payload.requestId
+        || typeof body.feedbackId !== "string"
+        || !/^[0-9a-f]{64}$/.test(body.feedbackId)
+        || body.feedbackStatus !== "未対応"
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_feedback_submit_response",
+          200,
+        );
+      }
+      return {
+        feedbackId: body.feedbackId,
+        status: body.feedbackStatus,
+      };
+    });
+  }
+
+  function extractAdminFeedback_(body) {
+    if (
+      !isPlainObject(body)
+      || body.ok !== true
+      || body.status !== "ok"
+      || !Array.isArray(body.items)
+      || typeof body.hasMore !== "boolean"
+      || body.items.length > 200
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_feedback_response",
+        200,
+      );
+    }
+    const items = body.items.map(function (item) {
+      if (
+        !isPlainObject(item)
+        || !Object.keys(item).every((key) => [
+          "feedbackId", "name", "at", "category", "message", "status",
+          "updatedAt",
+        ].includes(key))
+        || typeof item.feedbackId !== "string"
+        || !/^(?:[0-9a-f]{64}|legacy-\d+)$/.test(item.feedbackId)
+        || typeof item.name !== "string" || item.name.length > 200
+        || typeof item.at !== "string" || !item.at || item.at.length > 64
+        || typeof item.category !== "string"
+        || !FEEDBACK_CATEGORIES.has(item.category)
+        || typeof item.message !== "string"
+        || !item.message || item.message.length > 300
+        || typeof item.status !== "string"
+        || !FEEDBACK_STATUSES.has(item.status)
+        || typeof item.updatedAt !== "string"
+        || item.updatedAt.length > 64
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_feedback_response",
+          200,
+        );
+      }
+      return {
+        feedbackId: item.feedbackId,
+        name: item.name,
+        at: item.at,
+        category: item.category,
+        message: item.message,
+        status: item.status,
+        updatedAt: item.updatedAt,
+      };
+    });
+    return { items, hasMore: body.hasMore };
+  }
+
+  async function loadAuthenticatedAdminFeedback_(options) {
+    const opts = options || {};
+    return withCurrentIdToken_(opts, async function (idToken) {
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_ADMIN_FEEDBACK_PATH,
+        { method: "GET" },
+        idToken,
+        opts.dependencies,
+      );
+      return extractAdminFeedback_(body);
+    });
+  }
+
+  async function updateAuthenticatedAdminFeedbackStatus_(input, options) {
+    const opts = options || {};
+    if (
+      !isPlainObject(input)
+      || Object.keys(input).length !== 3
+      || !Object.keys(input).every((key) =>
+        ["feedbackId", "status", "expectedUpdatedAt"].includes(key)
+      )
+      || typeof input.feedbackId !== "string"
+      || !/^(?:[0-9a-f]{64}|legacy-\d+)$/.test(input.feedbackId)
+      || !FEEDBACK_STATUSES.has(input.status)
+      || typeof input.expectedUpdatedAt !== "string"
+      || input.expectedUpdatedAt.length > 64
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_feedback_status_input",
+        0,
+      );
+    }
+    const payload = {
+      requestId: createAuthenticatedRequestId_(opts.dependencies),
+      feedbackId: input.feedbackId,
+      status: input.status,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    };
+    return withCurrentIdToken_(opts, async function (idToken) {
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_ADMIN_FEEDBACK_STATUS_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      if (
+        !isPlainObject(body)
+        || body.ok !== true
+        || body.status !== "ok"
+        || body.requestId !== payload.requestId
+        || body.feedbackId !== payload.feedbackId
+        || body.feedbackStatus !== payload.status
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_feedback_status_response",
+          200,
+        );
+      }
+      return {
+        feedbackId: body.feedbackId,
+        status: body.feedbackStatus,
+      };
+    });
+  }
+
+  function buildNotificationSelection_(input) {
+    if (
+      !isPlainObject(input)
+      || !Object.keys(input).every((key) =>
+        ["eventKey", "statuses", "extraRecipientRefs"].includes(key)
+      )
+      || Object.keys(input).length !== 3
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_notification_input",
+        0,
+      );
+    }
+    const eventKey = normalizeClientText_(
+      input.eventKey,
+      128,
+      "invalid_event_key",
+      false,
+    );
+    if (
+      !Array.isArray(input.statuses)
+      || input.statuses.length > 4
+      || input.statuses.some((status) => !NOTIFICATION_STATUSES.has(status))
+      || new Set(input.statuses).size !== input.statuses.length
+      || !Array.isArray(input.extraRecipientRefs)
+      || input.extraRecipientRefs.length > 200
+      || input.extraRecipientRefs.some((value) =>
+        typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)
+      )
+      || new Set(input.extraRecipientRefs).size
+        !== input.extraRecipientRefs.length
+      || (!eventKey && input.statuses.length > 0)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_notification_input",
+        0,
+      );
+    }
+    return {
+      eventKey,
+      statuses: input.statuses.slice(),
+      extraRecipientRefs: input.extraRecipientRefs.slice(),
+    };
+  }
+
+  function extractNotificationPreview_(body) {
+    const validEvent = body && (
+      body.event === null
+      || (
+        isPlainObject(body.event)
+        && Object.keys(body.event).length === 4
+        && Object.keys(body.event).every((key) =>
+          ["eventKey", "date", "title", "targetGroup"].includes(key)
+        )
+        && typeof body.event.eventKey === "string"
+        && body.event.eventKey.length > 0
+        && body.event.eventKey.length <= 128
+        && typeof body.event.date === "string"
+        && /^\d{8}$/.test(body.event.date)
+        && typeof body.event.title === "string"
+        && body.event.title.length > 0
+        && body.event.title.length <= 200
+        && typeof body.event.targetGroup === "string"
+        && body.event.targetGroup.length <= 40
+      )
+    );
+    if (
+      !isPlainObject(body)
+      || body.ok !== true
+      || body.status !== "ok"
+      || !validEvent
+      || !Number.isSafeInteger(body.recipientCount)
+      || body.recipientCount < 0
+      || body.recipientCount > 200
+      || !Array.isArray(body.automaticRecipients)
+      || body.automaticRecipients.length > 200
+      || !Array.isArray(body.manualCandidates)
+      || body.manualCandidates.length > 500
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_notification_preview_response",
+        200,
+      );
+    }
+    const readCandidate = function (candidate, automatic) {
+      if (
+        !isPlainObject(candidate)
+        || typeof candidate.recipientRef !== "string"
+        || !/^[0-9a-f]{64}$/.test(candidate.recipientRef)
+        || typeof candidate.displayName !== "string"
+        || !candidate.displayName || candidate.displayName.length > 200
+        || !Array.isArray(candidate.performerNames)
+        || candidate.performerNames.length > 10
+        || candidate.performerNames.some((value) =>
+          typeof value !== "string" || value.length > 200
+        )
+        || (automatic && (
+          !Array.isArray(candidate.statuses)
+          || candidate.statuses.some((status) =>
+            !NOTIFICATION_STATUSES.has(status)
+          )
+        ))
+        || (!automatic && typeof candidate.selected !== "boolean")
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_notification_preview_response",
+          200,
+        );
+      }
+      const normalized = {
+        recipientRef: candidate.recipientRef,
+        displayName: candidate.displayName,
+        performerNames: candidate.performerNames.slice(),
+      };
+      if (automatic) normalized.statuses = candidate.statuses.slice();
+      else normalized.selected = candidate.selected;
+      return normalized;
+    };
+    const automaticRecipients = body.automaticRecipients.map((item) =>
+      readCandidate(item, true)
+    );
+    const manualCandidates = body.manualCandidates.map((item) =>
+      readCandidate(item, false)
+    );
+    const candidateRefs = new Set();
+    for (const candidate of manualCandidates) {
+      if (candidateRefs.has(candidate.recipientRef)) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_notification_preview_response",
+          200,
+        );
+      }
+      candidateRefs.add(candidate.recipientRef);
+    }
+    const selectedRefs = new Set(
+      manualCandidates
+        .filter((candidate) => candidate.selected)
+        .map((candidate) => candidate.recipientRef),
+    );
+    for (const recipient of automaticRecipients) {
+      if (
+        !candidateRefs.has(recipient.recipientRef)
+        || selectedRefs.has(recipient.recipientRef)
+          && automaticRecipients.filter((candidate) =>
+            candidate.recipientRef === recipient.recipientRef
+          ).length > 1
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_notification_preview_response",
+          200,
+        );
+      }
+      selectedRefs.add(recipient.recipientRef);
+    }
+    if (selectedRefs.size !== body.recipientCount) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_notification_preview_response",
+        200,
+      );
+    }
+    return {
+      recipientCount: body.recipientCount,
+      event: body.event,
+      automaticRecipients,
+      manualCandidates,
+    };
+  }
+
+  async function previewAuthenticatedCustomNotification_(input, options) {
+    const opts = options || {};
+    const payload = buildNotificationSelection_(input);
+    return withCurrentIdToken_(opts, async function (idToken) {
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_CUSTOM_NOTIFICATION_PREVIEW_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      return extractNotificationPreview_(body);
+    });
+  }
+
+  async function submitAuthenticatedCustomNotification_(input, options) {
+    const opts = options || {};
+    if (
+      !isPlainObject(input)
+      || !Object.keys(input).every((key) => [
+        "eventKey", "statuses", "extraRecipientRefs", "message",
+      ].includes(key))
+      || Object.keys(input).length !== 4
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_notification_input",
+        0,
+      );
+    }
+    const selection = buildNotificationSelection_({
+      eventKey: input.eventKey,
+      statuses: input.statuses,
+      extraRecipientRefs: input.extraRecipientRefs,
+    });
+    const payload = {
+      requestId: createAuthenticatedRequestId_(opts.dependencies),
+      ...selection,
+      message: normalizeClientText_(
+        input.message,
+        2000,
+        "invalid_notification_message",
+        true,
+      ),
+    };
+    return withCurrentIdToken_(opts, async function (idToken) {
+      const body = await authenticatedFetch_(
+        AUTHENTICATED_CUSTOM_NOTIFICATION_SUBMIT_PATH,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          expectedStatus: 200,
+        },
+        idToken,
+        opts.dependencies,
+      );
+      if (
+        !isPlainObject(body)
+        || body.ok !== true
+        || body.status !== "ok"
+        || body.requestId !== payload.requestId
+        || typeof body.jobId !== "string"
+        || !/^[0-9a-f]{64}$/.test(body.jobId)
+        || body.deliveryStatus !== "queued"
+        || !Number.isSafeInteger(body.recipientCount)
+        || body.recipientCount < 1
+        || body.recipientCount > 200
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_notification_submit_response",
+          200,
+        );
+      }
+      return {
+        jobId: body.jobId,
+        deliveryStatus: body.deliveryStatus,
+        recipientCount: body.recipientCount,
+      };
+    });
+  }
+
   return {
     AUTH_STATES,
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
@@ -3353,6 +3851,11 @@
     AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH,
     AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH,
     AUTHENTICATED_ADMIN_CARPOOL_PATH,
+    AUTHENTICATED_FEEDBACK_SUBMIT_PATH,
+    AUTHENTICATED_ADMIN_FEEDBACK_PATH,
+    AUTHENTICATED_ADMIN_FEEDBACK_STATUS_PATH,
+    AUTHENTICATED_CUSTOM_NOTIFICATION_PREVIEW_PATH,
+    AUTHENTICATED_CUSTOM_NOTIFICATION_SUBMIT_PATH,
     AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
@@ -3388,6 +3891,11 @@
     submitAuthenticatedAttendancePayload_,
     submitAuthenticatedAdminSchedule_,
     submitAuthenticatedMemberProfile_,
+    submitAuthenticatedFeedback_,
+    loadAuthenticatedAdminFeedback_,
+    updateAuthenticatedAdminFeedbackStatus_,
+    previewAuthenticatedCustomNotification_,
+    submitAuthenticatedCustomNotification_,
     startStagingAuthenticatedReadOnly,
     startAuthenticatedAdminSchedules,
     startAuthenticatedAdminAttendanceReport,

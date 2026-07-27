@@ -65,7 +65,7 @@ test("本人認証済み読み取り専用モードは従来初期化へ進ま�
 
 test("通常起動はhome-summaryから始まり/auth/sessionを重複しない", () => {
   const start = authSource.indexOf("async function startStagingAuthenticatedReadOnly");
-  const end = authSource.indexOf("\n  return {", start);
+  const end = authSource.indexOf("\n  const FEEDBACK_CATEGORIES", start);
   const readOnlyFlow = authSource.slice(start, end);
   assert.ok(start >= 0 && end > start);
   assert.match(readOnlyFlow, /fetchHomeSummary_/);
@@ -111,9 +111,9 @@ test("production相当shellは安全な認証済み機能だけを表示する",
     html,
     /effectiveStatus === "registered_read_only" \? "none" : ""/,
   );
-  assert.match(html, /feedback\.setAttribute\("hidden", ""\)/);
   assert.match(html, /#feedbackFab\.fab\[hidden\]\s*\{\s*display: none !important;/);
-  assert.match(html, /feedback\.style\.display = "none"/);
+  assert.match(html, /feedback\.hidden = !registered/);
+  assert.match(html, /feedback\.style\.display = registered \? "" : "none"/);
 });
 
 test("安全未対応のホーム操作は旧画面への遷移属性を持たない", () => {
@@ -138,7 +138,7 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shellは認証済みの6 viewだけを切り替える", () => {
+test("安全shellは認証済みの8 viewだけを切り替える", () => {
   const viewStart = html.indexOf("function showStagingAuthenticatedView_");
   const shellStart = html.indexOf("function configureStagingProductionShell_");
   const viewSwitch = html.slice(viewStart, shellStart);
@@ -152,6 +152,8 @@ test("安全shellは認証済みの6 viewだけを切り替える", () => {
     "view-admin-safe",
     "view-admin-report",
     "view-admin-carpool",
+    "view-custom-push",
+    "view-feedback",
   ]) {
     assert.match(viewSwitch, new RegExp(`"${viewId}"`));
   }
@@ -174,23 +176,21 @@ test("安全shellは認証済みの6 viewだけを切り替える", () => {
   assert.match(viewSwitch, /自動再送はしていません/);
 });
 
-test("管理者メニューは認証済み予定管理・出欠結果・配車補助だけを有効にし旧管理画面へ接続しない", () => {
+test("管理者メニューは安全な認証済み機能だけを有効にしサマリを廃止する", () => {
   assert.match(
     html,
     /id="adminMenu"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/,
   );
   assert.match(html, /id="view-admin-safe"[^>]*data-view[^>]*hidden/);
   assert.match(html, /予定登録\/編集/);
-  for (const id of [
-    "btnAdminCustomPush",
-    "btnSummary",
-    "btnFeedback",
-  ]) {
+  for (const id of ["btnAdminCustomPush", "btnFeedback"]) {
     const openingTag = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
     assert.ok(openingTag, `${id} が必要`);
-    assert.match(openingTag[0], /\bdisabled\b/);
+    assert.doesNotMatch(openingTag[0], /\bdisabled\b/);
     assert.doesNotMatch(openingTag[0], /data-view-target/);
   }
+  assert.doesNotMatch(html, /id="btnSummary"/);
+  assert.doesNotMatch(html, /id="view-summary"/);
   const scheduleButton = html.match(
     /<button[^>]*id="btnAdminMenuSchedules"[^>]*>/,
   );
@@ -217,6 +217,8 @@ test("管理者メニューは認証済み予定管理・出欠結果・配車�
   assert.match(html, /削除はまだ利用できません/);
   assert.match(html, /showStagingAuthenticatedView_\("view-admin-safe"\)/);
   assert.match(html, /showStagingAuthenticatedView_\("view-admin-report"\)/);
+  assert.match(html, /showStagingAuthenticatedView_\("view-custom-push"\)/);
+  assert.match(html, /showStagingAuthenticatedView_\("view-feedback"\)/);
   assert.match(
     html,
     /adult: "大人"[\s\S]*child: "子ども"[\s\S]*both: "両方"/,
@@ -229,6 +231,33 @@ test("管理者メニューは認証済み予定管理・出欠結果・配車�
     ),
     /API_ENDPOINT|no-cors|lineId|memberId|adminListFetch|show\("#view-admin"\)/,
   );
+});
+
+test("カスタム通知とご意見BOXは認証モジュールだけへ接続し結果不明を自動再送しない", () => {
+  const start = html.indexOf("function stagingAuthenticatedApiOptions_");
+  const end = html.indexOf("function bindStagingAdminSafe_", start);
+  const flow = html.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  for (const method of [
+    "previewAuthenticatedCustomNotification_",
+    "submitAuthenticatedCustomNotification_",
+    "submitAuthenticatedFeedback_",
+    "loadAuthenticatedAdminFeedback_",
+    "updateAuthenticatedAdminFeedbackStatus_",
+  ]) {
+    assert.match(flow, new RegExp(method));
+    assert.match(authSource, new RegExp(method));
+  }
+  assert.match(flow, /送信待ちへ登録しました。実送信結果とは異なります/);
+  assert.match(flow, /自動再送はしません/);
+  assert.match(flow, /自動再送はしていません/);
+  assert.match(flow, /createElement/);
+  assert.match(flow, /textContent/);
+  assert.doesNotMatch(
+    flow,
+    /API_ENDPOINT|GAS_ENDPOINT|D1_ORIGIN|no-cors|getDecodedIDToken|lineId|memberId|extraLineIds|senderLineId|fetch\(|innerHTML|localStorage|sessionStorage/,
+  );
+  assert.match(envSource, /frontVersion:\s*"Front v6\.9\.0"/);
 });
 
 test("配車補助は認証済みAPIと安全なDOMだけを使い入力を画面内に保持する", () => {
@@ -389,7 +418,7 @@ test("production形式の出欠UIは安全なDOMと予定単位buttonだけを�
 
 test("通常読み取りフローは許可された2 APIだけを使用し書き込みへ進まない", () => {
   const start = authSource.indexOf("async function startStagingAuthenticatedReadOnly");
-  const end = authSource.indexOf("\n  return {", start);
+  const end = authSource.indexOf("\n  const FEEDBACK_CATEGORIES", start);
   const flow = authSource.slice(start, end);
   assert.doesNotMatch(flow, /attendance\/submit|\/line\/schedules|events\/by-date/);
   assert.doesNotMatch(flow, /\/line\/admin|\/admin\/|feedback|API_ENDPOINT/);
