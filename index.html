@@ -3304,51 +3304,54 @@
     </style>
     <!-- ===== Custom Overrides（最後に評価されるCSS） ===== -->
         <style id="custom-overrides">
-        .adminSafeStatus{
-            display:flex;
-            align-items:center;
-            justify-content:space-between;
-            gap:8px;
-            margin-bottom:10px;
-        }
         .adminSafeScheduleList{
             display:grid;
             gap:10px;
         }
         .adminSafeScheduleCard{
             margin:0;
-            padding:0;
-            overflow:hidden;
         }
-        .adminSafeScheduleCard > summary{
+        #adminSafeListAcc .fHead{
+            background:#fbf1eb !important;
+            border-radius:10px;
             cursor:pointer;
-            list-style:none;
-            padding:14px 16px;
         }
-        .adminSafeScheduleCard > summary::-webkit-details-marker{ display:none; }
-        .adminSafeScheduleTitle{
-            font-weight:700;
-            line-height:1.45;
+        #adminSafeListAcc.open .fHead{
+            background:var(--ui-secondary) !important;
         }
-        .adminSafeScheduleMeta{
-            color:var(--c-muted);
-            font-size:12px;
-            margin-top:4px;
+        #adminSafeListAcc .fBody{ display:none; }
+        #adminSafeListAcc.open .fBody{
+            display:block;
+            padding-top:12px !important;
         }
-        .adminSafeScheduleBody{
-            border-top:1px solid var(--c-border);
-            padding:12px 16px 16px;
-            display:grid;
-            gap:8px;
+        #adminSafeListAcc .adminControls{ margin-top:4px; }
+        #adminSafeListAcc .adminControls .schedSel.short{
+            width:100px !important;
+            min-width:100px !important;
+            max-width:100%;
         }
-        .adminSafeScheduleRow{
-            display:grid;
-            grid-template-columns:7.5em minmax(0, 1fr);
-            gap:8px;
+        #adminSafeListAcc #btnAdminSafeReload{
+            min-height:30px;
+            padding:6px 10px;
             font-size:13px;
+            border-radius:9px;
         }
-        .adminSafeScheduleLabel{ color:var(--c-muted); }
+        #adminSafeListAcc .btn-edit{
+            min-height:32px;
+            padding:6px 10px;
+            font-size:13px;
+            border-radius:9px;
+            background:#fff !important;
+            color:color-mix(in srgb, var(--c-primary-2), #000 0%) !important;
+            border:1px solid color-mix(in srgb, var(--c-primary-2), #000 12%) !important;
+            box-shadow:0 1px 3px rgba(160,60,32,0.08);
+        }
+        #adminSafeListAcc .btn-edit:hover{
+            background:#fff8f4 !important;
+            border-color:color-mix(in srgb, var(--c-primary-2), #000 20%) !important;
+        }
         .adminSafeReadOnlyNotice{
+            margin-top:12px;
             border:1px solid #93c5fd;
             background:#eff6ff;
             color:#1e3a8a;
@@ -3356,27 +3359,6 @@
             padding:10px 12px;
             font-size:13px;
         }
-        .adminSafeControls,
-        .adminSafeFormGrid{
-            display:grid;
-            grid-template-columns:minmax(0, 1fr) minmax(0, 1fr);
-            gap:12px;
-        }
-        .adminSafeControls{ align-items:end; margin-top:12px; }
-        .adminSafeField{ display:grid; gap:5px; min-width:0; }
-        .adminSafeFieldWide{ grid-column:1 / -1; }
-        .adminSafeField label{ font-size:12px; color:var(--c-muted); }
-        .adminSafeField input,
-        .adminSafeField select,
-        .adminSafeField textarea{ width:100%; min-width:0; }
-        .adminSafeFormActions{
-            display:flex;
-            gap:8px;
-            justify-content:flex-end;
-            flex-wrap:wrap;
-            margin-top:14px;
-        }
-        .adminSafeEditButton{ justify-self:end; }
         .adminSafeSaveNotice{
             margin-top:12px;
             border:1px solid #2563eb;
@@ -3386,10 +3368,22 @@
             padding:9px 11px;
             font-size:12px;
         }
-        @media (max-width:560px){
-            .adminSafeControls,
-            .adminSafeFormGrid{ grid-template-columns:minmax(0, 1fr); }
-            .adminSafeFieldWide{ grid-column:auto; }
+        #view-admin #adminSafeNote{
+            -webkit-appearance:none;
+            appearance:none;
+            border:1px solid var(--c-border) !important;
+            border-radius:8px !important;
+            background:#fff !important;
+            padding:8px !important;
+            font-size:15px !important;
+            line-height:1.4;
+            box-sizing:border-box;
+        }
+        @media (max-width:420px){
+            #adminSafeListAcc .adminControls .schedSel.short{
+                width:100px !important;
+                min-width:100px !important;
+            }
         }
         </style>
   
@@ -3817,10 +3811,10 @@
             </div>
         </section>
 
-    <!-- ===== View: 認証済み管理者向け予定一覧（読み取り専用） ===== -->
-        <section id="view-admin-safe" data-view hidden>
+    <!-- ===== View: 認証済み管理者向け予定登録・編集 ===== -->
+        <section id="view-admin" data-view hidden>
             <div class="row-space">
-                <div class="sectionTitle">予定登録・編集（管理者）</div>
+                <div class="sectionTitle">予定登録（管理者）</div>
                 <button
                     id="btnAdminSafeBack"
                     class="btn btn-ghost btn-sm"
@@ -3829,135 +3823,184 @@
                     トップに戻る
                 </button>
             </div>
-            <div class="card">
-                <div class="adminSafeStatus">
-                    <div>
-                        <div class="sectionTitle">現在登録中のイベント一覧</div>
-                        <div class="small muted">タップすると詳細を確認できます</div>
-                    </div>
-                    <button
-                        id="btnAdminSafeReload"
-                        class="btn btn-ghost btn-sm btn-compact"
-                        type="button"
-                    >
-                        再取得
-                    </button>
+
+            <div class="card fEvent" id="adminSafeListAcc">
+                <div
+                    class="fHead"
+                    role="button"
+                    tabindex="0"
+                    aria-expanded="false"
+                    aria-controls="adminSafeListBody"
+                    style="display:flex; align-items:center; justify-content:space-between;"
+                >
+                    <div class="sectionTitle" style="margin:0;">現在登録中のイベント一覧</div>
+                    <span class="small muted">タップで開閉</span>
                 </div>
-                <div class="adminSafeReadOnlyNotice">
-                    新規登録と編集を安全な認証済み経路で試験できます。削除はまだ利用できません。
-                </div>
-                <div class="adminSafeControls">
-                    <div class="adminSafeField">
-                        <label for="adminSafeDays">一覧の表示期間（日数）</label>
-                        <select id="adminSafeDays" class="selectBtn">
+
+                <div class="fBody" id="adminSafeListBody">
+                    <div class="adminControls">
+                        <label for="adminSafeDays" class="admLabel">一覧の表示期間（日数）</label>
+                        <select id="adminSafeDays" class="selectBtn schedSel short">
                             <option value="30">30日</option>
                             <option value="60" selected>60日</option>
                             <option value="90">90日</option>
                         </select>
-                    </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeSegmentFilter">対象区分フィルタ</label>
-                        <select id="adminSafeSegmentFilter" class="selectBtn">
-                            <option value="">すべて</option>
+
+                        <label for="adminSafeSegmentFilter" class="admLabel">対象区分フィルタ</label>
+                        <select id="adminSafeSegmentFilter" class="selectBtn schedSel short">
+                            <option value="">（すべて）</option>
                             <option value="大人">大人</option>
                             <option value="子ども">子ども</option>
                             <option value="両方">両方</option>
                         </select>
+
+                        <div class="span2">
+                            <button
+                                id="btnAdminSafeReload"
+                                class="btn btn-ghost btn-sm btn-compact"
+                                type="button"
+                            >
+                                再取得
+                            </button>
+                        </div>
                     </div>
+
+                    <div class="adminSafeReadOnlyNotice">
+                        STAGING／テスト環境です。新規登録と編集は認証済み経路だけを使用し、削除はまだ利用できません。
+                    </div>
+                    <div
+                        id="adminSafeScheduleMessage"
+                        class="muted"
+                        role="status"
+                        aria-live="polite"
+                        style="margin-top:12px;"
+                    ></div>
+                    <div
+                        id="adminSafeScheduleList"
+                        class="adminSafeScheduleList"
+                        style="margin-top:12px;"
+                    ></div>
                 </div>
-                <div
-                    id="adminSafeScheduleMessage"
-                    class="muted"
-                    role="status"
-                    aria-live="polite"
-                    style="margin-top:12px;"
-                ></div>
-                <div
-                    id="adminSafeScheduleList"
-                    class="adminSafeScheduleList"
-                    style="margin-top:12px;"
-                ></div>
             </div>
+
             <div class="card">
                 <div class="row-space">
                     <div id="adminSafeFormTitle" class="sectionTitle">新規登録</div>
                     <span id="adminSafeEditingId" class="small muted"></span>
                 </div>
-                <div class="adminSafeFormGrid">
-                    <div class="adminSafeField">
-                        <label for="adminSafeType">種別</label>
-                        <select id="adminSafeType" class="selectBtn">
-                            <option value="">選択してください</option>
+
+                <div class="adminGrid">
+                    <div>
+                        <label for="adminSafeType">種別 *</label>
+                        <select id="adminSafeType" class="selectBtn" required>
+                            <option value="" disabled hidden selected>（選択）</option>
                             <option value="発表">発表</option>
                             <option value="練習">練習</option>
                             <option value="その他">その他</option>
                         </select>
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeTargetGroup">対象区分</label>
-                        <select id="adminSafeTargetGroup" class="selectBtn">
+                    <div>
+                        <label for="adminSafeTargetGroup">対象区分 *</label>
+                        <select id="adminSafeTargetGroup" class="selectBtn" required>
                             <option value="子ども">子ども</option>
                             <option value="大人">大人</option>
                             <option value="両方">両方</option>
                         </select>
                     </div>
-                    <div class="adminSafeField adminSafeFieldWide">
-                        <label for="adminSafeTitle">タイトル</label>
-                        <input id="adminSafeTitle" type="text" maxlength="200" autocomplete="off">
+                    <div>
+                        <label for="adminSafeTitle">タイトル *</label>
+                        <input
+                            id="adminSafeTitle"
+                            type="text"
+                            maxlength="200"
+                            autocomplete="off"
+                            placeholder="例：秋祭り演奏会"
+                        >
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeDate">公演日</label>
+                    <div>
+                        <label for="adminSafeDate">日付 *</label>
                         <input id="adminSafeDate" type="date">
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeTime">開始時間</label>
+                    <div>
+                        <label for="adminSafeTime">時間（開始）</label>
                         <input id="adminSafeTime" type="time">
                     </div>
-                    <div class="adminSafeField adminSafeFieldWide">
+                    <div>
                         <label for="adminSafePlace">場所</label>
-                        <input id="adminSafePlace" type="text" maxlength="300" autocomplete="off">
+                        <input
+                            id="adminSafePlace"
+                            type="text"
+                            maxlength="300"
+                            autocomplete="off"
+                            placeholder="例：藤塚小体育館"
+                        >
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeCallTime">集合時間</label>
+                    <div>
+                        <label for="adminSafeCallTime">集合時間（発表・その他のみ）</label>
                         <input id="adminSafeCallTime" type="time">
                     </div>
-                    <div class="adminSafeField">
+                    <div>
                         <label for="adminSafeCallPlace">集合場所</label>
-                        <input id="adminSafeCallPlace" type="text" maxlength="300" autocomplete="off">
+                        <input
+                            id="adminSafeCallPlace"
+                            type="text"
+                            maxlength="300"
+                            autocomplete="off"
+                            placeholder="例：藤塚小学校"
+                        >
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeAttendance">出欠対象</label>
+                    <div>
+                        <label for="adminSafeNote">備考</label>
+                        <textarea
+                            id="adminSafeNote"
+                            rows="3"
+                            maxlength="2000"
+                            placeholder="例：駐車場は裏手、着替えて集合 など"
+                        ></textarea>
+                    </div>
+                    <div>
+                        <label for="adminSafeAttendance">出欠対象（発表のみ）</label>
                         <select id="adminSafeAttendance" class="selectBtn">
-                            <option value="Y">Y（回答を受け付ける）</option>
-                            <option value="N">N（回答不要）</option>
+                            <option value="Y">Y</option>
+                            <option value="N">N</option>
                         </select>
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafePushFlag">配信フラグ</label>
-                        <select id="adminSafePushFlag" class="selectBtn"></select>
-                    </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafeDeadline">回答期限</label>
+                    <div>
+                        <label for="adminSafeDeadline">締切日</label>
                         <input id="adminSafeDeadline" type="date">
                     </div>
-                    <div class="adminSafeField">
-                        <label for="adminSafePublish">公開</label>
+                    <div>
+                        <label for="adminSafePublish">
+                            公開
+                            <span class="admNote muted">※Yes=ユーザーに公開 / No=非公開（下書き）</span>
+                        </label>
                         <select id="adminSafePublish" class="selectBtn">
                             <option value="Yes">Yes</option>
                             <option value="No">No</option>
                         </select>
                     </div>
-                    <div class="adminSafeField">
+                    <div>
                         <label for="adminSafeStatus">ステータス</label>
                         <select id="adminSafeStatus" class="selectBtn">
                             <option value="active">active</option>
                             <option value="archived">archived</option>
                         </select>
                     </div>
-                    <div class="adminSafeField adminSafeFieldWide">
-                        <label for="adminSafeNote">備考</label>
-                        <textarea id="adminSafeNote" rows="4" maxlength="2000"></textarea>
+                    <div>
+                        <label for="adminSafePushFlag">
+                            配信フラグ（必須：発表のみ）
+                            <span class="admNote muted">※Y=初回配信対象 / S=配信済 / D=締切停止 / N=配信なし</span>
+                        </label>
+                        <select id="adminSafePushFlag" class="selectBtn"></select>
                     </div>
+                </div>
+
+                <div class="hint" style="margin-top:6px;">
+                    * 必須。IDは自動採番です。<br>
+                    種別が「練習」の場合は集合時間/集合場所/締切日/配信フラグ無効化。<br>
+                    種別が「発表」以外では「出欠対象」は自動で N 固定になります。<br>
+                    「発表」の配信フラグは <b>新規登録時は Y/N のみ</b>、
+                    <b>編集時は Y/S/D/N</b> が選択可能です。
                 </div>
                 <div class="adminSafeSaveNotice">
                     STAGING／テスト環境への保存です。通信結果が不明な場合は自動再送しません。
@@ -3969,11 +4012,11 @@
                     aria-live="polite"
                     style="margin-top:10px;"
                 ></div>
-                <div class="adminSafeFormActions">
+                <div class="row right" style="margin-top:10px;">
                     <button id="btnAdminSafeReset" class="btn btn-ghost btn-sm" type="button">
-                        新規入力へ戻す
+                        新規モードに戻す
                     </button>
-                    <button id="btnAdminSafeSubmit" class="btn btn-primary btn-sm" type="button">
+                    <button id="btnAdminSafeSubmit" class="btn btn-primary" type="button">
                         新規登録
                     </button>
                 </div>
@@ -3981,7 +4024,7 @@
         </section>
 
     <!-- ===== View: 予定登録（旧管理画面・stagingでは非表示） ===== -->
-        <section id="view-admin" data-view>
+        <section id="view-admin-legacy" data-view>
             <div class="row-space">
                 <div class="sectionTitle">予定登録（管理者）</div>
                 <button
@@ -5895,7 +5938,7 @@
             "view-home",
             "view-form",
             "view-register",
-            "view-admin-safe",
+            "view-admin",
             "view-admin-report",
             "view-admin-carpool",
             "view-custom-push",
@@ -5911,21 +5954,6 @@
         if (legalFooter) legalFooter.style.display = viewId === "view-home" ? "" : "none";
         window.scrollTo({ top:0, behavior:"auto" });
         return true;
-    }
-
-    function appendAdminSafeScheduleRow_(container, label, value){
-        const normalized = String(value || "").trim();
-        if (!normalized) return;
-        const row = document.createElement("div");
-        row.className = "adminSafeScheduleRow";
-        const labelElement = document.createElement("div");
-        labelElement.className = "adminSafeScheduleLabel";
-        labelElement.textContent = label;
-        const valueElement = document.createElement("div");
-        valueElement.textContent = normalized;
-        row.appendChild(labelElement);
-        row.appendChild(valueElement);
-        container.appendChild(row);
     }
 
     function formatAdminSafeTargetGroup_(value){
@@ -5961,18 +5989,35 @@
     function autoAdminSafeDeadline_(){
         if (
             state.authenticatedAdminEdit
-            || document.getElementById("adminSafeType")?.value !== "発表"
+            || document.getElementById("adminSafeType")?.value === "練習"
         ) return;
         const eventDate = document.getElementById("adminSafeDate");
         const deadline = document.getElementById("adminSafeDeadline");
-        if (!eventDate?.value || !deadline || deadline.value) return;
+        if (
+            !eventDate?.value
+            || !deadline
+            || deadline.dataset.touched === "1"
+        ) return;
         const date = new Date(`${eventDate.value}T00:00:00`);
         if (Number.isNaN(date.getTime())) return;
         date.setDate(date.getDate() - 7);
         const year = String(date.getFullYear()).padStart(4, "0");
         const month = String(date.getMonth() + 1).padStart(2, "0");
         const day = String(date.getDate()).padStart(2, "0");
-        deadline.value = `${year}-${month}-${day}`;
+        const expected = `${year}-${month}-${day}`;
+        const wasAuto = deadline.dataset.autofilled === "1";
+        const sourceDate = deadline.dataset.autofillFrom || "";
+        if (
+            !deadline.value
+            || (wasAuto && (
+                sourceDate !== eventDate.value
+                || deadline.value !== expected
+            ))
+        ) {
+            deadline.value = expected;
+            deadline.dataset.autofilled = "1";
+            deadline.dataset.autofillFrom = eventDate.value;
+        }
     }
 
     function updateAdminSafeFormRules_(){
@@ -5982,32 +6027,59 @@
         const deadline = document.getElementById("adminSafeDeadline");
         const callTime = document.getElementById("adminSafeCallTime");
         const callPlace = document.getElementById("adminSafeCallPlace");
+        const time = document.getElementById("adminSafeTime");
+        const place = document.getElementById("adminSafePlace");
         const status = document.getElementById("adminSafeStatus");
-        if (!type || !attendance || !push || !deadline || !callTime || !callPlace) {
+        if (
+            !type || !attendance || !push || !deadline || !callTime
+            || !callPlace || !time || !place
+        ) {
             return;
         }
         const isCreate = !state.authenticatedAdminEdit;
         const isPerformance = type.value === "発表";
         const isPractice = type.value === "練習";
-        if (!isPerformance) {
-            attendance.value = "N";
-            deadline.value = "";
-        }
+
         if (isPractice) {
+            attendance.value = "N";
+            attendance.disabled = true;
+            deadline.value = "";
+            deadline.disabled = true;
+            deadline.dataset.touched = "0";
+            deadline.dataset.autofilled = "0";
+            deadline.dataset.autofillFrom = "";
             callTime.value = "";
             callPlace.value = "";
-            const time = document.getElementById("adminSafeTime");
-            const place = document.getElementById("adminSafePlace");
             const targetGroup = String(
                 document.getElementById("adminSafeTargetGroup")?.value || "",
             );
-            if (time && !time.value) {
+            if (!time.value || time.dataset.autofilled === "1") {
                 time.value = targetGroup === "大人" ? "17:30" : "17:15";
+                time.dataset.autofilled = "1";
             }
-            if (place && !place.value) place.value = "藤塚小学校体育館";
+            if (!place.value || place.dataset.autofilled === "1") {
+                place.value = "藤塚小学校体育館";
+                place.dataset.autofilled = "1";
+            }
+        } else {
+            callTime.disabled = false;
+            callPlace.disabled = false;
+            deadline.disabled = false;
+            if (time.dataset.autofilled === "1") time.value = "";
+            if (place.dataset.autofilled === "1") place.value = "";
+            time.dataset.autofilled = "0";
+            place.dataset.autofilled = "0";
+            if (isPerformance) {
+                attendance.disabled = false;
+                if (isCreate && attendance.dataset.touched !== "1") {
+                    attendance.value = "Y";
+                }
+            } else {
+                attendance.value = "N";
+                attendance.disabled = true;
+            }
+            autoAdminSafeDeadline_();
         }
-        attendance.disabled = !isPerformance;
-        deadline.disabled = !isPerformance || attendance.value !== "Y";
         callTime.disabled = isPractice;
         callPlace.disabled = isPractice;
         if (status) status.disabled = isCreate;
@@ -6031,7 +6103,6 @@
         });
         push.value = values.includes(current) ? current : "N";
         push.disabled = !isPerformance;
-        autoAdminSafeDeadline_();
     }
 
     function resetAdminSafeForm_(){
@@ -6059,6 +6130,18 @@
         const editing = document.getElementById("adminSafeEditingId");
         const submit = document.getElementById("btnAdminSafeSubmit");
         const message = document.getElementById("adminSafeFormMessage");
+        const attendance = document.getElementById("adminSafeAttendance");
+        const deadline = document.getElementById("adminSafeDeadline");
+        const time = document.getElementById("adminSafeTime");
+        const place = document.getElementById("adminSafePlace");
+        if (attendance) attendance.dataset.touched = "0";
+        if (deadline) {
+            deadline.dataset.touched = "0";
+            deadline.dataset.autofilled = "0";
+            deadline.dataset.autofillFrom = "";
+        }
+        if (time) time.dataset.autofilled = "0";
+        if (place) place.dataset.autofilled = "0";
         if (title) title.textContent = "新規登録";
         if (editing) editing.textContent = "";
         if (submit) {
@@ -6068,6 +6151,14 @@
         }
         if (message) message.textContent = "";
         updateAdminSafeFormRules_();
+    }
+
+    function setAdminSafeAccordionOpen_(open){
+        const accordion = document.getElementById("adminSafeListAcc");
+        const head = accordion?.querySelector(".fHead");
+        if (!accordion || !head) return;
+        accordion.classList.toggle("open", Boolean(open));
+        head.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
     function editAdminSafeSchedule_(schedule){
@@ -6095,6 +6186,18 @@
         const editing = document.getElementById("adminSafeEditingId");
         const submit = document.getElementById("btnAdminSafeSubmit");
         const message = document.getElementById("adminSafeFormMessage");
+        const attendance = document.getElementById("adminSafeAttendance");
+        const deadline = document.getElementById("adminSafeDeadline");
+        const time = document.getElementById("adminSafeTime");
+        const place = document.getElementById("adminSafePlace");
+        if (attendance) attendance.dataset.touched = "1";
+        if (deadline) {
+            deadline.dataset.touched = "1";
+            deadline.dataset.autofilled = "0";
+            deadline.dataset.autofillFrom = "";
+        }
+        if (time) time.dataset.autofilled = "0";
+        if (place) place.dataset.autofilled = "0";
         if (title) title.textContent = "予定を編集";
         if (editing) editing.textContent = `ID: ${schedule.eventKey}`;
         if (submit) {
@@ -6108,6 +6211,7 @@
         if (push && Array.from(push.options).some(function(option){
             return option.value === schedule.pushFlag;
         })) push.value = schedule.pushFlag;
+        setAdminSafeAccordionOpen_(false);
         document.getElementById("adminSafeFormTitle")?.scrollIntoView({
             behavior: "smooth",
             block: "start",
@@ -6130,6 +6234,16 @@
             if (!date || date < today || date > until) return false;
             return !segment
                 || formatAdminSafeTargetGroup_(schedule.targetGroup) === segment;
+        }).sort(function(a, b){
+            return String(a.date || "").localeCompare(String(b.date || ""))
+                || String(a.time || "").localeCompare(String(b.time || ""))
+                || String(a.title || "").localeCompare(
+                    String(b.title || ""),
+                    "ja",
+                )
+                || String(a.eventKey || "").localeCompare(
+                    String(b.eventKey || ""),
+                );
         });
     }
 
@@ -6148,88 +6262,84 @@
         }
         const filtered = filteredAdminSafeSchedules_(schedules);
         message.textContent = model.hasMore
-            ? `${filtered.length}件を表示中です。取得上限を超えた予定があります。`
-            : `${filtered.length}件を表示中（取得済み${schedules.length}件）です。`;
+            ? "取得上限を超えた予定があります。表示期間を短くして再取得してください。"
+            : "";
 
         if (filtered.length === 0) {
             const empty = document.createElement("div");
             empty.className = "listEmpty";
-            empty.textContent = "条件に該当する予定はありません。";
+            empty.textContent = "該当する予定はありません";
             list.appendChild(empty);
         }
         filtered.forEach(function(schedule){
-            const details = document.createElement("details");
-            details.className = "card adminSafeScheduleCard";
-            const summary = document.createElement("summary");
-            const title = document.createElement("div");
-            title.className = "adminSafeScheduleTitle";
-            title.textContent = `${window.LineAuthSession.formatYmdJapanese(schedule.date)}　${schedule.title}`;
-            const meta = document.createElement("div");
-            meta.className = "adminSafeScheduleMeta";
+            const card = document.createElement("div");
+            card.className = "card adminSafeScheduleCard";
+            const normalizedSegment = typeof normSeg === "function"
+                ? normSeg(schedule.targetGroup)
+                : "";
+            card.dataset.seg = normalizedSegment || "both";
+
+            const dateLine = document.createElement("div");
+            const dateStrong = document.createElement("b");
+            const dateLabel = typeof fmtYmd === "function"
+                ? fmtYmd(schedule.date)
+                : window.LineAuthSession.formatYmdJapanese(schedule.date);
+            const timeLabel = typeof fmtTime === "function"
+                ? fmtTime(schedule.time)
+                : String(schedule.time || "");
+            dateStrong.textContent = `${dateLabel}${timeLabel ? ` ${timeLabel}` : ""}`;
+            dateLine.appendChild(dateStrong);
+            dateLine.appendChild(document.createTextNode(
+                ` @ ${String(schedule.place || "")}`,
+            ));
+
+            const summaryLine = document.createElement("div");
+            summaryLine.className = "small";
             const targetGroupLabel = formatAdminSafeTargetGroup_(
                 schedule.targetGroup,
             );
-            const metaParts = [
-                schedule.time,
-                schedule.place,
-                schedule.kind,
-                targetGroupLabel,
-            ].filter(Boolean);
-            meta.textContent = metaParts.join("／") || "詳細情報なし";
-            summary.appendChild(title);
-            summary.appendChild(meta);
+            summaryLine.textContent =
+                `${targetGroupLabel}｜${String(schedule.kind || "")}：${String(schedule.title || "")}`;
 
-            const body = document.createElement("div");
-            body.className = "adminSafeScheduleBody";
-            appendAdminSafeScheduleRow_(body, "種別", schedule.kind);
-            appendAdminSafeScheduleRow_(body, "対象区分", targetGroupLabel);
-            appendAdminSafeScheduleRow_(body, "開始時間", schedule.time);
-            appendAdminSafeScheduleRow_(body, "場所", schedule.place);
-            appendAdminSafeScheduleRow_(body, "集合時間", schedule.callTime);
-            appendAdminSafeScheduleRow_(body, "集合場所", schedule.callPlace);
-            appendAdminSafeScheduleRow_(
-                body,
-                "出欠回答",
-                schedule.needAttendance === "Y" ? "必要" :
-                    schedule.needAttendance === "N" ? "不要" : schedule.needAttendance,
-            );
-            appendAdminSafeScheduleRow_(
-                body,
-                "公開",
-                schedule.publishFlag === "Yes" ? "公開" :
-                    schedule.publishFlag === "No" ? "非公開" : schedule.publishFlag,
-            );
-            appendAdminSafeScheduleRow_(body, "配信", schedule.pushFlag);
-            appendAdminSafeScheduleRow_(
-                body,
-                "状態",
-                formatAdminSafeStatus_(schedule.status),
-            );
-            appendAdminSafeScheduleRow_(
-                body,
-                "回答期限",
-                schedule.deadlineDate
-                    ? window.LineAuthSession.formatYmdJapanese(schedule.deadlineDate)
-                    : "",
-            );
-            appendAdminSafeScheduleRow_(body, "備考", schedule.note);
-            appendAdminSafeScheduleRow_(body, "通知件名", schedule.subject);
-            appendAdminSafeScheduleRow_(body, "通知本文", schedule.bodyTemplate);
-            appendAdminSafeScheduleRow_(body, "更新日時", schedule.updatedAt);
+            const flagsLine = document.createElement("div");
+            flagsLine.className = "small muted";
+            const deadlineLabel = schedule.deadlineDate
+                ? (
+                    typeof fmtYmd === "function"
+                        ? fmtYmd(schedule.deadlineDate)
+                        : window.LineAuthSession.formatYmdJapanese(
+                            schedule.deadlineDate,
+                        )
+                )
+                : "(なし)";
+            flagsLine.textContent = [
+                `出欠対象:${String(schedule.needAttendance || "N")}`,
+                `期限:${deadlineLabel}`,
+                `公開:${String(schedule.publishFlag || "No")}`,
+                `状態:${String(schedule.status || "archived")}`,
+                `配信:${String(schedule.pushFlag || "N")}`,
+            ].join(" / ");
+
+            const actions = document.createElement("div");
+            actions.className = "row";
+            actions.style.marginTop = "8px";
+            actions.style.justifyContent = "flex-end";
             const edit = document.createElement("button");
             edit.type = "button";
             edit.className =
-                "btn btn-ghost btn-sm btn-compact adminSafeEditButton";
+                "btn btn-ghost btn-sm btn-compact btn-edit";
             edit.textContent = "編集";
             edit.addEventListener("click", function(event){
                 event.preventDefault();
                 event.stopPropagation();
                 editAdminSafeSchedule_(schedule);
             });
-            body.appendChild(edit);
-            details.appendChild(summary);
-            details.appendChild(body);
-            list.appendChild(details);
+            actions.appendChild(edit);
+            card.appendChild(dateLine);
+            card.appendChild(summaryLine);
+            card.appendChild(flagsLine);
+            card.appendChild(actions);
+            list.appendChild(card);
         });
     }
 
@@ -7431,14 +7541,29 @@
         const feedbackButton = document.getElementById("btnFeedback");
         const reload = document.getElementById("btnAdminSafeReload");
         const back = document.getElementById("btnAdminSafeBack");
+        const accordion = document.getElementById("adminSafeListAcc");
+        const accordionHead = accordion?.querySelector(".fHead");
         if (menuButton) {
             menuButton.onclick = function(){
                 if (menuButton.disabled) return;
-                if (!showStagingAuthenticatedView_("view-admin-safe")) return;
+                if (!showStagingAuthenticatedView_("view-admin")) return;
                 loadStagingAdminSchedules_();
             };
         }
         if (reload) reload.onclick = loadStagingAdminSchedules_;
+        if (accordionHead) {
+            const toggleAccordion = function(){
+                setAdminSafeAccordionOpen_(
+                    !accordion.classList.contains("open"),
+                );
+            };
+            accordionHead.onclick = toggleAccordion;
+            accordionHead.onkeydown = function(event){
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                toggleAccordion();
+            };
+        }
         if (reportButton) {
             reportButton.onclick = function(){
                 if (
@@ -7507,11 +7632,26 @@
                 }
             };
         });
-        ["adminSafeType", "adminSafeAttendance", "adminSafeTargetGroup"].forEach(function(id){
-            document.getElementById(id).onchange = updateAdminSafeFormRules_;
-        });
+        document.getElementById("adminSafeType").onchange =
+            updateAdminSafeFormRules_;
+        document.getElementById("adminSafeTargetGroup").onchange =
+            updateAdminSafeFormRules_;
+        document.getElementById("adminSafeAttendance").onchange = function(){
+            this.dataset.touched = "1";
+            updateAdminSafeFormRules_();
+        };
         document.getElementById("adminSafeDate").onchange =
             autoAdminSafeDeadline_;
+        document.getElementById("adminSafeDeadline").oninput = function(){
+            this.dataset.touched = "1";
+            this.dataset.autofilled = "0";
+            this.dataset.autofillFrom = "";
+        };
+        ["adminSafeTime", "adminSafePlace"].forEach(function(id){
+            document.getElementById(id).oninput = function(){
+                this.dataset.autofilled = "0";
+            };
+        });
         if (back) {
             back.onclick = function(){
                 showStagingAuthenticatedView_("view-home");
