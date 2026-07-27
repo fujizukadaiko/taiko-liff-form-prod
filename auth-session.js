@@ -15,6 +15,8 @@
     "/line/admin/schedules/submit-authenticated";
   const AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH =
     "/line/admin/attendance-report-authenticated";
+  const AUTHENTICATED_ADMIN_CARPOOL_PATH =
+    "/line/admin/carpool-authenticated";
   const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -1104,6 +1106,154 @@
     try {
       idToken = getCurrentLiffIdToken_(opts.liff);
       return await fetchAdminAttendanceReport_(
+        eventKey,
+        idToken,
+        opts.dependencies,
+      );
+    } finally {
+      idToken = "";
+    }
+  }
+
+  const ADMIN_CARPOOL_FIELDS = new Set([
+    "ok",
+    "status",
+    "event",
+    "participantCount",
+    "candidateCount",
+    "candidates",
+  ]);
+  const ADMIN_CARPOOL_CANDIDATE_FIELDS = new Set([
+    "displayName",
+    "participantNames",
+    "comment",
+  ]);
+
+  function extractAdminCarpool_(body, eventKey) {
+    if (
+      !hasExactFields_(body, ADMIN_CARPOOL_FIELDS)
+      || body.ok !== true
+      || body.status !== "ok"
+      || !Array.isArray(body.candidates)
+      || body.candidates.length > 500
+      || !Number.isInteger(body.participantCount)
+      || body.participantCount < 0
+      || !Number.isInteger(body.candidateCount)
+      || body.candidateCount !== body.candidates.length
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_carpool",
+        200,
+      );
+    }
+    const event = extractAdminReportEvent_(body.event);
+    if (event.eventKey !== eventKey) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_carpool",
+        200,
+      );
+    }
+    let participantCount = 0;
+    const candidates = body.candidates.map(function (candidate) {
+      if (
+        !hasExactFields_(candidate, ADMIN_CARPOOL_CANDIDATE_FIELDS)
+        || !Array.isArray(candidate.participantNames)
+        || candidate.participantNames.length < 1
+        || candidate.participantNames.length > 20
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_carpool",
+          200,
+        );
+      }
+      const participantNames = candidate.participantNames.map(
+        function (participantName) {
+          if (
+            typeof participantName !== "string"
+            || !participantName.trim()
+            || participantName !== participantName.trim()
+            || participantName.length > 220
+          ) {
+            throw makeError(
+              AUTH_STATES.RESPONSE_ERROR,
+              "invalid_admin_carpool",
+              200,
+            );
+          }
+          return participantName;
+        },
+      );
+      if (new Set(participantNames).size !== participantNames.length) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_carpool",
+          200,
+        );
+      }
+      participantCount += participantNames.length;
+      return {
+        displayName: readResponseString(candidate, "displayName", {
+          required: true,
+          maxLength: 220,
+          code: "invalid_admin_carpool",
+        }),
+        participantNames,
+        comment: readResponseString(candidate, "comment", {
+          nullable: true,
+          maxLength: 2000,
+          code: "invalid_admin_carpool",
+        }),
+      };
+    });
+    if (body.participantCount !== participantCount) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_carpool",
+        200,
+      );
+    }
+    return {
+      event,
+      participantCount,
+      candidateCount: candidates.length,
+      candidates,
+    };
+  }
+
+  async function fetchAuthenticatedAdminCarpool_(
+    eventKey,
+    idToken,
+    dependencies,
+  ) {
+    if (
+      typeof eventKey !== "string"
+      || !ADMIN_REPORT_EVENT_KEY_PATTERN.test(eventKey)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_carpool_event",
+        0,
+      );
+    }
+    const body = await authenticatedFetch_(
+      `${AUTHENTICATED_ADMIN_CARPOOL_PATH}`
+        + `?eventKey=${encodeURIComponent(eventKey)}`,
+      { method: "GET" },
+      idToken,
+      dependencies,
+    );
+    return extractAdminCarpool_(body, eventKey);
+  }
+
+  async function loadAuthenticatedAdminCarpool(eventKey, options) {
+    const opts = options || {};
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      return await fetchAuthenticatedAdminCarpool_(
         eventKey,
         idToken,
         opts.dependencies,
@@ -3202,6 +3352,7 @@
     AUTHENTICATED_ADMIN_SCHEDULES_PATH,
     AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH,
     AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH,
+    AUTHENTICATED_ADMIN_CARPOOL_PATH,
     AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
@@ -3221,6 +3372,7 @@
     fetchAdminSchedules_,
     fetchAdminAttendanceReportEvents_,
     fetchAdminAttendanceReport_,
+    fetchAuthenticatedAdminCarpool_,
     fetchHomeSummary_,
     formatYmdJapanese,
     getAuthUiCopy,
@@ -3240,6 +3392,7 @@
     startAuthenticatedAdminSchedules,
     startAuthenticatedAdminAttendanceReport,
     loadAuthenticatedAdminAttendanceReport,
+    loadAuthenticatedAdminCarpool,
     startStagingLineAuthCheck,
     verifyLineSession_,
   };

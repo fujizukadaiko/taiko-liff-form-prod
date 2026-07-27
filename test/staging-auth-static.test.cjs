@@ -138,7 +138,7 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shellは認証済みの5 viewだけを切り替える", () => {
+test("安全shellは認証済みの6 viewだけを切り替える", () => {
   const viewStart = html.indexOf("function showStagingAuthenticatedView_");
   const shellStart = html.indexOf("function configureStagingProductionShell_");
   const viewSwitch = html.slice(viewStart, shellStart);
@@ -151,6 +151,7 @@ test("安全shellは認証済みの5 viewだけを切り替える", () => {
     "view-register",
     "view-admin-safe",
     "view-admin-report",
+    "view-admin-carpool",
   ]) {
     assert.match(viewSwitch, new RegExp(`"${viewId}"`));
   }
@@ -173,7 +174,7 @@ test("安全shellは認証済みの5 viewだけを切り替える", () => {
   assert.match(viewSwitch, /自動再送はしていません/);
 });
 
-test("管理者メニューは認証済み予定管理・出欠結果だけを有効にし旧管理画面へ接続しない", () => {
+test("管理者メニューは認証済み予定管理・出欠結果・配車補助だけを有効にし旧管理画面へ接続しない", () => {
   assert.match(
     html,
     /id="adminMenu"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/,
@@ -181,7 +182,6 @@ test("管理者メニューは認証済み予定管理・出欠結果だけを�
   assert.match(html, /id="view-admin-safe"[^>]*data-view[^>]*hidden/);
   assert.match(html, /予定登録\/編集/);
   for (const id of [
-    "btnAdminCarpool",
     "btnAdminCustomPush",
     "btnSummary",
     "btnFeedback",
@@ -202,6 +202,12 @@ test("管理者メニューは認証済み予定管理・出欠結果だけを�
   assert.ok(reportButton);
   assert.doesNotMatch(reportButton[0], /\bdisabled\b/);
   assert.doesNotMatch(reportButton[0], /data-view-target/);
+  const carpoolButton = html.match(
+    /<button[^>]*id="btnAdminCarpool"[^>]*>/,
+  );
+  assert.ok(carpoolButton);
+  assert.doesNotMatch(carpoolButton[0], /\bdisabled\b/);
+  assert.doesNotMatch(carpoolButton[0], /data-view-target/);
   assert.match(html, />\s*出欠結果一覧\s*</);
   assert.match(html, /startAuthenticatedAdminSchedules/);
   assert.match(html, /submitAuthenticatedAdminSchedule_/);
@@ -222,6 +228,39 @@ test("管理者メニューは認証済み予定管理・出欠結果だけを�
       html.indexOf("function clearAuthenticatedProductionHome_"),
     ),
     /API_ENDPOINT|no-cors|lineId|memberId|adminListFetch|show\("#view-admin"\)/,
+  );
+});
+
+test("配車補助は認証済みAPIと安全なDOMだけを使い入力を画面内に保持する", () => {
+  const start = html.indexOf("function resetStagingAdminCarpool_");
+  const end = html.indexOf("function bindStagingAdminSafe_", start);
+  const flow = html.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.match(flow, /startAuthenticatedAdminAttendanceReport/);
+  assert.match(flow, /loadAuthenticatedAdminCarpool/);
+  assert.match(flow, /state\.authenticatedAdminCarpoolEvents/);
+  assert.match(flow, /state\.authenticatedAdminCarpool/);
+  assert.match(flow, /candidate\.displayName/);
+  assert.match(flow, /candidate\.participantNames/);
+  assert.match(flow, /candidate\.comment/);
+  assert.match(flow, /createElement/);
+  assert.match(flow, /textContent/);
+  assert.match(flow, /自動再試行はしていません/);
+  assert.doesNotMatch(
+    flow,
+    /API_ENDPOINT|D1_ORIGIN|no-cors|lineId|memberId|getDecodedIDToken|innerHTML|initCarpoolPage|loadCarpoolDetail|localStorage|sessionStorage|fetch\(/,
+  );
+
+  const backButton = html.match(
+    /<button[^>]*id="btnCarpoolBack"[^>]*>/,
+  );
+  assert.ok(backButton);
+  assert.doesNotMatch(backButton[0], /data-view-target/);
+  assert.match(html, /保存はせず、この画面上で計算します/);
+  assert.match(authSource, /\/line\/admin\/carpool-authenticated/);
+  assert.doesNotMatch(
+    authSource,
+    /\/line\/attendance\/report(?:["'`?])/,
   );
 });
 
