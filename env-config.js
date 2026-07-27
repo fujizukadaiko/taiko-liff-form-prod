@@ -11,7 +11,7 @@
 
   const STAGING_CONFIG = Object.freeze({
     environment: "staging",
-    frontVersion: "Front v7.1.0",
+    frontVersion: "Front v7.1.1",
     liffId: "2008020568-2jVl00Rn",
     workerBaseUrl: STAGING_WORKER_ORIGIN,
     gasBaseUrl:
