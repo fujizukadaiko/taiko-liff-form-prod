@@ -233,6 +233,21 @@ test("管理者メニューは安全な認証済み機能だけを有効にし�
   );
 });
 
+test("旧カスタム通知とFeedbackのclick listenerは全環境で起動しない", () => {
+  assert.match(
+    html,
+    /カスタム一斉通知：送信UI[\s\S]{0,240}\(function\(\)\{\s*[\s\S]{0,160}?return;/,
+  );
+  assert.match(
+    html,
+    /フィードバック一覧ビュー（管理）[\s\S]{0,240}\(function \(\) \{\s*[\s\S]{0,180}?return;/,
+  );
+  assert.match(
+    html,
+    /「変更を保存」ボタンでまとめて更新[\s\S]{0,240}\(function \(\) \{\s*[\s\S]{0,180}?return;/,
+  );
+});
+
 test("カスタム通知とご意見BOXは認証モジュールだけへ接続し結果不明を自動再送しない", () => {
   const start = html.indexOf("function stagingAuthenticatedApiOptions_");
   const end = html.indexOf("function bindStagingAdminSafe_", start);

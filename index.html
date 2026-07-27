@@ -12866,6 +12866,8 @@
 
 /* ===== カスタム一斉通知：送信UI（リセット・プレビュー・送信） ===== */
     (function(){
+        // 認証済みqueue経路へ移行済み。旧GAS直接送信は全環境で起動しない。
+        return;
         const root = window.cpSec || document.getElementById('view-custom-push');
         if (!root) return;
 
@@ -13353,7 +13355,8 @@
 <script>
 /* ===== フィードバック一覧ビュー（管理） ===== */
     (function () {
-    if (STAGING_AUTHENTICATED_READ_ONLY) return;
+    // 認証済みWorker経路へ移行済み。旧client identity経路は全環境で起動しない。
+    return;
     // 戻る / 再読込ボタン
     document.getElementById('btnFeedbackBack')
         ?.addEventListener('click', () => show('#view-home'));
@@ -13572,6 +13575,8 @@
 
     // 「変更を保存」ボタンでまとめて更新
         (function () {
+        // 認証済みWorker経路へ移行済み。旧LINE ID保存listenerは登録しない。
+        return;
         const btn = document.getElementById('fbSave');
         const box = document.getElementById('feedbackListBox');
         if (!btn || !box) return;
