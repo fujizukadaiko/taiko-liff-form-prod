@@ -138,7 +138,7 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shellは認証済みの4 viewだけを切り替える", () => {
+test("安全shellは認証済みの5 viewだけを切り替える", () => {
   const viewStart = html.indexOf("function showStagingAuthenticatedView_");
   const shellStart = html.indexOf("function configureStagingProductionShell_");
   const viewSwitch = html.slice(viewStart, shellStart);
@@ -150,6 +150,7 @@ test("安全shellは認証済みの4 viewだけを切り替える", () => {
     "view-form",
     "view-register",
     "view-admin-safe",
+    "view-admin-report",
   ]) {
     assert.match(viewSwitch, new RegExp(`"${viewId}"`));
   }
@@ -172,7 +173,7 @@ test("安全shellは認証済みの4 viewだけを切り替える", () => {
   assert.match(viewSwitch, /自動再送はしていません/);
 });
 
-test("管理者メニューは認証済み予定一覧・登録編集だけを有効にし旧管理画面へ接続しない", () => {
+test("管理者メニューは認証済み予定管理・出欠結果だけを有効にし旧管理画面へ接続しない", () => {
   assert.match(
     html,
     /id="adminMenu"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/,
@@ -180,7 +181,6 @@ test("管理者メニューは認証済み予定一覧・登録編集だけを�
   assert.match(html, /id="view-admin-safe"[^>]*data-view[^>]*hidden/);
   assert.match(html, /予定登録\/編集/);
   for (const id of [
-    "btnAdminMenuReport",
     "btnAdminCarpool",
     "btnAdminCustomPush",
     "btnSummary",
@@ -196,6 +196,13 @@ test("管理者メニューは認証済み予定一覧・登録編集だけを�
   );
   assert.ok(scheduleButton);
   assert.doesNotMatch(scheduleButton[0], /data-view-target/);
+  const reportButton = html.match(
+    /<button[^>]*id="btnAdminMenuReport"[^>]*>/,
+  );
+  assert.ok(reportButton);
+  assert.doesNotMatch(reportButton[0], /\bdisabled\b/);
+  assert.doesNotMatch(reportButton[0], /data-view-target/);
+  assert.match(html, />\s*出欠結果一覧\s*</);
   assert.match(html, /startAuthenticatedAdminSchedules/);
   assert.match(html, /submitAuthenticatedAdminSchedule_/);
   assert.match(html, /classifyAdminScheduleSubmitError_/);
@@ -203,6 +210,7 @@ test("管理者メニューは認証済み予定一覧・登録編集だけを�
   assert.match(html, /自動再送しません/);
   assert.match(html, /削除はまだ利用できません/);
   assert.match(html, /showStagingAuthenticatedView_\("view-admin-safe"\)/);
+  assert.match(html, /showStagingAuthenticatedView_\("view-admin-report"\)/);
   assert.match(
     html,
     /adult: "大人"[\s\S]*child: "子ども"[\s\S]*both: "両方"/,
@@ -214,6 +222,42 @@ test("管理者メニューは認証済み予定一覧・登録編集だけを�
       html.indexOf("function clearAuthenticatedProductionHome_"),
     ),
     /API_ENDPOINT|no-cors|lineId|memberId|adminListFetch|show\("#view-admin"\)/,
+  );
+});
+
+test("管理者向け出欠結果は認証済みAPIだけで取得し安全なDOM操作で描画する", () => {
+  const flow = html.slice(
+    html.indexOf("function adminReportBadgeClass_"),
+    html.indexOf("function bindStagingAdminSafe_"),
+  );
+  assert.ok(flow.length > 0);
+  assert.match(flow, /startAuthenticatedAdminAttendanceReport/);
+  assert.match(flow, /loadAuthenticatedAdminAttendanceReport/);
+  assert.match(flow, /state\.authenticatedAdminReportEvents/);
+  assert.match(flow, /state\.authenticatedAdminReport/);
+  assert.match(flow, /row\.displayName/);
+  assert.match(flow, /row\.comment/);
+  assert.match(flow, /event\.accepting/);
+  assert.match(flow, /textContent/);
+  assert.match(flow, /createElement/);
+  assert.match(flow, /自動再試行はしていません/);
+  assert.doesNotMatch(
+    flow,
+    /API_ENDPOINT|no-cors|lineId|memberId|getDecodedIDToken|renderReport|reportReload|innerHTML|show\("#view-admin-report"\)/,
+  );
+
+  const backButton = html.match(
+    /<button[^>]*id="btnReportBack"[^>]*>/,
+  );
+  assert.ok(backButton);
+  assert.doesNotMatch(backButton[0], /data-view-target/);
+  assert.doesNotMatch(
+    authSource,
+    /\/line\/admin\/attendance-report(?:["'`?])/,
+  );
+  assert.match(
+    authSource,
+    /\/line\/admin\/attendance-report-authenticated/,
   );
 });
 
