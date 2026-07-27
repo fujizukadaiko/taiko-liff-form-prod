@@ -284,6 +284,29 @@ function adminAttendanceReportResponse(overrides = {}) {
   };
 }
 
+function adminCarpoolResponse(overrides = {}) {
+  return {
+    ok: true,
+    status: "ok",
+    event: adminAttendanceReportEvent(),
+    participantCount: 3,
+    candidateCount: 2,
+    candidates: [
+      {
+        displayName: "登録者1",
+        participantNames: ["演奏者1", "演奏者2【大人の部】"],
+        comment: "車出し可能です",
+      },
+      {
+        displayName: "登録者2",
+        participantNames: ["演奏者3"],
+        comment: "",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function writableAdminSchedule(overrides = {}) {
   return {
     eventKey: "20990102AA",
@@ -2463,6 +2486,137 @@ test("管理出欠レポートは不正event key・Token欠落・権限拒否を
 
   await assert.rejects(
     auth.startAuthenticatedAdminAttendanceReport({
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () =>
+        jsonResponse({ ok: false, error: "admin_forbidden" }, 403)
+      ),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.status === 403,
+  );
+});
+
+test("管理配車補助は生IDを送らず認証済みGETだけで候補を取得する", async () => {
+  const requests = [];
+  const dependencies = fetchDependencies(async (url, options) => {
+    requests.push({ url, options });
+    return jsonResponse(adminCarpoolResponse());
+  });
+
+  const result = await auth.loadAuthenticatedAdminCarpool(
+    "admin-event-1",
+    {
+      liff: makeLiff(),
+      dependencies,
+    },
+  );
+
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_CARPOOL_PATH}`
+      + "?eventKey=admin-event-1",
+  );
+  assert.equal(requests[0].options.method, "GET");
+  assert.equal(
+    requests[0].options.headers.Authorization,
+    `Bearer ${TOKEN}`,
+  );
+  assert.equal(requests[0].options.body, undefined);
+  assert.doesNotMatch(
+    requests[0].url,
+    /lineId|line_id|memberId|token|header\.payload/,
+  );
+  assert.deepEqual(result, {
+    event: adminAttendanceReportEvent(),
+    participantCount: 3,
+    candidateCount: 2,
+    candidates: adminCarpoolResponse().candidates,
+  });
+  assert.doesNotMatch(
+    JSON.stringify(result),
+    /lineId|line_id|memberId|memberIds|header\.payload/,
+  );
+});
+
+test("管理配車補助は余分な属性・件数不一致・候補不正を拒否する", async (t) => {
+  for (const [name, body] of [
+    ["top余分な属性", adminCarpoolResponse({ extra: true })],
+    ["候補件数不一致", adminCarpoolResponse({ candidateCount: 1 })],
+    ["参加者件数不一致", adminCarpoolResponse({ participantCount: 4 })],
+    [
+      "候補余分な属性",
+      adminCarpoolResponse({
+        participantCount: 1,
+        candidateCount: 1,
+        candidates: [{
+          displayName: "登録者1",
+          participantNames: ["演奏者1"],
+          comment: "",
+          lineId: "forbidden",
+        }],
+      }),
+    ],
+    [
+      "参加者重複",
+      adminCarpoolResponse({
+        participantCount: 2,
+        candidateCount: 1,
+        candidates: [{
+          displayName: "登録者1",
+          participantNames: ["演奏者1", "演奏者1"],
+          comment: "",
+        }],
+      }),
+    ],
+    [
+      "event不一致",
+      adminCarpoolResponse({
+        event: adminAttendanceReportEvent({ eventKey: "other-event" }),
+      }),
+    ],
+  ]) {
+    await t.test(name, async () => {
+      await assert.rejects(
+        auth.loadAuthenticatedAdminCarpool("admin-event-1", {
+          liff: makeLiff(),
+          dependencies: fetchDependencies(async () => jsonResponse(body)),
+        }),
+        (error) => error instanceof auth.AuthSessionError
+          && error.type === auth.AUTH_STATES.RESPONSE_ERROR,
+      );
+    });
+  }
+});
+
+test("管理配車補助は不正event key・Token欠落・権限拒否を成功扱いしない", async () => {
+  let fetchCount = 0;
+  await assert.rejects(
+    auth.loadAuthenticatedAdminCarpool(" invalid ", {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () => {
+        fetchCount += 1;
+      }),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.code === "invalid_admin_carpool_event",
+  );
+  assert.equal(fetchCount, 0);
+
+  await assert.rejects(
+    auth.loadAuthenticatedAdminCarpool("admin-event-1", {
+      liff: makeLiff({ getIDToken() { return ""; } }),
+      dependencies: fetchDependencies(async () => {
+        fetchCount += 1;
+      }),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.type === auth.AUTH_STATES.UNAUTHENTICATED,
+  );
+  assert.equal(fetchCount, 0);
+
+  await assert.rejects(
+    auth.loadAuthenticatedAdminCarpool("admin-event-1", {
       liff: makeLiff(),
       dependencies: fetchDependencies(async () =>
         jsonResponse({ ok: false, error: "admin_forbidden" }, 403)

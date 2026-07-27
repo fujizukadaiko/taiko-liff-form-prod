@@ -3591,8 +3591,8 @@
                     <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" type="button">
                         出欠結果一覧
                     </button>
-                    <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
-                        配車補助（準備中）
+                    <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" type="button">
+                        配車補助
                     </button>
                     <button id="btnAdminCustomPush" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
                         カスタム通知（準備中）
@@ -4415,7 +4415,6 @@
                 <button
                 id="btnCarpoolBack"
                 class="btn btn-ghost btn-sm"
-                data-view-target="view-home"
                 type="button"
                 >
                 トップに戻る
@@ -4435,6 +4434,7 @@
                     class="selectBtn"
                     type="number"
                     min="0"
+                    max="100"
                     step="1"
                     inputmode="numeric"
                     value="0"
@@ -5423,6 +5423,8 @@
     authenticatedAdminSchedules: null, // Tokenや本人IDを含まない管理予定snapshot。
     authenticatedAdminReportEvents: null, // Tokenや本人IDを含まないレポート対象予定。
     authenticatedAdminReport: null, // 管理者に許可された表示用レポート。
+    authenticatedAdminCarpoolEvents: null, // 配車対象予定。Tokenや内部IDは含まない。
+    authenticatedAdminCarpool: null, // 配車候補と画面内の計算元。保存しない。
     authenticatedAdminAuthorized: false,
     authenticatedAdminEdit: null,
     };
@@ -6098,6 +6100,7 @@
             "view-register",
             "view-admin-safe",
             "view-admin-report",
+            "view-admin-carpool",
         ]);
         if (!allowedViewIds.has(viewId)) return false;
         document.querySelectorAll("[data-view]").forEach(function(view){
@@ -6809,9 +6812,371 @@
         }
     }
 
+    function resetStagingAdminCarpool_(){
+        state.authenticatedAdminCarpoolEvents = null;
+        state.authenticatedAdminCarpool = null;
+        const eventSelect = document.getElementById("carpoolEvent");
+        const extraInput = document.getElementById("carpoolExtraCount");
+        const summary = document.getElementById("carpoolSummary");
+        const alert = document.getElementById("carpoolDrumAlert");
+        const box = document.getElementById("carpoolBox");
+        if (eventSelect) {
+            eventSelect.textContent = "";
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "（選択してください）";
+            eventSelect.appendChild(option);
+        }
+        if (extraInput) extraInput.value = "0";
+        if (summary) summary.textContent = "";
+        if (alert) alert.hidden = true;
+        if (box) {
+            box.className = "muted";
+            box.textContent = "公演を選択してください";
+        }
+    }
+
+    function analyzeStagingCarpoolComment_(comment){
+        const value = String(comment || "").trim();
+        if (!value) return null;
+        const negative = [
+            /車\s*出せ\s*ません/,
+            /車出し\s*(不可|無理|できません|出来ません)/,
+            /車は\s*出せ\s*ません/,
+            /乗せて\s*もら/,
+            /乗せてもら/,
+            /.+さんの車/,
+            /現地で/,
+            /自車で行きます/,
+        ];
+        if (negative.some(function(pattern){ return pattern.test(value); })) {
+            return { level: "weak", label: "車出し候補は要確認" };
+        }
+        const positive = [
+            /車\s*出せ\s*ます/,
+            /車出し\s*(可能|できます|出来ます|可)/,
+            /車出しも\s*可能/,
+            /必要なら\s*車/,
+            /同乗可能/,
+            /\d+\s*人乗り/,
+            /[０-９]\s*人乗り/,
+            /軽自動車/,
+            /太鼓車/,
+            /太鼓.*車/,
+        ];
+        if (positive.some(function(pattern){ return pattern.test(value); })) {
+            return { level: "strong", label: "車出し候補かも" };
+        }
+        return null;
+    }
+
+    function stagingCarpoolInteger_(input){
+        const value = Number(input && input.value);
+        if (!Number.isFinite(value)) return 0;
+        return Math.min(100, Math.max(0, Math.trunc(value)));
+    }
+
+    function renderStagingAdminCarpoolSummary_(){
+        const root = document.getElementById("carpoolSummary");
+        const box = document.getElementById("carpoolBox");
+        if (!root) return;
+        const participantCount = Number.isInteger(
+            state.authenticatedAdminCarpool?.participantCount,
+        )
+            ? state.authenticatedAdminCarpool.participantCount
+            : 0;
+        const extra = stagingCarpoolInteger_(
+            document.getElementById("carpoolExtraCount"),
+        );
+        let capacity = 0;
+        let drumCount = 0;
+        box?.querySelectorAll(".carpoolRow").forEach(function(row){
+            const candidate = row.querySelector(".carpoolCandidate");
+            if (!candidate?.checked) return;
+            capacity += stagingCarpoolInteger_(
+                row.querySelector(".carpoolCap"),
+            );
+            if (row.querySelector(".carpoolDrum")?.checked) drumCount += 1;
+        });
+        const total = participantCount + extra;
+        const difference = capacity - total;
+        const drumReady = drumCount > 0;
+        const items = [
+            ["参加演奏者数", `${participantCount}名`, ""],
+            ["追加同行者人数", `${extra}名`, ""],
+            ["総輸送対象人数", `${total}名`, ""],
+            ["合計運搬可能人数", `${capacity}名`, ""],
+            ["差分", `${difference >= 0 ? "+" : ""}${difference}名`,
+                difference >= 0 ? "ok" : "warn"],
+            ["太鼓運搬車", drumReady ? "設定あり" : "未設定",
+                drumReady ? "ok" : "warn"],
+        ];
+        root.textContent = "";
+        items.forEach(function(item){
+            const card = document.createElement("div");
+            card.className = "carpoolKpi";
+            const label = document.createElement("div");
+            label.className = "carpoolKpiLabel";
+            label.textContent = item[0];
+            const value = document.createElement("div");
+            value.className = `carpoolKpiValue ${item[2]}`.trim();
+            value.textContent = item[1];
+            card.appendChild(label);
+            card.appendChild(value);
+            root.appendChild(card);
+        });
+        const alert = document.getElementById("carpoolDrumAlert");
+        if (alert) {
+            alert.hidden = !state.authenticatedAdminCarpool
+                || !participantCount
+                || drumReady;
+        }
+    }
+
+    function setStagingCarpoolCandidateEnabled_(row, enabled){
+        row.classList.toggle("is-open", Boolean(enabled));
+        row.querySelectorAll(
+            ".carpoolCap, .carpoolDrum, .carpoolMemo",
+        ).forEach(function(control){
+            control.disabled = !enabled;
+            if (!enabled) {
+                if (control.type === "checkbox") control.checked = false;
+                else control.value = "";
+            }
+        });
+    }
+
+    function appendStagingCarpoolCandidate_(table, candidate){
+        const row = document.createElement("div");
+        row.className = "carpoolRow";
+        const compact = document.createElement("div");
+        compact.className = "carpoolCompact";
+        const topLine = document.createElement("div");
+        topLine.className = "carpoolTopLine";
+        const nameCell = document.createElement("div");
+        nameCell.className = "carpoolCellName";
+        const name = document.createElement("div");
+        name.className = "carpoolName";
+        name.textContent = candidate.displayName;
+        const participants = document.createElement("div");
+        participants.className = "carpoolParticipants";
+        participants.textContent = `参加者: ${candidate.participantNames.join("、")}`;
+        nameCell.appendChild(name);
+        nameCell.appendChild(participants);
+        const assistData = analyzeStagingCarpoolComment_(candidate.comment);
+        if (assistData) {
+            const assist = document.createElement("span");
+            assist.className = assistData.level === "weak"
+                ? "carpoolAssist weak"
+                : "carpoolAssist";
+            assist.textContent = assistData.label;
+            nameCell.appendChild(assist);
+        }
+        const attendCell = document.createElement("div");
+        attendCell.className = "carpoolCellAttend";
+        const attend = document.createElement("span");
+        attend.className = "badge-att yes";
+        attend.textContent = "参加";
+        attendCell.appendChild(attend);
+        const candidateLabel = document.createElement("label");
+        candidateLabel.className = "carpoolCellCandidate";
+        const candidateInput = document.createElement("input");
+        candidateInput.type = "checkbox";
+        candidateInput.className = "carpoolCandidate";
+        candidateLabel.appendChild(candidateInput);
+        candidateLabel.appendChild(document.createTextNode(" 候補"));
+        topLine.appendChild(nameCell);
+        topLine.appendChild(attendCell);
+        topLine.appendChild(candidateLabel);
+        compact.appendChild(topLine);
+        if (candidate.comment) {
+            const commentCell = document.createElement("div");
+            commentCell.className = "carpoolCellComment";
+            const comment = document.createElement("div");
+            comment.className = "carpoolComment";
+            comment.textContent = candidate.comment;
+            commentCell.appendChild(comment);
+            compact.appendChild(commentCell);
+        }
+        row.appendChild(compact);
+
+        const details = document.createElement("div");
+        details.className = "carpoolDetails";
+        const capacityCell = document.createElement("div");
+        capacityCell.className = "carpoolCellCapacity";
+        const capacityLabel = document.createElement("label");
+        capacityLabel.className = "carpoolDetailLabel";
+        capacityLabel.textContent = "当日この車で運べる人数";
+        const capacity = document.createElement("input");
+        capacity.type = "number";
+        capacity.min = "0";
+        capacity.max = "100";
+        capacity.step = "1";
+        capacity.inputMode = "numeric";
+        capacity.className = "carpoolCap";
+        capacity.disabled = true;
+        capacityCell.appendChild(capacityLabel);
+        capacityCell.appendChild(capacity);
+        const drumLabel = document.createElement("label");
+        drumLabel.className = "carpoolCellDrum";
+        const drum = document.createElement("input");
+        drum.type = "checkbox";
+        drum.className = "carpoolDrum";
+        drum.disabled = true;
+        drumLabel.appendChild(drum);
+        drumLabel.appendChild(document.createTextNode(" 太鼓"));
+        const memoCell = document.createElement("div");
+        memoCell.className = "carpoolCellMemo";
+        const memoLabel = document.createElement("label");
+        memoLabel.className = "carpoolDetailLabel";
+        memoLabel.textContent = "メモ";
+        const memo = document.createElement("input");
+        memo.type = "text";
+        memo.className = "carpoolMemo";
+        memo.placeholder = "メモ";
+        memo.maxLength = 200;
+        memo.disabled = true;
+        memoCell.appendChild(memoLabel);
+        memoCell.appendChild(memo);
+        details.appendChild(capacityCell);
+        details.appendChild(drumLabel);
+        details.appendChild(memoCell);
+        row.appendChild(details);
+
+        candidateInput.addEventListener("change", function(){
+            setStagingCarpoolCandidateEnabled_(row, candidateInput.checked);
+            renderStagingAdminCarpoolSummary_();
+        });
+        [capacity, drum].forEach(function(control){
+            control.addEventListener("input", renderStagingAdminCarpoolSummary_);
+            control.addEventListener("change", renderStagingAdminCarpoolSummary_);
+        });
+        table.appendChild(row);
+    }
+
+    function renderStagingAdminCarpool_(model){
+        const box = document.getElementById("carpoolBox");
+        if (!box || !model) return;
+        box.textContent = "";
+        box.className = "";
+        if (!model.candidates.length) {
+            const card = document.createElement("div");
+            card.className = "repCard";
+            const empty = document.createElement("div");
+            empty.className = "repNA";
+            empty.textContent = "参加表明者がいません";
+            card.appendChild(empty);
+            box.appendChild(card);
+            renderStagingAdminCarpoolSummary_();
+            return;
+        }
+        const table = document.createElement("div");
+        table.className = "carpoolTable";
+        const header = document.createElement("div");
+        header.className = "carpoolHead";
+        [
+            "氏名",
+            "参加状況",
+            "コメント / 備考",
+            "車出し候補",
+            "当日この車で運べる人数",
+            "太鼓運搬車",
+            "メモ",
+        ].forEach(function(labelText){
+            const label = document.createElement("div");
+            label.textContent = labelText;
+            header.appendChild(label);
+        });
+        table.appendChild(header);
+        model.candidates.forEach(function(candidate){
+            appendStagingCarpoolCandidate_(table, candidate);
+        });
+        box.appendChild(table);
+        renderStagingAdminCarpoolSummary_();
+    }
+
+    async function loadStagingAdminCarpoolDetail_(){
+        const eventSelect = document.getElementById("carpoolEvent");
+        const box = document.getElementById("carpoolBox");
+        const eventKey = String(eventSelect?.value || "");
+        state.authenticatedAdminCarpool = null;
+        if (!eventKey || !box || !window.LineAuthSession) {
+            if (box) box.textContent = "公演を選択してください";
+            renderStagingAdminCarpoolSummary_();
+            return;
+        }
+        eventSelect.disabled = true;
+        box.className = "muted";
+        box.textContent = "管理者権限と参加者を安全に確認しています…";
+        renderStagingAdminCarpoolSummary_();
+        try {
+            const model = await window.LineAuthSession
+                .loadAuthenticatedAdminCarpool(eventKey, {
+                    liff: window.liff,
+                    dependencies: { workerBaseUrl: D1_BASE },
+                });
+            state.authenticatedAdminCarpool = model;
+            renderStagingAdminCarpool_(model);
+        } catch (_) {
+            box.className = "muted";
+            box.textContent = "参加者一覧を取得できませんでした。自動再試行はしていません。公演を選び直して再度お試しください。";
+            renderStagingAdminCarpoolSummary_();
+        } finally {
+            eventSelect.disabled = false;
+        }
+    }
+
+    async function loadStagingAdminCarpoolEvents_(){
+        const eventSelect = document.getElementById("carpoolEvent");
+        const menuButton = document.getElementById("btnAdminCarpool");
+        const box = document.getElementById("carpoolBox");
+        if (!eventSelect || !box || !window.LineAuthSession) return;
+        eventSelect.disabled = true;
+        if (menuButton) menuButton.disabled = true;
+        box.className = "muted";
+        box.textContent = "管理者権限と対象公演を安全に確認しています…";
+        try {
+            const model = await window.LineAuthSession
+                .startAuthenticatedAdminAttendanceReport({
+                    liff: window.liff,
+                    dependencies: { workerBaseUrl: D1_BASE },
+                });
+            state.authenticatedAdminCarpoolEvents = model;
+            eventSelect.textContent = "";
+            const emptyOption = document.createElement("option");
+            emptyOption.value = "";
+            emptyOption.textContent = model.events.length
+                ? "（選択してください）"
+                : "（対象の公演はありません）";
+            eventSelect.appendChild(emptyOption);
+            model.events.forEach(function(event){
+                const option = document.createElement("option");
+                option.value = event.eventKey;
+                option.textContent = adminReportEventLabel_(event);
+                eventSelect.appendChild(option);
+            });
+            box.textContent = model.events.length
+                ? "公演を選択してください"
+                : "配車を確認できる公演はありません。";
+        } catch (_) {
+            state.authenticatedAdminCarpoolEvents = null;
+            eventSelect.textContent = "";
+            const errorOption = document.createElement("option");
+            errorOption.value = "";
+            errorOption.textContent = "（取得できませんでした）";
+            eventSelect.appendChild(errorOption);
+            box.className = "muted";
+            box.textContent = "対象公演を取得できませんでした。自動再試行はしていません。トップへ戻ってから再度お試しください。";
+        } finally {
+            eventSelect.disabled = false;
+            if (menuButton) menuButton.disabled = false;
+        }
+    }
+
     function bindStagingAdminSafe_(){
         const menuButton = document.getElementById("btnAdminMenuSchedules");
         const reportButton = document.getElementById("btnAdminMenuReport");
+        const carpoolButton = document.getElementById("btnAdminCarpool");
         const reload = document.getElementById("btnAdminSafeReload");
         const back = document.getElementById("btnAdminSafeBack");
         if (menuButton) {
@@ -6833,6 +7198,17 @@
                 loadStagingAdminReportEvents_();
             };
         }
+        if (carpoolButton) {
+            carpoolButton.onclick = function(){
+                if (
+                    carpoolButton.disabled
+                    || !state.authenticatedAdminAuthorized
+                ) return;
+                if (!showStagingAuthenticatedView_("view-admin-carpool")) return;
+                resetStagingAdminCarpool_();
+                loadStagingAdminCarpoolEvents_();
+            };
+        }
         document.getElementById("repEvent").onchange =
             loadStagingAdminReportDetail_;
         document.getElementById("repAttend").onchange = function(){
@@ -6846,6 +7222,14 @@
             loadStagingAdminReportEvents_;
         document.getElementById("btnReportBack").onclick = function(){
             resetStagingAdminReport_();
+            showStagingAuthenticatedView_("view-home");
+        };
+        document.getElementById("carpoolEvent").onchange =
+            loadStagingAdminCarpoolDetail_;
+        document.getElementById("carpoolExtraCount").oninput =
+            renderStagingAdminCarpoolSummary_;
+        document.getElementById("btnCarpoolBack").onclick = function(){
+            resetStagingAdminCarpool_();
             showStagingAuthenticatedView_("view-home");
         };
         document.getElementById("btnAdminSafeReset").onclick =
