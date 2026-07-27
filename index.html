@@ -3429,7 +3429,7 @@
     <!-- ===== View: ホーム（メンバー用トップ画面） ===== -->
         <section id="view-home" data-view class="show">
             <div id="hello" class="muted" data-staging-shell="safe">
-                本人情報を安全に確認しています…
+                読み込み中…
             </div>
             <!-- 管理メニュー（管理者のみ表示） -->
                 <details
@@ -3468,7 +3468,7 @@
                 <div id="stagingHomeActions" class="homeActions" aria-label="主操作" data-staging-shell="safe">
                     <button id="btnPrimary" class="btn btn-primary btn-lg homePrimary" type="button" disabled>
                     <span class="homePrimaryText">
-                        <span class="homePrimaryTitle">本人確認中…</span>
+                        <span class="homePrimaryTitle">読み込み中…</span>
                     </span>
                     <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
@@ -3481,9 +3481,10 @@
                             </svg>
                         </span>
                         <span class="homeSecondaryText">
-                            <span class="homeSecondaryTitle">予定表（準備中）</span>
+                            <span class="homeSecondaryTitle">予定表</span>
                         </span>
                     </span>
+                    <span class="homeArrow" aria-hidden="true">›</span>
                     </button>
                 </div>
 
@@ -3498,8 +3499,8 @@
             <!-- 回答受付中の公演（密リスト＋バッジ） -->
                 <div class="card" id="cardEventsActive" data-staging-shell="safe" hidden>
                     <div class="row-space">
-                        <div class="sectionTitle homeCardTitle">本人向け予定・出欠</div>
-                        <label id="homeOnlyNALabel" style="margin-left:auto;" hidden aria-hidden="true">
+                        <div class="sectionTitle homeCardTitle">回答受付中の公演</div>
+                        <label id="homeOnlyNALabel" style="margin-left:auto;">
                             <input type="checkbox" id="homeOnlyNA" checked>
                             未定/未回答のみ表示
                         </label>
@@ -3555,17 +3556,9 @@
             </div>
 
             <section id="readOnlyScheduleSection" class="readOnlyScheduleSection" aria-labelledby="readOnlyScheduleHeading" hidden>
-                <h2 id="readOnlyScheduleHeading" class="sectionTitle">本人向け予定・出欠</h2>
+                <h2 id="readOnlyScheduleHeading" class="sectionTitle">回答する公演を選択</h2>
                 <div id="attendanceDraftPanel" class="attendanceDraftNotice" aria-live="polite" hidden>
                     <div class="saveEnvironmentNotice">STAGING／テスト環境での保存です。本番データには反映されません。</div>
-                    <div>予定をタップして開き、演奏者ごとの回答を選択してください。</div>
-                    <div>保存は予定ごとに行います。ほかの予定の未保存内容は送信しません。</div>
-                    <div>保存機能はテスト用ゲートにより停止している場合があります。</div>
-                    <div>「変更を保存しました。」と表示された回答だけがサーバーへ反映されています。</div>
-                    <div class="attendanceDraftSummary">
-                        <span id="attendanceDraftEventCount">選択を変更した予定：0件</span>
-                        <span id="attendanceDraftPerformerCount">選択を変更した演奏者：0人</span>
-                    </div>
                 </div>
                 <div id="readOnlyScheduleList" class="readOnlyScheduleList"></div>
             </section>
@@ -5937,6 +5930,7 @@
         const allowedViewIds = new Set([
             "view-home",
             "view-form",
+            "view-schedules",
             "view-register",
             "view-admin",
             "view-admin-report",
@@ -6585,7 +6579,8 @@
         const attendanceSelect = document.getElementById("repAttend");
         if (!box || !attendanceSelect || !report) return;
         box.textContent = "";
-        box.className = "";
+        // productionではrepBoxのmuted（13px）を維持したまま描画する。
+        box.className = "muted";
 
         const card = document.createElement("div");
         card.className = "repCard";
@@ -7105,6 +7100,38 @@
         };
     }
 
+    function renderCustomNotificationManualSelection_(){
+        const extra = document.getElementById("cp_extra");
+        const manual = document.getElementById("cp_manual");
+        if (!extra || !manual) return;
+        const names = Array.from(extra.selectedOptions)
+            .map(function(option){ return String(option.textContent || "").trim(); })
+            .filter(Boolean);
+        manual.textContent = names.length
+            ? names.join("、")
+            : "（未選択）";
+    }
+
+    function applyCustomNotificationMode_(){
+        const event = document.getElementById("cp_event");
+        const wrap = document.getElementById("cp_stat_wrap");
+        const lock = document.getElementById("cp_stat_lock");
+        const automatic = document.getElementById("cp_auto");
+        const manual = !event || event.value === "manual" || !event.value;
+        document.querySelectorAll("#view-custom-push .cp_stat").forEach(
+            function(input){ input.disabled = manual; },
+        );
+        if (wrap) {
+            wrap.classList.toggle("is-disabled", manual);
+            wrap.setAttribute("aria-disabled", String(manual));
+        }
+        if (lock) lock.hidden = !manual;
+        if (manual && automatic) {
+            automatic.textContent =
+                "（手動モード：自動選択は使いません）";
+        }
+    }
+
     function setCustomNotificationStatus_(message, isError){
         const status = document.getElementById("cp_status");
         if (!status) return;
@@ -7206,12 +7233,34 @@
                 );
             state.authenticatedAdminSchedules = model;
             group.textContent = "";
-            model.schedules.forEach(function(schedule){
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const until = new Date(today);
+            until.setDate(until.getDate() + 365);
+            model.schedules
+                .filter(function(schedule){
+                    const date = parseCompactYmdForProduction_(schedule.date);
+                    return date
+                        && date >= today
+                        && date <= until
+                        && schedule.kind === "発表"
+                        && String(schedule.status).toLowerCase() === "active"
+                        && String(schedule.publishFlag).toLowerCase() === "yes";
+                })
+                .sort(function(a, b){
+                    return a.date.localeCompare(b.date)
+                        || String(a.time || "99:99").localeCompare(
+                            String(b.time || "99:99"),
+                        )
+                        || a.title.localeCompare(b.title, "ja");
+                })
+                .forEach(function(schedule){
                 const option = document.createElement("option");
                 option.value = schedule.eventKey;
                 option.textContent = adminReportEventLabel_(schedule);
                 group.appendChild(option);
             });
+            applyCustomNotificationMode_();
             await refreshCustomNotificationPreview_();
         } catch (_) {
             setCustomNotificationStatus_(
@@ -7237,6 +7286,8 @@
         if (body) body.value = "";
         const count = document.getElementById("cp_count");
         if (count) count.textContent = "0 / 2000";
+        applyCustomNotificationMode_();
+        renderCustomNotificationManualSelection_();
         refreshCustomNotificationPreview_();
     }
 
@@ -7298,16 +7349,23 @@
             const manual = event.value === "manual";
             document.querySelectorAll("#view-custom-push .cp_stat").forEach(
                 function(input){
-                    input.disabled = manual;
                     if (manual) input.checked = false;
                 },
             );
+            applyCustomNotificationMode_();
             refreshCustomNotificationPreview_();
         };
         document.querySelectorAll("#view-custom-push .cp_stat").forEach(
             function(input){ input.onchange = refreshCustomNotificationPreview_; },
         );
-        if (extra) extra.onchange = refreshCustomNotificationPreview_;
+        if (extra) {
+            const updateManual = function(){
+                renderCustomNotificationManualSelection_();
+                refreshCustomNotificationPreview_();
+            };
+            extra.oninput = renderCustomNotificationManualSelection_;
+            extra.onchange = updateManual;
+        }
         if (body) body.oninput = function(){
             document.getElementById("cp_count").textContent =
                 String(body.value.length) + " / 2000";
@@ -7327,6 +7385,8 @@
         document.getElementById("btnCustomBack").onclick = function(){
             showStagingAuthenticatedView_("view-home");
         };
+        applyCustomNotificationMode_();
+        renderCustomNotificationManualSelection_();
     }
 
     function setFeedbackModalOpen_(open){
@@ -7385,11 +7445,28 @@
             if (!groups.has(item.category)) groups.set(item.category, []);
             groups.get(item.category).push(item);
         });
+        const formatDate = function(value){
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value || "");
+            const pad = function(number){
+                return String(number).padStart(2, "0");
+            };
+            return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        };
+        const lastSeen = Number(
+            state.authenticatedFeedbackLastSeenNo || 0,
+        );
         ["要望", "不具合", "デザイン", "その他"].forEach(function(category){
             const items = groups.get(category);
             if (!items || !items.length) return;
             const details = document.createElement("details");
             details.className = "fb-cat card";
+            const maxNo = Math.max.apply(
+                null,
+                items.map(function(item){ return item.no; }),
+            );
+            details.dataset.maxno = String(maxNo);
+            if (maxNo > lastSeen) details.classList.add("has-unread");
             const summary = document.createElement("summary");
             summary.className = "fb-cat-head";
             const title = document.createElement("span");
@@ -7400,18 +7477,23 @@
             count.textContent = items.length + "件";
             summary.append(title, count);
             details.appendChild(summary);
+            const list = document.createElement("div");
+            list.className = "fb-list";
             items.forEach(function(item){
                 const row = document.createElement("div");
                 row.className = "fb-row";
                 const head = document.createElement("div");
                 head.className = "fb-row-head";
+                const number = document.createElement("span");
+                number.className = "mono";
+                number.textContent = `#${item.no}`;
                 const name = document.createElement("span");
                 name.className = "name";
-                name.textContent = item.name || "（登録名なし）";
+                name.textContent = item.name || "（名無し）";
                 const date = document.createElement("span");
                 date.className = "date";
-                date.textContent = item.at;
-                head.append(name, date);
+                date.textContent = formatDate(item.at);
+                head.append(number, name, date);
                 const body = document.createElement("div");
                 body.className = "fb-row-body";
                 const message = document.createElement("div");
@@ -7420,7 +7502,7 @@
                 const wrap = document.createElement("div");
                 wrap.className = "fb-status-wrap";
                 const select = document.createElement("select");
-                select.className = "fb-status";
+                select.className = `fb-status is-${item.status}`;
                 select.dataset.feedbackId = item.feedbackId;
                 select.dataset.currentStatus = item.status;
                 select.dataset.expectedUpdatedAt = item.updatedAt;
@@ -7434,18 +7516,43 @@
                     },
                 );
                 select.onchange = function(){
-                    select.classList.toggle(
-                        "is-dirty",
-                        select.value !== select.dataset.currentStatus,
+                    ["未対応", "対応中", "保留", "完了", "却下"].forEach(
+                        function(status){
+                            select.classList.remove(`is-${status}`);
+                        },
                     );
+                    select.classList.add(`is-${select.value}`);
+                    const dirty =
+                        select.value !== select.dataset.currentStatus;
+                    select.classList.toggle("is-dirty", dirty);
+                    row.classList.toggle("is-dirty", dirty);
                 };
                 wrap.appendChild(select);
                 body.append(message, wrap);
                 row.append(head, body);
-                details.appendChild(row);
+                list.appendChild(row);
+            });
+            details.appendChild(list);
+            details.addEventListener("toggle", function(){
+                if (!details.open || !details.classList.contains("has-unread")) {
+                    return;
+                }
+                const current = Number(
+                    state.authenticatedFeedbackLastSeenNo || 0,
+                );
+                state.authenticatedFeedbackLastSeenNo =
+                    Math.max(current, maxNo);
+                details.classList.remove("has-unread");
             });
             box.appendChild(details);
         });
+        if (model.hasMore) {
+            const notice = document.createElement("div");
+            notice.className = "small muted";
+            notice.textContent =
+                "取得上限を超えた古いご意見は表示していません。";
+            box.appendChild(notice);
+        }
     }
 
     async function loadAdminFeedbackSafe_(){
@@ -7659,6 +7766,33 @@
         }
     }
 
+    function parseCompactYmdForProduction_(value){
+        const match = /^(\d{4})(\d{2})(\d{2})$/.exec(
+            String(value || ""),
+        );
+        if (!match) return null;
+        const date = new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+        );
+        date.setHours(0, 0, 0, 0);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function formatCompactYmdForProduction_(value, includeWeekday){
+        const date = parseCompactYmdForProduction_(value);
+        if (!date) return String(value || "");
+        const pad = function(number){
+            return String(number).padStart(2, "0");
+        };
+        const base =
+            `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+        return includeWeekday
+            ? `${base}（${"日月火水木金土"[date.getDay()]}）`
+            : base;
+    }
+
     function clearAuthenticatedProductionHome_(){
         state.authenticatedProductionHome = null;
         const card = document.getElementById("cardEventsActive");
@@ -7679,14 +7813,366 @@
         const productionHome = window.LineAuthSession.buildProductionHomeViewModel_(
             snapshot.viewModel,
         );
-        window.LineAuthSession.renderProductionHome_(
-            box,
-            productionHome,
-            document,
-        );
+        const onlyNotAnswered =
+            document.getElementById("homeOnlyNA")?.checked !== false;
+        const rows = productionHome.events
+            .filter(function(event){ return event.attendanceWriteAllowed; })
+            .map(function(event){
+                const performers = event.performers.filter(function(performer){
+                    return performer.attendanceWriteAllowed;
+                });
+                const missing = performers.filter(function(performer){
+                    return ["未回答", "データなし"].includes(
+                        performer.attendanceLabel,
+                    );
+                }).length;
+                const pending = performers.some(function(performer){
+                    return performer.attendanceLabel === "未定";
+                });
+                const decided = performers.filter(function(performer){
+                    return ["参加", "欠席"].includes(
+                        performer.attendanceLabel,
+                    );
+                }).length;
+                const summary = missing === performers.length
+                    ? { label:"未回答", className:"stat-na", key:"na" }
+                    : missing > 0
+                        ? { label:"一部未回答", className:"stat-pd", key:"partial" }
+                        : pending
+                            ? { label:"未定あり", className:"stat-pd", key:"pending" }
+                            : decided === performers.length
+                                ? { label:"回答済", className:"stat-ok", key:"done" }
+                                : { label:"未回答", className:"stat-na", key:"na" };
+                return { event, performers, summary };
+            })
+            .filter(function(row){
+                return !onlyNotAnswered
+                    || ["na", "partial", "pending"].includes(row.summary.key);
+            });
+
+        box.textContent = "";
+        if (!rows.length) {
+            const empty = document.createElement("div");
+            empty.className = "listEmpty";
+            empty.textContent = "該当する公演はありません";
+            box.appendChild(empty);
+        } else {
+            const list = document.createElement("div");
+            list.className = "evList";
+            rows.forEach(function(row){
+                const eventRow = document.createElement("div");
+                eventRow.className = "eventRow";
+                eventRow.tabIndex = 0;
+                eventRow.setAttribute("role", "button");
+                eventRow.setAttribute("aria-expanded", "false");
+
+                const meta = document.createElement("div");
+                meta.className = "eventMeta";
+                const head = document.createElement("div");
+                head.className = "eventHead";
+                const headLeft = document.createElement("div");
+                headLeft.className = "eventHead-left";
+                if (row.event.targetGroupLabel) {
+                    const segment = document.createElement("span");
+                    segment.className =
+                        `seg-badge ${row.event.targetGroupClass}`;
+                    segment.textContent = row.event.targetGroupLabel;
+                    headLeft.appendChild(segment);
+                }
+                const headRight = document.createElement("div");
+                headRight.className = "eventHead-right";
+                const status = document.createElement("span");
+                status.className =
+                    `pill sm ${row.summary.className}`;
+                status.textContent = row.summary.label;
+                headRight.appendChild(status);
+                head.append(headLeft, headRight);
+
+                const title = document.createElement("div");
+                title.className = "eventTitle";
+                const date = document.createElement("span");
+                date.className = "title-date";
+                date.textContent = formatCompactYmdForProduction_(
+                    row.event.date,
+                    true,
+                );
+                if (row.event.timeLabel) {
+                    date.appendChild(document.createTextNode(" "));
+                    const time = document.createElement("small");
+                    time.textContent = row.event.timeLabel;
+                    date.appendChild(time);
+                }
+                const place = document.createElement("span");
+                place.className = "title-place";
+                place.textContent = row.event.place
+                    ? `@ ${row.event.place}`
+                    : "";
+                title.append(date, place);
+
+                const deadline = document.createElement("div");
+                deadline.className = "eventSub";
+                deadline.appendChild(document.createTextNode("締切："));
+                const deadlineValue = document.createElement("span");
+                deadlineValue.className = "deadline";
+                deadlineValue.textContent = row.event.deadlineDate
+                    ? formatCompactYmdForProduction_(
+                        row.event.deadlineDate,
+                        false,
+                    )
+                    : "—";
+                deadline.appendChild(deadlineValue);
+                meta.append(head, title, deadline);
+                eventRow.appendChild(meta);
+
+                const detail = document.createElement("div");
+                detail.className = "eventDetail";
+                detail.hidden = true;
+                const chips = document.createElement("div");
+                chips.className = "row";
+                chips.style.cssText =
+                    "gap:6px;flex-wrap:wrap;padding:4px 2px 0 2px";
+                row.performers.forEach(function(performer){
+                    const chip = document.createElement("span");
+                    chip.className =
+                        `pill sm ${performer.attendanceClass}`;
+                    chip.textContent =
+                        `${performer.performerName}:${performer.attendanceLabel}`;
+                    chips.appendChild(chip);
+                });
+                detail.appendChild(chips);
+                const toggle = function(){
+                    const open = detail.hidden;
+                    detail.hidden = !open;
+                    eventRow.classList.toggle("open", open);
+                    eventRow.setAttribute("aria-expanded", String(open));
+                };
+                eventRow.onclick = toggle;
+                eventRow.onkeydown = function(event){
+                    if (event.key !== "Enter" && event.key !== " ") return;
+                    event.preventDefault();
+                    toggle();
+                };
+                list.append(eventRow, detail);
+            });
+            box.appendChild(list);
+        }
         state.authenticatedProductionHome = productionHome;
         card.hidden = false;
         card.style.display = "";
+    }
+
+    function memberHasBothSegments_(snapshot){
+        const segments = new Set(
+            (snapshot?.memberProfile?.performers || []).map(function(member){
+                const value = String(member.segment || "");
+                if (value.includes("大人") || value === "adult") return "adult";
+                if (
+                    value.includes("子ども")
+                    || value.includes("子供")
+                    || value === "child"
+                ) return "child";
+                return "";
+            }).filter(Boolean),
+        );
+        return segments.has("adult") && segments.has("child");
+    }
+
+    function scheduleTargetCode_(schedule){
+        const value = String(schedule.targetGroup || "");
+        if (value.includes("大人") || value === "adult") return "adult";
+        if (
+            value.includes("子ども")
+            || value.includes("子供")
+            || value === "child"
+        ) return "child";
+        return "both";
+    }
+
+    function appendScheduleMetaLine_(container, labelText, value, extraClass){
+        if (!value) return;
+        const line = document.createElement("div");
+        line.className = extraClass ? `scLine ${extraClass}` : "scLine";
+        const label = document.createElement("span");
+        label.className = "lbl";
+        label.textContent = labelText;
+        const content = document.createElement("span");
+        content.textContent = value;
+        line.append(label, content);
+        container.appendChild(line);
+    }
+
+    function appendMemberScheduleCard_(box, schedule){
+        const date = parseCompactYmdForProduction_(schedule.date);
+        if (!date) return;
+        const card = document.createElement("div");
+        card.className = "card scheduleCard";
+        card.dataset.seg = scheduleTargetCode_(schedule);
+        card.dataset.expanded = "false";
+
+        const dateColumn = document.createElement("div");
+        dateColumn.className = "scDateCol";
+        dateColumn.setAttribute("aria-hidden", "true");
+        [
+            ["scMonth", `${date.getMonth() + 1}月`],
+            ["scDay", String(date.getDate())],
+            ["scDow", `(${"日月火水木金土"[date.getDay()]})`],
+        ].forEach(function(entry){
+            const element = document.createElement("div");
+            element.className = entry[0];
+            element.textContent = entry[1];
+            dateColumn.appendChild(element);
+        });
+
+        const body = document.createElement("div");
+        body.className = "scBodyCol";
+        const top = document.createElement("div");
+        top.className = "scTopRow";
+        const segment = document.createElement("span");
+        const segmentCode = scheduleTargetCode_(schedule);
+        segment.className = `seg-badge seg-${segmentCode}`;
+        segment.textContent = schedule.targetGroupLabel;
+        const right = document.createElement("div");
+        right.className = "scRight";
+        if (schedule.kind) {
+            const kind = document.createElement("span");
+            const kindClass = {
+                "発表": "badge--announce",
+                "練習": "badge--practice",
+                "その他": "badge--other",
+            }[schedule.kind] || "";
+            kind.className = `kind-badge ${kindClass}`.trim();
+            kind.textContent = schedule.kind;
+            right.appendChild(kind);
+        }
+        top.append(segment, right);
+
+        const title = document.createElement("button");
+        title.type = "button";
+        title.className = "scTitleBtn";
+        title.setAttribute("aria-expanded", "false");
+        const hiddenDate = document.createElement("span");
+        hiddenDate.className = "sr-only";
+        hiddenDate.textContent =
+            formatCompactYmdForProduction_(schedule.date, true);
+        title.appendChild(hiddenDate);
+        if (schedule.time) {
+            const time = document.createElement("span");
+            time.className = "scTime";
+            time.textContent = schedule.time;
+            title.appendChild(time);
+        }
+        const titleText = document.createElement("span");
+        titleText.className = "scTitle";
+        titleText.textContent = schedule.title;
+        const caret = document.createElement("span");
+        caret.className = "scCaret";
+        caret.setAttribute("aria-hidden", "true");
+        caret.textContent = "∨";
+        title.append(titleText, caret);
+
+        const panel = document.createElement("div");
+        panel.className = "scPanel";
+        panel.hidden = true;
+        const meta = document.createElement("div");
+        meta.className = "scMeta";
+        appendScheduleMetaLine_(meta, "場所", schedule.place);
+        appendScheduleMetaLine_(
+            meta,
+            schedule.kind === "発表" ? "演奏開始" : "開始時間",
+            schedule.time,
+        );
+        appendScheduleMetaLine_(meta, "集合時間", schedule.callTime);
+        appendScheduleMetaLine_(meta, "集合場所", schedule.callPlace);
+        appendScheduleMetaLine_(meta, "備考", schedule.note, "scMemo");
+        if (meta.children.length) panel.appendChild(meta);
+        title.onclick = function(){
+            const open = panel.hidden;
+            panel.hidden = !open;
+            card.classList.toggle("is-open", open);
+            card.dataset.expanded = String(open);
+            title.setAttribute("aria-expanded", String(open));
+            caret.textContent = open ? "∧" : "∨";
+        };
+        body.append(top, title, panel);
+        card.append(dateColumn, body);
+        box.appendChild(card);
+    }
+
+    function renderStagingMemberSchedules_(){
+        const snapshot = state.authenticatedMemberSnapshot;
+        const box = document.getElementById("schedulesBox");
+        if (!box || !snapshot?.viewModel) return;
+        const days = Number(document.getElementById("selDays")?.value || 60);
+        const kind = String(document.getElementById("selKind")?.value || "");
+        const segment = String(document.getElementById("selSeg")?.value || "");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const until = new Date(today);
+        until.setDate(until.getDate() + days);
+        const schedules = (snapshot.viewModel.schedules || [])
+            .filter(function(schedule){
+                const date = parseCompactYmdForProduction_(schedule.date);
+                return date && date >= today && date <= until;
+            })
+            .filter(function(schedule){
+                return !kind || schedule.kind === kind;
+            })
+            .filter(function(schedule){
+                if (!segment) return true;
+                const code = scheduleTargetCode_(schedule);
+                return code === segment || code === "both";
+            })
+            .sort(function(a, b){
+                return a.date.localeCompare(b.date)
+                    || String(a.time || "99:99").localeCompare(
+                        String(b.time || "99:99"),
+                    )
+                    || a.title.localeCompare(b.title, "ja");
+            });
+        box.textContent = "";
+        box.className = "";
+        if (!schedules.length) {
+            const empty = document.createElement("div");
+            empty.className = "listEmpty";
+            empty.textContent = "該当する予定はありません";
+            box.appendChild(empty);
+            return;
+        }
+        schedules.forEach(function(schedule){
+            appendMemberScheduleCard_(box, schedule);
+        });
+    }
+
+    function bindStagingMemberSchedules_(){
+        const snapshot = state.authenticatedMemberSnapshot;
+        const hasBoth = memberHasBothSegments_(snapshot);
+        const segmentLabel = document.getElementById("labSeg");
+        const segmentSelect = document.getElementById("selSeg");
+        if (segmentLabel) segmentLabel.style.display = hasBoth ? "" : "none";
+        if (segmentSelect) {
+            segmentSelect.style.display = hasBoth ? "" : "none";
+            if (!hasBoth) segmentSelect.value = "";
+        }
+        ["selDays", "selKind", "selSeg"].forEach(function(id){
+            const control = document.getElementById(id);
+            if (control) control.onchange = renderStagingMemberSchedules_;
+        });
+        const back = document.getElementById("btnBackFromSchedules");
+        if (back) back.onclick = function(){
+            showStagingAuthenticatedView_("view-home");
+        };
+        const reload = document.getElementById("btnFetchSchedules");
+        if (reload) reload.onclick = async function(){
+            reload.disabled = true;
+            try {
+                await initStagingAuthenticatedReadOnly_();
+                showStagingAuthenticatedView_("view-schedules");
+                renderStagingMemberSchedules_();
+            } finally {
+                reload.disabled = false;
+            }
+        };
+        window.setIcsFeedUrl?.();
     }
 
     function addStagingMemberPerformerField_(performer){
@@ -7899,18 +8385,34 @@
 
         if (hello) {
             const messages = {
-                loading: "本人情報を安全に確認しています…",
-                registered_read_only: "本人認証済みの予定と出欠を表示しています。",
+                loading: "読み込み中…",
                 unregistered: "LINEアカウントに対応する登録情報が見つかりません。",
                 auth_error: "LINEでの本人確認を完了できませんでした。",
                 network_error: "通信エラーのため本人情報を確認できませんでした。",
                 response_error: "受信したデータを安全に確認できませんでした。",
             };
-            hello.textContent = messages[status] || messages.response_error;
+            hello.textContent = "";
+            if (
+                registered
+                && typeof profile?.inputName === "string"
+                && profile.inputName
+            ) {
+                hello.appendChild(document.createTextNode("こんにちは、"));
+                const name = document.createElement("span");
+                name.className = "helloName";
+                name.textContent = profile.inputName;
+                hello.appendChild(name);
+                hello.appendChild(document.createTextNode(" さん"));
+            } else {
+                hello.textContent =
+                    messages[status] || messages.response_error;
+            }
         }
 
         setHomePrimaryButton(
-            unregistered
+            status === "loading"
+                ? "読み込み中…"
+                : unregistered
                 ? "初回登録"
                 : viewerOnly
                     ? "登録情報を変更"
@@ -7942,8 +8444,15 @@
             backFromForm.__stagingShellBound = true;
         }
         if (schedules) {
-            schedules.disabled = true;
-            schedules.setAttribute("aria-disabled", "true");
+            const available = registered || unregistered;
+            schedules.disabled = !available;
+            schedules.setAttribute("aria-disabled", String(!available));
+            schedules.onclick = function(){
+                if (schedules.disabled) return;
+                showStagingAuthenticatedView_("view-schedules");
+                bindStagingMemberSchedules_();
+                renderStagingMemberSchedules_();
+            };
         }
         if (editNames) {
             editNames.disabled = !registered;
@@ -7968,6 +8477,17 @@
         bindStagingAdminSafe_();
         bindCustomNotificationSafe_();
         bindFeedbackSafe_();
+        bindStagingMemberSchedules_();
+        const onlyNotAnswered = document.getElementById("homeOnlyNA");
+        if (onlyNotAnswered) {
+            onlyNotAnswered.onchange = function(){
+                if (state.authenticatedMemberSnapshot?.viewModel) {
+                    renderAuthenticatedProductionHome_(
+                        state.authenticatedMemberSnapshot,
+                    );
+                }
+            };
+        }
 
         const feedback = document.getElementById("feedbackFab");
         if (feedback) {

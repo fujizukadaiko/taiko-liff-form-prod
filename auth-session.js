@@ -458,7 +458,13 @@
         ? body.member.performers
         : null;
     const events = body.events === undefined && !body.registered ? [] : body.events;
-    if (!members || !Array.isArray(events)) {
+    const schedules = body.schedules === undefined ? [] : body.schedules;
+    if (
+      !members
+      || !Array.isArray(events)
+      || !Array.isArray(schedules)
+      || schedules.length > 200
+    ) {
       throw makeError(AUTH_STATES.RESPONSE_ERROR, "invalid_home_summary", 200);
     }
     const memberProfileValue = isPlainObject(body.member) ? body.member : {};
@@ -581,6 +587,93 @@
       };
     });
 
+    const scheduleKeys = new Set();
+    const normalizedSchedules = schedules.map(function (schedule) {
+      if (
+        !isPlainObject(schedule)
+        || Object.keys(schedule).length !== 10
+        || !Object.keys(schedule).every(function (key) {
+          return [
+            "eventKey", "date", "title", "kind", "targetGroup",
+            "time", "place", "callTime", "callPlace", "note",
+          ].includes(key);
+        })
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_member_schedule",
+          200,
+        );
+      }
+      const eventKey = readResponseString(schedule, "eventKey", {
+        required: true,
+        maxLength: 128,
+        code: "invalid_member_schedule",
+      });
+      if (scheduleKeys.has(eventKey)) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "duplicate_member_schedule",
+          200,
+        );
+      }
+      scheduleKeys.add(eventKey);
+      const date = readResponseString(schedule, "date", {
+        required: true,
+        maxLength: 8,
+        code: "invalid_member_schedule",
+      });
+      parseYmd(date, "invalid_member_schedule");
+      const targetGroup = readResponseString(schedule, "targetGroup", {
+        nullable: true,
+        maxLength: 40,
+        code: "invalid_member_schedule",
+      });
+      const time = validateTime(readResponseString(schedule, "time", {
+        nullable: true,
+        maxLength: 5,
+        code: "invalid_member_schedule",
+      }));
+      const callTime = validateTime(readResponseString(schedule, "callTime", {
+        nullable: true,
+        maxLength: 5,
+        code: "invalid_member_schedule",
+      }));
+      return {
+        eventKey,
+        date,
+        title: readResponseString(schedule, "title", {
+          required: true,
+          maxLength: 200,
+          code: "invalid_member_schedule",
+        }),
+        kind: readResponseString(schedule, "kind", {
+          nullable: true,
+          maxLength: 80,
+          code: "invalid_member_schedule",
+        }),
+        targetGroup,
+        targetGroupLabel: normalizeTargetGroup(targetGroup),
+        time,
+        place: readResponseString(schedule, "place", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_member_schedule",
+        }),
+        callTime,
+        callPlace: readResponseString(schedule, "callPlace", {
+          nullable: true,
+          maxLength: 300,
+          code: "invalid_member_schedule",
+        }),
+        note: readResponseString(schedule, "note", {
+          nullable: true,
+          maxLength: 2000,
+          code: "invalid_member_schedule",
+        }),
+      };
+    });
+
     return {
       registered: body.registered,
       adminAccess: {
@@ -596,6 +689,7 @@
         }),
       },
       events: normalizedEvents,
+      schedules: normalizedSchedules,
       memberCount: normalizedMembers.length,
       eventCount: normalizedEvents.length,
     };
@@ -1684,6 +1778,7 @@
       return {
         eventKey: event.eventKey,
         title: event.title,
+        date: event.date,
         dateLabel: formatYmdJapanese(event.date, "invalid_event_date"),
         timeLabel: event.time,
         place: event.place,
@@ -1691,6 +1786,7 @@
         deadlineLabel: event.deadlineDate
           ? formatYmdJapanese(event.deadlineDate, "invalid_event_deadline")
           : "",
+        deadlineDate: event.deadlineDate || "",
         status: event.status,
         note: event.note,
         eventAllowed: event.attendanceWrite.eventAllowed,
@@ -1718,6 +1814,9 @@
     });
     return {
       events,
+      schedules: Array.isArray(home.schedules)
+        ? home.schedules.map(function (schedule) { return { ...schedule }; })
+        : [],
       members: home.members.map((member) => ({ performerName: member.performerName })),
       memberProfile: {
         inputName: home.memberProfile.inputName,
@@ -1822,6 +1921,11 @@
           maxLength: 200,
           code: "invalid_production_home_event",
         }),
+        date: readResponseString(event, "date", {
+          required: true,
+          maxLength: 8,
+          code: "invalid_production_home_event",
+        }),
         dateLabel: readResponseString(event, "dateLabel", {
           required: true,
           maxLength: 40,
@@ -1844,6 +1948,11 @@
         deadlineLabel: readResponseString(event, "deadlineLabel", {
           nullable: true,
           maxLength: 40,
+          code: "invalid_production_home_event",
+        }),
+        deadlineDate: readResponseString(event, "deadlineDate", {
+          nullable: true,
+          maxLength: 8,
           code: "invalid_production_home_event",
         }),
         attendanceWriteAllowed: event.eventAllowed,
@@ -3475,9 +3584,10 @@
       if (
         !isPlainObject(item)
         || !Object.keys(item).every((key) => [
-          "feedbackId", "name", "at", "category", "message", "status",
+          "no", "feedbackId", "name", "at", "category", "message", "status",
           "updatedAt",
         ].includes(key))
+        || !Number.isSafeInteger(item.no) || item.no < 1
         || typeof item.feedbackId !== "string"
         || !/^(?:[0-9a-f]{64}|legacy-\d+)$/.test(item.feedbackId)
         || typeof item.name !== "string" || item.name.length > 200
@@ -3498,6 +3608,7 @@
         );
       }
       return {
+        no: item.no,
         feedbackId: item.feedbackId,
         name: item.name,
         at: item.at,
