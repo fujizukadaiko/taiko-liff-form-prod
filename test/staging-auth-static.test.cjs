@@ -149,7 +149,7 @@ test("安全shellは認証済みの8 viewだけを切り替える", () => {
     "view-home",
     "view-form",
     "view-register",
-    "view-admin-safe",
+    "view-admin",
     "view-admin-report",
     "view-admin-carpool",
     "view-custom-push",
@@ -181,7 +181,8 @@ test("管理者メニューは安全な認証済み機能だけを有効にし�
     html,
     /id="adminMenu"[\s\S]*data-staging-shell="safe"[\s\S]*hidden/,
   );
-  assert.match(html, /id="view-admin-safe"[^>]*data-view[^>]*hidden/);
+  assert.match(html, /id="view-admin"[^>]*data-view[^>]*hidden/);
+  assert.match(html, /id="view-admin-legacy"[^>]*data-view/);
   assert.match(html, /予定登録\/編集/);
   for (const id of ["btnAdminCustomPush", "btnFeedback"]) {
     const openingTag = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
@@ -215,7 +216,7 @@ test("管理者メニューは安全な認証済み機能だけを有効にし�
   assert.match(html, /expectedUpdatedAt/);
   assert.match(html, /自動再送しません/);
   assert.match(html, /削除はまだ利用できません/);
-  assert.match(html, /showStagingAuthenticatedView_\("view-admin-safe"\)/);
+  assert.match(html, /showStagingAuthenticatedView_\("view-admin"\)/);
   assert.match(html, /showStagingAuthenticatedView_\("view-admin-report"\)/);
   assert.match(html, /showStagingAuthenticatedView_\("view-custom-push"\)/);
   assert.match(html, /showStagingAuthenticatedView_\("view-feedback"\)/);
@@ -231,6 +232,56 @@ test("管理者メニューは安全な認証済み機能だけを有効にし�
     ),
     /API_ENDPOINT|no-cors|lineId|memberId|adminListFetch|show\("#view-admin"\)/,
   );
+});
+
+test("安全な予定登録画面はproductionの画面構造と操作順を再利用する", () => {
+  const start = html.indexOf('<section id="view-admin"');
+  const end = html.indexOf('<section id="view-admin-legacy"', start);
+  const safeAdmin = html.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  for (const contract of [
+    /予定登録（管理者）/,
+    /class="card fEvent" id="adminSafeListAcc"/,
+    /class="fHead"[\s\S]*タップで開閉/,
+    /class="adminControls"/,
+    /class="selectBtn schedSel short"/,
+    /class="adminGrid"/,
+    /種別 \*/,
+    /対象区分 \*/,
+    /タイトル \*/,
+    /日付 \*/,
+    /集合時間（発表・その他のみ）/,
+    /出欠対象（発表のみ）/,
+    /配信フラグ（必須：発表のみ）/,
+    /新規モードに戻す/,
+  ]) {
+    assert.match(safeAdmin, contract);
+  }
+  assert.match(safeAdmin, /STAGING／テスト環境/);
+  assert.match(safeAdmin, /自動再送しません/);
+  assert.doesNotMatch(safeAdmin, /id="ad_|API_ENDPOINT|lineId|memberId|no-cors/);
+
+  const renderStart = html.indexOf("function renderStagingAdminSchedules_");
+  const renderEnd = html.indexOf(
+    "async function loadStagingAdminSchedules_",
+    renderStart,
+  );
+  const render = html.slice(renderStart, renderEnd);
+  assert.ok(renderStart >= 0 && renderEnd > renderStart);
+  assert.match(render, /card adminSafeScheduleCard/);
+  assert.match(render, /btn btn-ghost btn-sm btn-compact btn-edit/);
+  assert.match(render, /出欠対象:/);
+  assert.match(render, /期限:/);
+  assert.doesNotMatch(render, /createElement\("details"\)|innerHTML/);
+
+  const rulesStart = html.indexOf("function updateAdminSafeFormRules_");
+  const rulesEnd = html.indexOf("function resetAdminSafeForm_", rulesStart);
+  const rules = html.slice(rulesStart, rulesEnd);
+  assert.ok(rulesStart >= 0 && rulesEnd > rulesStart);
+  assert.match(rules, /attendance\.dataset\.touched !== "1"/);
+  assert.match(rules, /attendance\.value = "Y"/);
+  assert.match(rules, /deadline\.disabled = false/);
+  assert.match(rules, /autoAdminSafeDeadline_\(\)/);
 });
 
 test("旧カスタム通知とFeedbackのclick listenerは全環境で起動しない", () => {
@@ -272,7 +323,7 @@ test("カスタム通知とご意見BOXは認証モジュールだけへ接続�
     flow,
     /API_ENDPOINT|GAS_ENDPOINT|D1_ORIGIN|no-cors|getDecodedIDToken|lineId|memberId|extraLineIds|senderLineId|fetch\(|innerHTML|localStorage|sessionStorage/,
   );
-  assert.match(envSource, /frontVersion:\s*"Front v6\.9\.0"/);
+  assert.match(envSource, /frontVersion:\s*"Front v7\.0\.0"/);
 });
 
 test("配車補助は認証済みAPIと安全なDOMだけを使い入力を画面内に保持する", () => {
