@@ -226,6 +226,64 @@ function adminSchedulesResponse(overrides = {}) {
   };
 }
 
+function adminAttendanceReportEvent(overrides = {}) {
+  return {
+    eventKey: "admin-event-1",
+    date: "20260730",
+    title: "管理予定",
+    time: "18:00",
+    place: "テスト会場",
+    targetGroup: "両方",
+    deadlineDate: "20260729",
+    accepting: true,
+    ...overrides,
+  };
+}
+
+function adminAttendanceReportEventsResponse(overrides = {}) {
+  return {
+    ok: true,
+    status: "ok",
+    mode: "events",
+    events: [adminAttendanceReportEvent()],
+    hasMore: false,
+    ...overrides,
+  };
+}
+
+function adminAttendanceReportResponse(overrides = {}) {
+  return {
+    ok: true,
+    status: "ok",
+    mode: "report",
+    event: adminAttendanceReportEvent(),
+    rows: [
+      {
+        displayName: "演奏者1",
+        segment: "子ども",
+        attend: "参加",
+        comment: "テストコメント",
+        answeredAt: "2026-07-27T00:00:00.000Z",
+      },
+      {
+        displayName: "演奏者2【大人の部】",
+        segment: "大人",
+        attend: "未回答",
+        comment: "",
+        answeredAt: "",
+      },
+    ],
+    counts: {
+      participating: 1,
+      absent: 0,
+      undecided: 0,
+      unanswered: 1,
+      total: 2,
+    },
+    ...overrides,
+  };
+}
+
 function writableAdminSchedule(overrides = {}) {
   return {
     eventKey: "20990102AA",
@@ -2223,6 +2281,196 @@ test("管理予定一覧は不正契約・Token欠落・HTTP失敗を成功扱�
     );
     assert.equal(fetchCount, 0);
   });
+});
+
+test("管理出欠レポートは生IDを送らず認証済みGETだけで一覧と詳細を取得する", async () => {
+  const requests = [];
+  const dependencies = fetchDependencies(async (url, options) => {
+    requests.push({ url, options });
+    return requests.length === 1
+      ? jsonResponse(adminAttendanceReportEventsResponse())
+      : jsonResponse(adminAttendanceReportResponse());
+  });
+
+  const events = await auth.startAuthenticatedAdminAttendanceReport({
+    liff: makeLiff(),
+    dependencies,
+  });
+  const report = await auth.loadAuthenticatedAdminAttendanceReport(
+    "admin-event-1",
+    {
+      liff: makeLiff(),
+      dependencies,
+    },
+  );
+
+  assert.equal(requests.length, 2);
+  assert.equal(
+    requests[0].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH}`,
+  );
+  assert.equal(
+    requests[1].url,
+    `${TEST_WORKER_BASE_URL}${auth.AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH}`
+      + "?eventKey=admin-event-1",
+  );
+  for (const requestValue of requests) {
+    assert.equal(requestValue.options.method, "GET");
+    assert.equal(
+      requestValue.options.headers.Authorization,
+      `Bearer ${TOKEN}`,
+    );
+    assert.equal(requestValue.options.body, undefined);
+    assert.doesNotMatch(
+      requestValue.url,
+      /lineId|line_id|memberId|token|header\.payload/,
+    );
+  }
+  assert.deepEqual(events, {
+    events: [adminAttendanceReportEvent()],
+    hasMore: false,
+  });
+  assert.deepEqual(report, {
+    event: adminAttendanceReportEvent(),
+    rows: adminAttendanceReportResponse().rows,
+    counts: adminAttendanceReportResponse().counts,
+  });
+  assert.doesNotMatch(
+    JSON.stringify({ events, report }),
+    /lineId|line_id|birthYear|sortGroup|header\.payload/,
+  );
+});
+
+test("管理出欠レポートは余分な属性・件数不一致・不正値を拒否する", async (t) => {
+  for (const [name, body, detail] of [
+    [
+      "events余分な属性",
+      adminAttendanceReportEventsResponse({ extra: true }),
+      false,
+    ],
+    [
+      "event key重複",
+      adminAttendanceReportEventsResponse({
+        events: [
+          adminAttendanceReportEvent(),
+          adminAttendanceReportEvent(),
+        ],
+      }),
+      false,
+    ],
+    [
+      "detail event不一致",
+      adminAttendanceReportResponse({
+        event: adminAttendanceReportEvent({ eventKey: "other-event" }),
+      }),
+      true,
+    ],
+    [
+      "row余分な属性",
+      adminAttendanceReportResponse({
+        rows: [{
+          ...adminAttendanceReportResponse().rows[0],
+          lineId: "forbidden",
+        }],
+        counts: {
+          participating: 1,
+          absent: 0,
+          undecided: 0,
+          unanswered: 0,
+          total: 1,
+        },
+      }),
+      true,
+    ],
+    [
+      "件数不一致",
+      adminAttendanceReportResponse({
+        counts: {
+          participating: 2,
+          absent: 0,
+          undecided: 0,
+          unanswered: 0,
+          total: 2,
+        },
+      }),
+      true,
+    ],
+    [
+      "出欠不正",
+      adminAttendanceReportResponse({
+        rows: [{
+          ...adminAttendanceReportResponse().rows[0],
+          attend: "回答済み",
+        }],
+        counts: {
+          participating: 0,
+          absent: 0,
+          undecided: 0,
+          unanswered: 0,
+          total: 1,
+        },
+      }),
+      true,
+    ],
+  ]) {
+    await t.test(name, async () => {
+      const operation = detail
+        ? auth.loadAuthenticatedAdminAttendanceReport(
+          "admin-event-1",
+          {
+            liff: makeLiff(),
+            dependencies: fetchDependencies(async () => jsonResponse(body)),
+          },
+        )
+        : auth.startAuthenticatedAdminAttendanceReport({
+          liff: makeLiff(),
+          dependencies: fetchDependencies(async () => jsonResponse(body)),
+        });
+      await assert.rejects(
+        operation,
+        (error) => error instanceof auth.AuthSessionError
+          && error.type === auth.AUTH_STATES.RESPONSE_ERROR,
+      );
+    });
+  }
+});
+
+test("管理出欠レポートは不正event key・Token欠落・権限拒否を成功扱いしない", async () => {
+  let fetchCount = 0;
+  await assert.rejects(
+    auth.loadAuthenticatedAdminAttendanceReport(" invalid ", {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () => {
+        fetchCount += 1;
+      }),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.code === "invalid_admin_attendance_report_event",
+  );
+  assert.equal(fetchCount, 0);
+
+  await assert.rejects(
+    auth.startAuthenticatedAdminAttendanceReport({
+      liff: makeLiff({ getIDToken() { return ""; } }),
+      dependencies: fetchDependencies(async () => {
+        fetchCount += 1;
+      }),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.type === auth.AUTH_STATES.UNAUTHENTICATED,
+  );
+  assert.equal(fetchCount, 0);
+
+  await assert.rejects(
+    auth.startAuthenticatedAdminAttendanceReport({
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async () =>
+        jsonResponse({ ok: false, error: "admin_forbidden" }, 403)
+      ),
+    }),
+    (error) => error instanceof auth.AuthSessionError
+      && error.status === 403,
+  );
 });
 
 test("管理予定保存は認証済みPOSTだけを使い再取得version一致後に成功する", async () => {

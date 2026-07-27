@@ -3588,8 +3588,8 @@
                     <button id="btnAdminMenuSchedules" class="btn btn-outline btn-sm btn-compact" type="button">
                         予定登録/編集
                     </button>
-                    <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
-                        出欠結果一覧（準備中）
+                    <button id="btnAdminMenuReport" class="btn btn-outline btn-sm btn-compact" type="button">
+                        出欠結果一覧
                     </button>
                     <button id="btnAdminCarpool" class="btn btn-outline btn-sm btn-compact" type="button" disabled aria-disabled="true">
                         配車補助（準備中）
@@ -3604,7 +3604,7 @@
                         ご意見BOX（準備中）
                     </button>
                 </div>
-                <div class="small muted" style="margin-top:6px;">※ 管理者だけに表示しています。書き込み機能はまだ開放していません。</div>
+                <div class="small muted" style="margin-top:6px;">※ 管理者権限をサーバーで再確認して接続します。準備中の機能は操作できません。</div>
                 </div>
             </details>
 
@@ -4364,7 +4364,6 @@
                 <button
                 id="btnReportBack"
                 class="btn btn-ghost btn-sm"
-                data-view-target="view-home"
                 type="button"
                 >
                 トップに戻る
@@ -5422,6 +5421,8 @@
     authenticatedReadOnlyStatus: "loading", // staging読み取り専用。Tokenは保持しない。
     authenticatedMemberSnapshot: null, // Tokenや本人IDを含まない登録表示用snapshot。
     authenticatedAdminSchedules: null, // Tokenや本人IDを含まない管理予定snapshot。
+    authenticatedAdminReportEvents: null, // Tokenや本人IDを含まないレポート対象予定。
+    authenticatedAdminReport: null, // 管理者に許可された表示用レポート。
     authenticatedAdminAuthorized: false,
     authenticatedAdminEdit: null,
     };
@@ -6096,6 +6097,7 @@
             "view-form",
             "view-register",
             "view-admin-safe",
+            "view-admin-report",
         ]);
         if (!allowedViewIds.has(viewId)) return false;
         document.querySelectorAll("[data-view]").forEach(function(view){
@@ -6554,8 +6556,262 @@
         }
     }
 
+    function adminReportBadgeClass_(attend){
+        const classes = {
+            "参加": "yes",
+            "欠席": "no",
+            "未定": "maybe",
+            "未回答": "na",
+        };
+        return classes[attend] || "na";
+    }
+
+    function resetStagingAdminReport_(){
+        state.authenticatedAdminReportEvents = null;
+        state.authenticatedAdminReport = null;
+        const eventSelect = document.getElementById("repEvent");
+        const attendanceSelect = document.getElementById("repAttend");
+        const box = document.getElementById("repBox");
+        if (eventSelect) {
+            eventSelect.textContent = "";
+            const option = document.createElement("option");
+            option.value = "";
+            option.textContent = "（選択してください）";
+            eventSelect.appendChild(option);
+        }
+        if (attendanceSelect) attendanceSelect.value = "";
+        if (box) {
+            box.className = "muted";
+            box.textContent = "公演を選択してください";
+        }
+    }
+
+    function adminReportEventLabel_(event){
+        const date = window.LineAuthSession.formatYmdJapanese(event.date);
+        const time = event.time ? ` ${event.time}` : "";
+        return `${date}${time}　${event.title}`;
+    }
+
+    function renderStagingAdminReportEvents_(model, selectedEventKey){
+        const eventSelect = document.getElementById("repEvent");
+        const box = document.getElementById("repBox");
+        if (!eventSelect || !box) return;
+        eventSelect.textContent = "";
+        const emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = model.events.length
+            ? "（選択してください）"
+            : "（対象の公演はありません）";
+        eventSelect.appendChild(emptyOption);
+        model.events.forEach(function(event){
+            const option = document.createElement("option");
+            option.value = event.eventKey;
+            option.textContent = adminReportEventLabel_(event);
+            eventSelect.appendChild(option);
+        });
+        const selectedExists = model.events.some(function(event){
+            return event.eventKey === selectedEventKey;
+        });
+        eventSelect.value = selectedExists ? selectedEventKey : "";
+        box.className = "muted";
+        if (!model.events.length) {
+            box.textContent = "出欠結果を確認できる公演はありません。";
+        } else if (model.hasMore) {
+            box.textContent = "公演を選択してください。取得上限を超えた公演は表示していません。";
+        } else {
+            box.textContent = "公演を選択してください";
+        }
+    }
+
+    function appendStagingAdminReportHeader_(card, event){
+        const header = document.createElement("div");
+        header.className = "repHeader";
+
+        const titleLine = document.createElement("div");
+        titleLine.className = "repLine";
+        const titleLeft = document.createElement("div");
+        titleLeft.className = "repLeft";
+        const title = document.createElement("span");
+        title.className = "repTitle";
+        title.textContent = event.title;
+        titleLeft.appendChild(title);
+        titleLine.appendChild(titleLeft);
+        header.appendChild(titleLine);
+
+        const detailLine = document.createElement("div");
+        detailLine.className = "repLine repHeadRow";
+        const detailLeft = document.createElement("div");
+        detailLeft.className = "repLeft";
+        const meta = document.createElement("span");
+        meta.className = "repMeta";
+        const time = event.time ? ` ${event.time}` : "";
+        meta.appendChild(document.createTextNode(
+            `${window.LineAuthSession.formatYmdJapanese(event.date)}${time}`,
+        ));
+        if (event.place) {
+            const place = document.createElement("span");
+            place.className = "repPlace";
+            place.textContent = ` @${event.place}`;
+            meta.appendChild(place);
+        }
+        detailLeft.appendChild(meta);
+        detailLine.appendChild(detailLeft);
+
+        const detailRight = document.createElement("div");
+        detailRight.className = "repRight";
+        const status = document.createElement("span");
+        status.className = `badge-status ${event.accepting ? "open" : "closed"}`;
+        status.textContent = event.accepting ? "受付中" : "締切";
+        detailRight.appendChild(status);
+        detailLine.appendChild(detailRight);
+        header.appendChild(detailLine);
+        card.appendChild(header);
+    }
+
+    function renderStagingAdminAttendanceReport_(report){
+        const box = document.getElementById("repBox");
+        const attendanceSelect = document.getElementById("repAttend");
+        if (!box || !attendanceSelect || !report) return;
+        box.textContent = "";
+        box.className = "";
+
+        const card = document.createElement("div");
+        card.className = "repCard";
+        appendStagingAdminReportHeader_(card, report.event);
+
+        const filter = attendanceSelect.value;
+        const groups = {
+            "参加": [],
+            "未定": [],
+            "欠席": [],
+            "未回答": [],
+        };
+        report.rows.forEach(function(row){
+            groups[row.attend].push(row);
+        });
+        const order = filter
+            ? [filter]
+            : ["参加", "未定", "欠席", "未回答"];
+        let visibleGroupCount = 0;
+        order.forEach(function(attend){
+            const rows = groups[attend] || [];
+            if (!rows.length) return;
+            visibleGroupCount += 1;
+            const group = document.createElement("div");
+            group.className = "repGroup";
+            const groupHeader = document.createElement("div");
+            groupHeader.className = "repGroupHead";
+            const badge = document.createElement("span");
+            badge.className = `badge-att ${adminReportBadgeClass_(attend)}`;
+            badge.textContent = attend;
+            const count = document.createElement("span");
+            count.className = "repCount";
+            count.textContent = `${rows.length}名`;
+            groupHeader.appendChild(badge);
+            groupHeader.appendChild(count);
+            group.appendChild(groupHeader);
+
+            rows.forEach(function(row){
+                const person = document.createElement("div");
+                person.className = "repPersonRow";
+                const name = document.createElement("div");
+                name.className = "repName";
+                name.textContent = row.displayName;
+                const commentBox = document.createElement("div");
+                commentBox.className = "repAt";
+                if (row.comment) {
+                    const comment = document.createElement("span");
+                    comment.className = "repComment";
+                    comment.textContent = row.comment;
+                    commentBox.appendChild(comment);
+                }
+                person.appendChild(name);
+                person.appendChild(commentBox);
+                group.appendChild(person);
+            });
+            card.appendChild(group);
+        });
+        if (!visibleGroupCount) {
+            const empty = document.createElement("div");
+            empty.className = "repNA";
+            empty.textContent = "該当者がいません";
+            card.appendChild(empty);
+        }
+        box.appendChild(card);
+    }
+
+    async function loadStagingAdminReportDetail_(){
+        const eventSelect = document.getElementById("repEvent");
+        const reload = document.getElementById("btnReportReload");
+        const box = document.getElementById("repBox");
+        const eventKey = String(eventSelect?.value || "");
+        state.authenticatedAdminReport = null;
+        if (!eventKey || !box || !window.LineAuthSession) {
+            if (box) box.textContent = "公演を選択してください";
+            return;
+        }
+        eventSelect.disabled = true;
+        if (reload) reload.disabled = true;
+        box.className = "muted";
+        box.textContent = "管理者権限と出欠結果を安全に確認しています…";
+        try {
+            const report = await window.LineAuthSession
+                .loadAuthenticatedAdminAttendanceReport(eventKey, {
+                    liff: window.liff,
+                    dependencies: { workerBaseUrl: D1_BASE },
+                });
+            state.authenticatedAdminReport = report;
+            renderStagingAdminAttendanceReport_(report);
+        } catch (_) {
+            box.className = "muted";
+            box.textContent = "出欠結果を取得できませんでした。自動再試行はしていません。更新ボタンから再度お試しください。";
+        } finally {
+            eventSelect.disabled = false;
+            if (reload) reload.disabled = false;
+        }
+    }
+
+    async function loadStagingAdminReportEvents_(){
+        const eventSelect = document.getElementById("repEvent");
+        const reload = document.getElementById("btnReportReload");
+        const menuButton = document.getElementById("btnAdminMenuReport");
+        const box = document.getElementById("repBox");
+        if (!eventSelect || !box || !window.LineAuthSession) return;
+        const selectedEventKey = String(eventSelect.value || "");
+        state.authenticatedAdminReport = null;
+        eventSelect.disabled = true;
+        if (reload) reload.disabled = true;
+        if (menuButton) menuButton.disabled = true;
+        box.className = "muted";
+        box.textContent = "管理者権限と対象公演を安全に確認しています…";
+        try {
+            const model = await window.LineAuthSession
+                .startAuthenticatedAdminAttendanceReport({
+                    liff: window.liff,
+                    dependencies: { workerBaseUrl: D1_BASE },
+                });
+            state.authenticatedAdminReportEvents = model;
+            renderStagingAdminReportEvents_(model, selectedEventKey);
+            if (eventSelect.value) await loadStagingAdminReportDetail_();
+        } catch (_) {
+            state.authenticatedAdminReportEvents = null;
+            eventSelect.textContent = "";
+            const errorOption = document.createElement("option");
+            errorOption.value = "";
+            errorOption.textContent = "（取得できませんでした）";
+            eventSelect.appendChild(errorOption);
+            box.className = "muted";
+            box.textContent = "対象公演を取得できませんでした。自動再試行はしていません。トップへ戻ってから再度お試しください。";
+        } finally {
+            eventSelect.disabled = false;
+            if (reload) reload.disabled = false;
+            if (menuButton) menuButton.disabled = false;
+        }
+    }
+
     function bindStagingAdminSafe_(){
         const menuButton = document.getElementById("btnAdminMenuSchedules");
+        const reportButton = document.getElementById("btnAdminMenuReport");
         const reload = document.getElementById("btnAdminSafeReload");
         const back = document.getElementById("btnAdminSafeBack");
         if (menuButton) {
@@ -6566,6 +6822,32 @@
             };
         }
         if (reload) reload.onclick = loadStagingAdminSchedules_;
+        if (reportButton) {
+            reportButton.onclick = function(){
+                if (
+                    reportButton.disabled
+                    || !state.authenticatedAdminAuthorized
+                ) return;
+                if (!showStagingAuthenticatedView_("view-admin-report")) return;
+                resetStagingAdminReport_();
+                loadStagingAdminReportEvents_();
+            };
+        }
+        document.getElementById("repEvent").onchange =
+            loadStagingAdminReportDetail_;
+        document.getElementById("repAttend").onchange = function(){
+            if (state.authenticatedAdminReport) {
+                renderStagingAdminAttendanceReport_(
+                    state.authenticatedAdminReport,
+                );
+            }
+        };
+        document.getElementById("btnReportReload").onclick =
+            loadStagingAdminReportEvents_;
+        document.getElementById("btnReportBack").onclick = function(){
+            resetStagingAdminReport_();
+            showStagingAuthenticatedView_("view-home");
+        };
         document.getElementById("btnAdminSafeReset").onclick =
             resetAdminSafeForm_;
         document.getElementById("btnAdminSafeSubmit").onclick =

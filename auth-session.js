@@ -13,6 +13,8 @@
     "/line/admin/schedules-authenticated";
   const AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH =
     "/line/admin/schedules/submit-authenticated";
+  const AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH =
+    "/line/admin/attendance-report-authenticated";
   const MEMBER_SEGMENTS = new Set(["子どもの部", "大人の部"]);
   const DEFAULT_TIMEOUT_MS = 10000;
 
@@ -797,6 +799,315 @@
       }
       idToken = validateIdToken(opts.liff.getIDToken());
       return await fetchAdminSchedules_(idToken, opts.dependencies);
+    } finally {
+      idToken = "";
+    }
+  }
+
+  const ADMIN_REPORT_EVENT_FIELDS = new Set([
+    "eventKey",
+    "date",
+    "title",
+    "time",
+    "place",
+    "targetGroup",
+    "deadlineDate",
+    "accepting",
+  ]);
+  const ADMIN_REPORT_ROW_FIELDS = new Set([
+    "displayName",
+    "segment",
+    "attend",
+    "comment",
+    "answeredAt",
+  ]);
+  const ADMIN_REPORT_COUNT_FIELDS = new Set([
+    "participating",
+    "absent",
+    "undecided",
+    "unanswered",
+    "total",
+  ]);
+  const ADMIN_REPORT_EVENT_KEY_PATTERN =
+    /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+  const ADMIN_REPORT_ATTENDANCE_VALUES =
+    new Set(["参加", "欠席", "未定", "未回答"]);
+  const ADMIN_REPORT_SEGMENTS = new Set(["子ども", "大人", "両方"]);
+
+  function hasExactFields_(value, fields) {
+    return isPlainObject(value)
+      && Object.keys(value).length === fields.size
+      && Object.keys(value).every(function (key) {
+        return fields.has(key);
+      });
+  }
+
+  function extractAdminReportEvent_(event) {
+    if (!hasExactFields_(event, ADMIN_REPORT_EVENT_FIELDS)) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    const eventKey = readResponseString(event, "eventKey", {
+      required: true,
+      maxLength: 128,
+      code: "invalid_admin_attendance_report",
+    });
+    if (!ADMIN_REPORT_EVENT_KEY_PATTERN.test(eventKey)) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    const date = readResponseString(event, "date", {
+      required: true,
+      maxLength: 8,
+      code: "invalid_admin_attendance_report",
+    });
+    parseYmd(date, "invalid_admin_attendance_report");
+    const time = validateTime(readResponseString(event, "time", {
+      nullable: true,
+      maxLength: 5,
+      code: "invalid_admin_attendance_report",
+    }));
+    const deadlineDate = readResponseString(event, "deadlineDate", {
+      nullable: true,
+      maxLength: 8,
+      code: "invalid_admin_attendance_report",
+    });
+    if (deadlineDate) {
+      parseYmd(deadlineDate, "invalid_admin_attendance_report");
+    }
+    const targetGroup = readResponseString(event, "targetGroup", {
+      required: true,
+      maxLength: 10,
+      code: "invalid_admin_attendance_report",
+    });
+    if (
+      !ADMIN_REPORT_SEGMENTS.has(targetGroup)
+      || typeof event.accepting !== "boolean"
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    return {
+      eventKey,
+      date,
+      title: readResponseString(event, "title", {
+        required: true,
+        maxLength: 200,
+        code: "invalid_admin_attendance_report",
+      }),
+      time,
+      place: readResponseString(event, "place", {
+        nullable: true,
+        maxLength: 300,
+        code: "invalid_admin_attendance_report",
+      }),
+      targetGroup,
+      deadlineDate,
+      accepting: event.accepting,
+    };
+  }
+
+  function extractAdminAttendanceReportEvents_(body) {
+    if (
+      !isPlainObject(body)
+      || Object.keys(body).length !== 5
+      || body.ok !== true
+      || body.status !== "ok"
+      || body.mode !== "events"
+      || !Array.isArray(body.events)
+      || body.events.length > 200
+      || typeof body.hasMore !== "boolean"
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    const eventKeys = new Set();
+    const events = body.events.map(function (event) {
+      const normalized = extractAdminReportEvent_(event);
+      if (eventKeys.has(normalized.eventKey)) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_attendance_report",
+          200,
+        );
+      }
+      eventKeys.add(normalized.eventKey);
+      return normalized;
+    });
+    return { events, hasMore: body.hasMore };
+  }
+
+  function extractAdminAttendanceReport_(body, eventKey) {
+    if (
+      !isPlainObject(body)
+      || Object.keys(body).length !== 6
+      || body.ok !== true
+      || body.status !== "ok"
+      || body.mode !== "report"
+      || !Array.isArray(body.rows)
+      || body.rows.length > 500
+      || !hasExactFields_(body.counts, ADMIN_REPORT_COUNT_FIELDS)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    const event = extractAdminReportEvent_(body.event);
+    if (event.eventKey !== eventKey) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report",
+        200,
+      );
+    }
+    const rows = body.rows.map(function (row) {
+      if (!hasExactFields_(row, ADMIN_REPORT_ROW_FIELDS)) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_attendance_report",
+          200,
+        );
+      }
+      const segment = readResponseString(row, "segment", {
+        required: true,
+        maxLength: 10,
+        code: "invalid_admin_attendance_report",
+      });
+      const attend = readResponseString(row, "attend", {
+        required: true,
+        maxLength: 16,
+        code: "invalid_admin_attendance_report",
+      });
+      if (
+        !ADMIN_REPORT_SEGMENTS.has(segment)
+        || !ADMIN_REPORT_ATTENDANCE_VALUES.has(attend)
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_attendance_report",
+          200,
+        );
+      }
+      return {
+        displayName: readResponseString(row, "displayName", {
+          required: true,
+          maxLength: 220,
+          code: "invalid_admin_attendance_report",
+        }),
+        segment,
+        attend,
+        comment: readResponseString(row, "comment", {
+          nullable: true,
+          maxLength: 2000,
+          code: "invalid_admin_attendance_report",
+        }),
+        answeredAt: readResponseString(row, "answeredAt", {
+          nullable: true,
+          maxLength: 64,
+          code: "invalid_admin_attendance_report",
+        }),
+      };
+    });
+    const expectedCounts = {
+      participating: rows.filter(function (row) {
+        return row.attend === "参加";
+      }).length,
+      absent: rows.filter(function (row) {
+        return row.attend === "欠席";
+      }).length,
+      undecided: rows.filter(function (row) {
+        return row.attend === "未定";
+      }).length,
+      unanswered: rows.filter(function (row) {
+        return row.attend === "未回答";
+      }).length,
+      total: rows.length,
+    };
+    for (const key of ADMIN_REPORT_COUNT_FIELDS) {
+      if (
+        !Number.isInteger(body.counts[key])
+        || body.counts[key] < 0
+        || body.counts[key] !== expectedCounts[key]
+      ) {
+        throw makeError(
+          AUTH_STATES.RESPONSE_ERROR,
+          "invalid_admin_attendance_report",
+          200,
+        );
+      }
+    }
+    return { event, rows, counts: expectedCounts };
+  }
+
+  async function fetchAdminAttendanceReportEvents_(idToken, dependencies) {
+    const body = await authenticatedFetch_(
+      AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH,
+      { method: "GET" },
+      idToken,
+      dependencies,
+    );
+    return extractAdminAttendanceReportEvents_(body);
+  }
+
+  async function fetchAdminAttendanceReport_(eventKey, idToken, dependencies) {
+    if (
+      typeof eventKey !== "string"
+      || !ADMIN_REPORT_EVENT_KEY_PATTERN.test(eventKey)
+    ) {
+      throw makeError(
+        AUTH_STATES.RESPONSE_ERROR,
+        "invalid_admin_attendance_report_event",
+        0,
+      );
+    }
+    const body = await authenticatedFetch_(
+      `${AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH}`
+        + `?eventKey=${encodeURIComponent(eventKey)}`,
+      { method: "GET" },
+      idToken,
+      dependencies,
+    );
+    return extractAdminAttendanceReport_(body, eventKey);
+  }
+
+  async function startAuthenticatedAdminAttendanceReport(options) {
+    const opts = options || {};
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      return await fetchAdminAttendanceReportEvents_(
+        idToken,
+        opts.dependencies,
+      );
+    } finally {
+      idToken = "";
+    }
+  }
+
+  async function loadAuthenticatedAdminAttendanceReport(eventKey, options) {
+    const opts = options || {};
+    let idToken = "";
+    try {
+      idToken = getCurrentLiffIdToken_(opts.liff);
+      return await fetchAdminAttendanceReport_(
+        eventKey,
+        idToken,
+        opts.dependencies,
+      );
     } finally {
       idToken = "";
     }
@@ -2890,6 +3201,7 @@
     AUTHENTICATED_ATTENDANCE_SUBMIT_PATH,
     AUTHENTICATED_ADMIN_SCHEDULES_PATH,
     AUTHENTICATED_ADMIN_SCHEDULE_SUBMIT_PATH,
+    AUTHENTICATED_ADMIN_ATTENDANCE_REPORT_PATH,
     AUTHENTICATED_MEMBER_SUBMIT_PATH,
     AuthSessionError,
     applyConfirmedAttendanceDraft_,
@@ -2907,6 +3219,8 @@
     createAttendanceDraftState_,
     fetchAttendanceSummary_,
     fetchAdminSchedules_,
+    fetchAdminAttendanceReportEvents_,
+    fetchAdminAttendanceReport_,
     fetchHomeSummary_,
     formatYmdJapanese,
     getAuthUiCopy,
@@ -2924,6 +3238,8 @@
     submitAuthenticatedMemberProfile_,
     startStagingAuthenticatedReadOnly,
     startAuthenticatedAdminSchedules,
+    startAuthenticatedAdminAttendanceReport,
+    loadAuthenticatedAdminAttendanceReport,
     startStagingLineAuthCheck,
     verifyLineSession_,
   };
