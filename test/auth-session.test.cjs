@@ -2831,6 +2831,158 @@ test("HTTP・通信・応答異常を未登録と区別する", async (t) => {
   });
 });
 
+test("ご意見投稿はIDトークン認証だけを使い自己申告本人情報を送らない", async () => {
+  const calls = [];
+  const result = await auth.submitAuthenticatedFeedback_(
+    { category: "要望", message: "改善してほしい点です" },
+    {
+      liff: makeLiff(),
+      dependencies: fetchDependencies(async (url, options) => {
+        calls.push({ url, options });
+        return jsonResponse({
+          ok: true,
+          status: "ok",
+          requestId: REQUEST_ID,
+          feedbackId: "a".repeat(64),
+          feedbackStatus: "未対応",
+        });
+      }, {
+        createRequestId: () => REQUEST_ID,
+      }),
+    },
+  );
+  assert.equal(result.status, "未対応");
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].url,
+    `${TEST_WORKER_BASE_URL}/line/feedback/submit-authenticated`,
+  );
+  assert.equal(calls[0].options.mode, "cors");
+  assert.equal(calls[0].options.headers.Authorization, `Bearer ${TOKEN}`);
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    requestId: REQUEST_ID,
+    category: "要望",
+    message: "改善してほしい点です",
+  });
+  assert.doesNotMatch(
+    calls[0].options.body,
+    /lineId|line_id|memberId|userId|name|sub/,
+  );
+});
+
+test("管理者ご意見一覧とstatus更新は認証済み契約を厳密に検証する", async () => {
+  const calls = [];
+  const dependencies = fetchDependencies(async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith("/line/admin/feedback-authenticated")) {
+      return jsonResponse({
+        ok: true,
+        status: "ok",
+        items: [{
+          feedbackId: "b".repeat(64),
+          name: "登録名",
+          at: "2026-07-27T00:00:00.000Z",
+          category: "不具合",
+          message: "表示の問題",
+          status: "未対応",
+          updatedAt: "2026-07-27T00:00:00.000Z",
+        }],
+        hasMore: false,
+      });
+    }
+    return jsonResponse({
+      ok: true,
+      status: "ok",
+      requestId: REQUEST_ID,
+      feedbackId: "b".repeat(64),
+      feedbackStatus: "対応中",
+    });
+  }, {
+    createRequestId: () => REQUEST_ID,
+  });
+  const list = await auth.loadAuthenticatedAdminFeedback_({
+    liff: makeLiff(),
+    dependencies,
+  });
+  assert.equal(list.items.length, 1);
+  const updated = await auth.updateAuthenticatedAdminFeedbackStatus_(
+    {
+      feedbackId: "b".repeat(64),
+      status: "対応中",
+      expectedUpdatedAt: "2026-07-27T00:00:00.000Z",
+    },
+    { liff: makeLiff(), dependencies },
+  );
+  assert.equal(updated.status, "対応中");
+  const payload = JSON.parse(calls[1].options.body);
+  assert.deepEqual(payload, {
+    requestId: REQUEST_ID,
+    feedbackId: "b".repeat(64),
+    status: "対応中",
+    expectedUpdatedAt: "2026-07-27T00:00:00.000Z",
+  });
+  assert.doesNotMatch(
+    calls.map((call) => call.url + String(call.options.body || "")).join(" "),
+    /lineId|line_id|memberId|userId|sub/,
+  );
+});
+
+test("カスタム通知はopaque宛先refだけを送りqueue成功と実送信を区別する", async () => {
+  const calls = [];
+  const recipientRef = "c".repeat(64);
+  const dependencies = fetchDependencies(async (url, options) => {
+    calls.push({ url, options });
+    if (url.endsWith("/preview-authenticated")) {
+      return jsonResponse({
+        ok: true,
+        status: "ok",
+        event: null,
+        recipientCount: 1,
+        automaticRecipients: [],
+        manualCandidates: [{
+          recipientRef,
+          displayName: "登録名",
+          performerNames: ["演奏者"],
+          selected: true,
+        }],
+      });
+    }
+    return jsonResponse({
+      ok: true,
+      status: "ok",
+      requestId: REQUEST_ID,
+      jobId: "d".repeat(64),
+      deliveryStatus: "queued",
+      recipientCount: 1,
+    });
+  }, {
+    createRequestId: () => REQUEST_ID,
+  });
+  const preview = await auth.previewAuthenticatedCustomNotification_(
+    { eventKey: "", statuses: [], extraRecipientRefs: [recipientRef] },
+    { liff: makeLiff(), dependencies },
+  );
+  assert.equal(preview.recipientCount, 1);
+  const queued = await auth.submitAuthenticatedCustomNotification_(
+    {
+      eventKey: "",
+      statuses: [],
+      extraRecipientRefs: [recipientRef],
+      message: "安全なテスト通知",
+    },
+    { liff: makeLiff(), dependencies },
+  );
+  assert.equal(queued.deliveryStatus, "queued");
+  assert.equal(queued.recipientCount, 1);
+  const submitted = JSON.parse(calls[1].options.body);
+  assert.equal(submitted.requestId, REQUEST_ID);
+  assert.deepEqual(submitted.extraRecipientRefs, [recipientRef]);
+  assert.doesNotMatch(
+    calls.map((call) => String(call.options.body || "")).join(" "),
+    /lineId|line_id|extraLineIds|senderLineId|memberId|userId|sub/,
+  );
+});
+
 test("attendanceのHTTP・構造異常を成功扱いしない", async (t) => {
   for (const [name, attendanceResponse, expected] of [
     ["HTTP 503", jsonResponse({ ok: false, error: "database_unavailable" }, 503), auth.AUTH_STATES.DATABASE_ERROR],
