@@ -116,7 +116,7 @@ test("production相当shellは安全な認証済み機能だけを表示する",
   assert.match(html, /feedback\.style\.display = registered \? "" : "none"/);
 });
 
-test("安全未対応のホーム操作は旧画面への遷移属性を持たない", () => {
+test("ホーム操作は旧画面への遷移属性を持たず安全経路で有効化する", () => {
   const openingTag = (id) => {
     const match = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
     assert.ok(match, `${id} が必要`);
@@ -134,11 +134,13 @@ test("安全未対応のホーム操作は旧画面への遷移属性を持た�
   assert.doesNotMatch(backFromForm, /data-view-target/);
   assert.match(schedules, /\bdisabled\b/);
   assert.match(editNames, /\bdisabled\b/);
-  assert.match(html, /予定表（準備中）/);
+  assert.match(html, /<span class="homeSecondaryTitle">予定表<\/span>/);
+  assert.match(html, /showStagingAuthenticatedView_\("view-schedules"\)/);
+  assert.match(html, /renderStagingMemberSchedules_\(\)/);
   assert.match(html, /登録氏名の変更（準備中）/);
 });
 
-test("安全shellは認証済みの8 viewだけを切り替える", () => {
+test("安全shellは認証済みの9 viewだけを切り替える", () => {
   const viewStart = html.indexOf("function showStagingAuthenticatedView_");
   const shellStart = html.indexOf("function configureStagingProductionShell_");
   const viewSwitch = html.slice(viewStart, shellStart);
@@ -148,6 +150,7 @@ test("安全shellは認証済みの8 viewだけを切り替える", () => {
   for (const viewId of [
     "view-home",
     "view-form",
+    "view-schedules",
     "view-register",
     "view-admin",
     "view-admin-report",
@@ -164,7 +167,8 @@ test("安全shellは認証済みの8 viewだけを切り替える", () => {
   assert.match(shell, /showStagingAuthenticatedView_\("view-form"\)/);
   assert.match(shell, /querySelectorAll\("\.stagingLegacyFormControl"\)/);
   assert.match(shell, /element\.hidden = true/);
-  assert.match(shell, /schedules\.disabled = true/);
+  assert.match(shell, /const available = registered \|\| unregistered/);
+  assert.match(shell, /schedules\.disabled = !available/);
   assert.match(shell, /editNames\.disabled = !registered/);
   assert.doesNotMatch(
     `${viewSwitch}\n${shell}`,
@@ -323,7 +327,7 @@ test("カスタム通知とご意見BOXは認証モジュールだけへ接続�
     flow,
     /API_ENDPOINT|GAS_ENDPOINT|D1_ORIGIN|no-cors|getDecodedIDToken|lineId|memberId|extraLineIds|senderLineId|fetch\(|innerHTML|localStorage|sessionStorage/,
   );
-  assert.match(envSource, /frontVersion:\s*"Front v7\.0\.0"/);
+  assert.match(envSource, /frontVersion:\s*"Front v7\.1\.0"/);
 });
 
 test("配車補助は認証済みAPIと安全なDOMだけを使い入力を画面内に保持する", () => {
@@ -426,10 +430,12 @@ test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続す
     html,
     /id="cardEventsActive"[^>]*data-staging-shell="safe"[^>]*hidden/,
   );
-  assert.match(html, /本人向け予定・出欠/);
-  assert.match(html, /id="homeOnlyNALabel"[^>]*hidden[^>]*aria-hidden="true"/);
+  assert.match(html, /回答受付中の公演/);
+  assert.match(html, /id="homeOnlyNALabel"/);
+  assert.doesNotMatch(html, /id="homeOnlyNALabel"[^>]*hidden/);
   assert.match(html, /buildProductionHomeViewModel_\(\s*snapshot\.viewModel/);
-  assert.match(html, /renderProductionHome_\(\s*box,\s*productionHome,\s*document/);
+  assert.match(html, /formatCompactYmdForProduction_/);
+  assert.match(html, /row\.summary\.className/);
   assert.match(html, /state\.authenticatedProductionHome = productionHome/);
   assert.match(
     html,
@@ -440,6 +446,76 @@ test("認証済みhome-summaryとattendanceをproductionホームDOMへ接続す
   const authenticatedSchedule = html.indexOf('id="readOnlyScheduleSection"');
   assert.ok(formView >= 0 && authenticatedSchedule > formView);
   assert.match(html, /class="[^"]*stagingLegacyFormControl[^"]*"[^>]*hidden/);
+});
+
+test("実LIFF回帰指摘のproduction同等表示を安全経路で反映する", () => {
+  const scheduleStart = html.indexOf(
+    "function appendMemberScheduleCard_",
+  );
+  const scheduleEnd = html.indexOf(
+    "\n    function addStagingMemberPerformerField_",
+    scheduleStart,
+  );
+  const schedules = html.slice(scheduleStart, scheduleEnd);
+  assert.ok(scheduleStart >= 0 && scheduleEnd > scheduleStart);
+  assert.match(schedules, /snapshot\.viewModel\.schedules/);
+  assert.match(schedules, /scheduleCard/);
+  assert.match(schedules, /scDateCol/);
+  assert.match(schedules, /scTitleBtn/);
+  assert.match(schedules, /scPanel/);
+  assert.match(schedules, /callTime/);
+  assert.match(schedules, /callPlace/);
+  assert.match(schedules, /schedule\.note/);
+  assert.doesNotMatch(
+    schedules,
+    /fetch\(|\/line\/schedules|API_ENDPOINT|D1_ORIGIN|lineId|memberId|innerHTML/,
+  );
+
+  assert.match(html, /回答受付中の公演/);
+  assert.match(html, /こんにちは、/);
+  assert.match(html, /profile\.inputName/);
+  assert.match(html, /status === "loading"[\s\S]*"読み込み中…"/);
+  assert.doesNotMatch(
+    html,
+    /<span class="homePrimaryTitle">現在利用できません<\/span>/,
+  );
+  assert.match(
+    html,
+    /box\.className = "muted";\s*\/\/ productionではrepBox|productionではrepBox[\s\S]*box\.className = "muted"/,
+  );
+
+  const customStart = html.indexOf(
+    "function customNotificationSelection_",
+  );
+  const customEnd = html.indexOf(
+    "\n    function setFeedbackModalOpen_",
+    customStart,
+  );
+  const custom = html.slice(customStart, customEnd);
+  assert.match(custom, /schedule\.kind === "発表"/);
+  assert.match(custom, /a\.date\.localeCompare\(b\.date\)/);
+  assert.match(custom, /renderCustomNotificationManualSelection_/);
+  assert.match(custom, /extra\.oninput/);
+  assert.match(custom, /wrap\.classList\.toggle\("is-disabled", manual\)/);
+  assert.match(custom, /input\.disabled = manual/);
+  assert.match(custom, /lock\.hidden = !manual/);
+
+  const feedbackStart = html.indexOf(
+    "function renderAdminFeedbackSafe_",
+  );
+  const feedbackEnd = html.indexOf(
+    "\n    async function loadAdminFeedbackSafe_",
+    feedbackStart,
+  );
+  const feedback = html.slice(feedbackStart, feedbackEnd);
+  assert.match(feedback, /number\.textContent = `#\$\{item\.no\}`/);
+  assert.match(feedback, /list\.className = "fb-list"/);
+  assert.match(feedback, /select\.className = `fb-status is-\$\{item\.status\}`/);
+  assert.match(feedback, /formatDate\(item\.at\)/);
+  assert.doesNotMatch(
+    feedback,
+    /innerHTML|lineId|memberId|fetch\(|localStorage|sessionStorage/,
+  );
 });
 
 test("productionホームアダプターは旧renderer・業務ルール・通信へ依存しない", () => {
@@ -513,8 +589,9 @@ test("draft previewは認証済み予定単位保存だけを追加しlegacy経�
   assert.match(authSource, /createAttendanceDraftState_/);
   assert.match(authSource, /変更を取り消す/);
   assert.match(html, /const STAGING_AUTHENTICATED_ATTENDANCE_SUBMIT_UI = true;/);
-  assert.match(html, /保存は予定ごとに行います。ほかの予定の未保存内容は送信しません/);
-  assert.match(html, /「変更を保存しました。」と表示された回答だけがサーバーへ反映されています/);
+  assert.match(html, /STAGING／テスト環境での保存です。本番データには反映されません/);
+  assert.doesNotMatch(html, /保存は予定ごとに行います。ほかの予定の未保存内容は送信しません/);
+  assert.doesNotMatch(html, /「変更を保存しました。」と表示された回答だけがサーバーへ反映されています/);
   assert.match(authSource, /submit-authenticated/);
   assert.doesNotMatch(authSource, /"\/line\/attendance\/submit"/);
   assert.doesNotMatch(authSource, /XMLHttpRequest|sendBeacon/);

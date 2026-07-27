@@ -171,6 +171,32 @@ function registeredHome() {
         },
       },
     ],
+    schedules: [
+      {
+        eventKey: "schedule-1",
+        date: "20260726",
+        title: "発表予定",
+        kind: "発表",
+        targetGroup: "both",
+        time: "17:15",
+        place: "会場1",
+        callTime: "16:45",
+        callPlace: "入口",
+        note: "備考1",
+      },
+      {
+        eventKey: "schedule-2",
+        date: "20260727",
+        title: "練習予定",
+        kind: "練習",
+        targetGroup: "adult",
+        time: "17:30",
+        place: "練習会場",
+        callTime: "",
+        callPlace: "",
+        note: "",
+      },
+    ],
   };
 }
 
@@ -580,6 +606,53 @@ test("本人向け予定を全件保持し、日付・時刻順の読み取り�
     enableDraftPreview: true,
   }), 5);
   assert.equal(collectTags(container).filter((tag) => tag === "ARTICLE").length, 5);
+});
+
+test("認証済みユーザー予定表の表示項目を厳密に検証して保持する", async () => {
+  let requestCount = 0;
+  const result = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? jsonResponse(registeredHome())
+        : jsonResponse(registeredAttendance());
+    }),
+  });
+  assert.deepEqual(
+    result.viewModel.schedules.map((schedule) => [
+      schedule.title,
+      schedule.kind,
+      schedule.callTime,
+      schedule.callPlace,
+      schedule.note,
+    ]),
+    [
+      ["発表予定", "発表", "16:45", "入口", "備考1"],
+      ["練習予定", "練習", "", "", ""],
+    ],
+  );
+  assert.equal(result.viewModel.schedules[0].targetGroupLabel, "両方");
+
+  const invalid = registeredHome();
+  invalid.schedules[0] = {
+    ...invalid.schedules[0],
+    callTime: "25:00",
+  };
+  let invalidRequestCount = 0;
+  const invalidResult = await auth.startStagingAuthenticatedReadOnly({
+    liff: makeLiff(),
+    liffId: "test-liff-id",
+    dependencies: fetchDependencies(async () => {
+      invalidRequestCount += 1;
+      return invalidRequestCount === 1
+        ? jsonResponse(invalid)
+        : jsonResponse(registeredAttendance());
+    }),
+  });
+  assert.equal(invalidResult.status, auth.AUTH_STATES.RESPONSE_ERROR);
+  assert.equal(invalidRequestCount, 1);
 });
 
 test("出欠statusを正式な日本語表示へ変換し、本人メンバーだけを保持する", async () => {
@@ -2879,6 +2952,7 @@ test("管理者ご意見一覧とstatus更新は認証済み契約を厳密に�
         ok: true,
         status: "ok",
         items: [{
+          no: 7,
           feedbackId: "b".repeat(64),
           name: "登録名",
           at: "2026-07-27T00:00:00.000Z",
